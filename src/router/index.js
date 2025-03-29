@@ -207,9 +207,18 @@ const routes = [
     component: () => import('../pages/search/Results.vue')
   },
   {
+    path: '/search-results',
+    component: () => import('../pages/search/Results.vue')
+  },
+  {
     path: '/location-picker',
     name: 'LocationPicker',
     component: () => import('../pages/common/LocationPicker.vue')
+  },
+  {
+    path: '/lost-found/detail',
+    component: () => import('../pages/lostFound/Detail.vue'),
+    props: route => ({ id: Number(route.query.id) })
   },
   {
     path: '/ai-assist',

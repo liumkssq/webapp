@@ -33,17 +33,20 @@ export function getLostFoundDetail(id) {
 
 /**
  * 获取用户发布的失物招领
- * @param {number} userId 用户ID
- * @param {Object} params 查询参数
+ * @param {object} params 查询参数
+ * @param {number} params.userId 用户ID
  * @param {number} params.page 页码
  * @param {number} params.limit 每页数量
  * @returns {Promise} Promise对象
  */
-export function getUserLostFound(userId, params) {
+export function getUserLostFound(params) {
   return request({
-    url: `/api/lost-found/user/${userId}`,
+    url: `/api/lost-found/user/${params.userId}`,
     method: 'get',
-    params
+    params: {
+      page: params.page,
+      limit: params.limit
+    }
   })
 }
 

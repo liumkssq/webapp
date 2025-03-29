@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Toast } from 'vant'
+import { showToast } from 'vant'
 import router from '../router'
 
 // 创建axios实例
@@ -37,8 +37,8 @@ service.interceptors.response.use(
     
     // 如果接口返回的状态码不是200，认为请求出错
     if (res.code !== 200) {
-      // 显示错误信息 - 使用showToast而不是fail
-      Toast(res.message || '请求失败')
+      // 显示错误信息
+      showToast(res.message || '请求失败')
       
       // 处理特定错误码
       if (res.code === 401) {
@@ -89,8 +89,8 @@ service.interceptors.response.use(
       message = error.message
     }
     
-    // 使用showToast而不是fail
-    Toast(message)
+    // 显示错误信息
+    showToast(message)
     
     return Promise.reject(error)
   }

@@ -337,7 +337,8 @@ const fetchUserProducts = async (isLoadMore = false) => {
     loading.value = true
     const page = isLoadMore ? pageInfo.value.products.page + 1 : 1
     
-    const res = await getUserProducts(userId.value, {
+    const res = await getUserProducts({
+      userId: userId.value,
       page,
       limit: pageInfo.value.products.limit
     })
@@ -372,7 +373,8 @@ const fetchUserLostFound = async (isLoadMore = false) => {
     loading.value = true
     const page = isLoadMore ? pageInfo.value.lostFound.page + 1 : 1
     
-    const res = await getUserLostFound(userId.value, {
+    const res = await getUserLostFound({
+      userId: userId.value,
       page,
       limit: pageInfo.value.lostFound.limit
     })
