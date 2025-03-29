@@ -207,6 +207,7 @@ import { getUserProducts, getFavoriteProducts } from '@/api/product'
 import { getUserLostFound } from '@/api/lostFound'
 import { getConversationDetail } from '@/api/chat'
 import { useUserStore } from '@/store/user'
+import { getFavoriteArticles } from '@/api/article'
 
 const route = useRoute()
 const router = useRouter()
@@ -300,7 +301,8 @@ const fetchUserArticles = async (isLoadMore = false) => {
     loading.value = true
     const page = isLoadMore ? pageInfo.value.articles.page + 1 : 1
     
-    const res = await getUserArticles(userId.value, {
+    const res = await getUserArticles({
+      userId: userId.value, 
       page,
       limit: pageInfo.value.articles.limit
     })
@@ -405,7 +407,6 @@ const fetchFavoriteArticles = async (isLoadMore = false) => {
     loading.value = true
     const page = isLoadMore ? pageInfo.value.favoriteArticles.page + 1 : 1
     
-    // 假设API提供了获取收藏文章的方法
     const res = await getFavoriteArticles({
       page,
       limit: pageInfo.value.favoriteArticles.limit

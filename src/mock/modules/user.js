@@ -316,21 +316,40 @@ export default {
   
   // 获取用户详细资料
   'GET /api/user/profile/:id': (options) => {
-    const userId = parseInt(options.url.match(/\/profile\/(\d+)/)[1])
-    const user = users.find(u => u.id === userId)
-    
-    if (!user) {
+    try {
+      // 安全地提取用户ID
+      const match = options.url.match(/\/profile\/(\d+)/)
+      if (!match || !match[1]) {
+        return {
+          code: 400,
+          message: '无效的用户ID',
+          data: null
+        }
+      }
+      
+      const userId = parseInt(match[1])
+      const user = users.find(u => u.id === userId)
+      
+      if (!user) {
+        return {
+          code: 404,
+          message: '用户不存在',
+          data: null
+        }
+      }
+      
       return {
-        code: 404,
-        message: '用户不存在',
+        code: 200,
+        message: '获取成功',
+        data: user
+      }
+    } catch (error) {
+      console.error('获取用户资料失败:', error)
+      return {
+        code: 500,
+        message: '服务器错误',
         data: null
       }
-    }
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: user
     }
   },
   
