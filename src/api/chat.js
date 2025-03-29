@@ -4,6 +4,17 @@ import request from '@/utils/request'
  * 获取聊天会话列表
  * @returns {Promise} Promise对象
  */
+export function getChatSessionList() {
+  return request({
+    url: '/api/chat/sessions',
+    method: 'get'
+  })
+}
+
+/**
+ * 获取聊天会话列表
+ * @returns {Promise} Promise对象
+ */
 export function getChatList() {
   return request({
     url: '/api/chat/list',

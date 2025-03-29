@@ -5,19 +5,33 @@
  */
 export function getUrlParams(url) {
   const params = {}
+  if (!url || url.indexOf('?') === -1) return params
+  
   const queryString = url.split('?')[1]
+  const pairs = queryString.split('&')
   
-  if (!queryString) return params
-  
-  const paramPairs = queryString.split('&')
-  
-  for (const pair of paramPairs) {
-    const [key, value] = pair.split('=')
-    params[decodeURIComponent(key)] = decodeURIComponent(value || '')
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i].split('=')
+    const key = decodeURIComponent(pair[0])
+    const value = pair.length > 1 ? decodeURIComponent(pair[1]) : ''
+    
+    // 处理数组参数
+    if (key.endsWith('[]')) {
+      const arrayKey = key.slice(0, -2)
+      if (!params[arrayKey]) {
+        params[arrayKey] = []
+      }
+      params[arrayKey].push(value)
+    } else {
+      params[key] = value
+    }
   }
   
   return params
 }
+
+// 添加别名以兼容现有代码
+export const getQueryParams = getUrlParams
 
 /**
  * 延迟函数

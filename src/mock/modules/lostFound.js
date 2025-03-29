@@ -1,5 +1,6 @@
 import Mock from 'mockjs'
-import { getQueryParams } from '../utils'
+import { getQueryParams, delay, getUrlParams } from '../utils'
+import { generateId, generateListPageData } from '../helpers'
 
 const Random = Mock.Random
 
@@ -25,108 +26,34 @@ const generatePublisher = (id, isCurrentUser = false) => {
 }
 
 // 生成失物招领数据
-const generateLostFoundItems = (count = 100) => {
-  const items = []
-  const categories = ['电子产品', '图书资料', '卡片证件', '衣物饰品', '生活用品', '运动用品', '背包箱包', '首饰配件', '钥匙钱包', '其他物品']
-  const locations = ['教室', '图书馆', '食堂', '宿舍', '操场', '实验室', '校车', '路边', '超市', '校门口', '体育馆', '其他地点']
-  const statuses = ['pending', 'found', 'claimed', 'closed']
-  
-  for (let i = 1; i <= count; i++) {
-    const isLost = Random.boolean()
-    const type = isLost ? 'lost' : 'found'
-    const status = Random.pick(statuses, statuses.slice(0, 2))
-    const publisherId = Random.natural(1, 30)
-    const isCurrentUser = Random.boolean(0.1)
-    
-    // 随机生成图片数量
-    const imageCount = Random.natural(0, 4)
-    const images = []
-    for (let j = 0; j < imageCount; j++) {
-      images.push(Random.image('300x300', Random.color(), Random.color(), 'png', 'Item'))
-    }
-    
-    // 生成评论
-    const commentCount = Random.natural(0, 15)
-    const comments = []
-    for (let j = 0; j < commentCount; j++) {
-      const commentId = `comment_${i}_${j}`
-      const authorId = Random.natural(1, 30)
-      
-      // 随机生成回复
-      const replyCount = Random.natural(0, 3)
-      const replies = []
-      for (let k = 0; k < replyCount; k++) {
-        const replyAuthorId = Random.natural(1, 30)
-        const replyToAuthorId = k === 0 ? authorId : Random.pick(replies).author.id
-        
-        replies.push({
-          id: `${commentId}_reply_${k}`,
-          content: Random.csentence(5, 30),
-          author: {
-            id: replyAuthorId,
-            name: Random.cname(),
-            avatar: Random.image('50x50', Random.color(), Random.color(), 'png', Random.first())
-          },
-          replyTo: {
-            id: replyToAuthorId,
-            name: Random.cname()
-          },
-          createTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-          likeCount: Random.natural(0, 20),
-          isLiked: Random.boolean(0.3)
-        })
-      }
-      
-      comments.push({
-        id: commentId,
-        content: Random.csentence(10, 50),
-        author: {
-          id: authorId,
-          name: Random.cname(),
-          avatar: Random.image('50x50', Random.color(), Random.color(), 'png', Random.first())
-        },
-        createTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-        likeCount: Random.natural(0, 30),
-        isLiked: Random.boolean(0.3),
-        replies: replies.length > 0 ? replies : undefined
-      })
-    }
-    
-    // 生成联系信息
-    const contactInfo = {
-      phone: `1${Random.pick(['3', '5', '7', '8', '9'])}${Random.string('number', 9)}`,
-      wechat: Random.string('lower', 6, 12),
-      showPhone: Random.boolean(0.7),
-      showWechat: Random.boolean(0.7)
-    }
-    
-    items.push({
-      id: i,
-      type,
-      title: `${type === 'lost' ? '寻找' : '拾获'}${Random.pick(categories)}：${Random.csentence(5, 15)}`,
-      description: Random.cparagraph(2, 5),
-      category: Random.pick(categories),
-      images,
-      location: Random.pick(locations),
-      eventTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-      createTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-      updateTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-      status,
-      reward: type === 'lost' ? (Random.boolean(0.7) ? Random.natural(10, 200) : 0) : 0,
-      publisher: generatePublisher(publisherId, isCurrentUser),
-      contactInfo,
-      viewCount: Random.natural(20, 1000),
-      commentCount,
-      comments: comments.length > 0 ? comments : undefined,
-      isFollowed: Random.boolean(0.3)
-    })
-  }
-  
-  return items
+const generateLostFoundItems = count => {
+  return Array(count)
+    .fill()
+    .map((_, i) => ({
+      id: i + 1,
+      type: i % 2 === 0 ? 'lost' : 'found',
+      title: i % 2 === 0 ? `寻找失物：钱包${i + 1}` : `招领启事：钥匙${i + 1}`,
+      description: '物品描述信息，包含物品特征、丢失/拾取时间等详细信息。',
+      location: i % 2 === 0 ? '图书馆三楼' : '学生食堂',
+      category: ['电子产品', '证件', '钱包', '钥匙', '衣物'][i % 5],
+      eventTime: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString(),
+      createTime: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString(),
+      images: i % 3 === 0 ? [`https://picsum.photos/id/${50 + i}/300/200`] : [],
+      status: ['pending', 'found', 'closed'][i % 3],
+      reward: i % 2 === 0 ? Math.floor(Math.random() * 100) : 0,
+      publisher: {
+        id: 1,
+        nickname: '测试用户',
+        avatar: 'https://picsum.photos/id/100/100/100'
+      },
+      contactPhone: '13800138000',
+      contactWechat: 'test_wechat',
+      viewCount: Math.floor(Math.random() * 100) + 10
+    }))
 }
 
 // 生成失物招领数据
-const lostFoundItems = generateLostFoundItems()
+const lostFoundItems = generateLostFoundItems(100)
 
 // 获取失物招领列表
 const getLostFoundList = (config) => {
@@ -529,13 +456,109 @@ const uploadLostFoundImages = () => {
   }
 }
 
-export default {
-  'GET /api/lost-found': getLostFoundList,
-  'GET /api/lost-found/\\d+': getLostFoundDetail,
-  'POST /api/lost-found': publishLostFound,
-  'PUT /api/lost-found/\\d+': updateLostFound,
-  'DELETE /api/lost-found/\\d+': deleteLostFound,
-  'PUT /api/lost-found/\\d+/status': updateLostFoundStatus,
-  'POST /api/lost-found/\\d+/comment': commentLostFound,
-  'POST /api/lost-found/images': uploadLostFoundImages
+// 失物招领模块
+const lostFoundMock = {
+  // 获取失物招领列表
+  'GET /api/lost-found/list': config => {
+    const { page = 1, limit = 10, type, status, sort, keywords } = getUrlParams(config.url)
+    
+    // 生成列表数据
+    const items = generateLostFoundItems(30) // 生成30条数据
+    
+    // 根据type过滤
+    let filteredItems = items
+    if (type && type !== 'all') {
+      filteredItems = items.filter(item => item.type === type)
+    }
+    
+    // 根据status过滤
+    if (status && status !== 'all') {
+      filteredItems = filteredItems.filter(item => item.status === status)
+    }
+    
+    // 根据关键词搜索
+    if (keywords) {
+      const keyword = keywords.toLowerCase()
+      filteredItems = filteredItems.filter(
+        item =>
+          item.title.toLowerCase().includes(keyword) ||
+          item.description.toLowerCase().includes(keyword) ||
+          item.location.toLowerCase().includes(keyword)
+      )
+    }
+    
+    // 排序
+    if (sort === 'latest') {
+      filteredItems.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
+    } else if (sort === 'hot') {
+      filteredItems.sort((a, b) => b.viewCount - a.viewCount)
+    }
+    
+    // 分页
+    const pageData = generateListPageData(filteredItems, Number(page), Number(limit))
+    
+    return {
+      code: 200,
+      message: '获取成功',
+      data: pageData
+    }
+  },
+  
+  // 获取失物招领详情
+  'GET /api/lost-found/detail/:id': config => {
+    const { id } = config.params
+    const items = generateLostFoundItems(30)
+    const item = items.find(item => item.id === Number(id))
+    
+    if (!item) {
+      return {
+        code: 404,
+        message: '未找到该失物招领信息',
+        data: null
+      }
+    }
+    
+    // 添加评论数据
+    item.comments = Array(Math.floor(Math.random() * 5))
+      .fill()
+      .map((_, i) => ({
+        id: i + 1,
+        content: `这是第${i + 1}条评论`,
+        createTime: new Date(Date.now() - Math.floor(Math.random() * 24 * 60 * 60 * 1000)).toISOString(),
+        user: {
+          id: i + 2,
+          nickname: `用户${i + 2}`,
+          avatar: `https://picsum.photos/id/${i + 101}/100/100`
+        }
+      }))
+    
+    return {
+      code: 200,
+      message: '获取成功',
+      data: item
+    }
+  },
+  
+  // 获取用户发布的失物招领列表
+  'GET /api/lost-found/user/:id': config => {
+    const { id } = config.params
+    const { page = 1, limit = 10 } = getUrlParams(config.url)
+    
+    // 生成列表数据
+    const items = generateLostFoundItems(15).map(item => {
+      item.publisher.id = Number(id)
+      return item
+    })
+    
+    // 分页
+    const pageData = generateListPageData(items, Number(page), Number(limit))
+    
+    return {
+      code: 200,
+      message: '获取成功',
+      data: pageData
+    }
+  }
 }
+
+export default lostFoundMock

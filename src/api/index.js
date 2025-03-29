@@ -1,9 +1,11 @@
 // 导入所有API模块
 import * as user from './user'
+import * as chat from './chat'
 
 // 创建API对象，便于统一管理
 const api = {
   user,
+  chat,
   
   // 占位API，后续实现
   product: {
