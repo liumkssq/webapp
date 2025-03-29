@@ -1,256 +1,233 @@
 <template>
-  <div class="home-container">
-    <!-- 顶部状态栏 -->
-    <div class="status-bar">
-      <span class="time">9:41</span>
-      <div class="status-icons">
-        <span>5G</span>
-        <span>100%</span>
-      </div>
+  <div class="home-page">
+    <!-- 顶部搜索栏 -->
+    <div class="search-bar">
+      <input
+          type="text"
+          v-model="searchKeyword"
+          placeholder="搜索商品、文章、失物招领..."
+          @keyup.enter="handleSearch"
+      />
+      <button @click="handleSearch">搜索</button>
     </div>
-    
-    <!-- 搜索栏 -->
-    <div class="search-bar" @click="goToSearch">
-      <span>搜索商品、失物、用户...</span>
-    </div>
-    
-    <!-- 轮播图区域 -->
-    <div class="banner-area">
-      <div class="banner-item">
-        <!-- 这里将来会放轮播图 -->
-        <div class="banner-placeholder">热门推荐</div>
-      </div>
-    </div>
-    
-    <!-- 分类导航 -->
-    <div class="category-nav">
-      <div class="category-item" @click="handleCategoryClick('secondhand')">
-        <div class="category-icon">二手</div>
-        <div class="category-name">二手市场</div>
-      </div>
-      <div class="category-item" @click="handleCategoryClick('lostfound')">
-        <div class="category-icon">失物</div>
-        <div class="category-name">失物招领</div>
-      </div>
-      <div class="category-item" @click="handleCategoryClick('group')">
-        <div class="category-icon">群组</div>
-        <div class="category-name">交流群组</div>
-      </div>
-      <div class="category-item" @click="handleCategoryClick('ai')">
-        <div class="category-icon">AI</div>
-        <div class="category-name">AI助手</div>
-      </div>
-    </div>
-    
-    <!-- 内容列表 -->
-    <div class="content-list">
-      <div class="list-header">
-        <h3>最新发布</h3>
-        <span @click="viewMore('latest')">查看更多</span>
-      </div>
-      
-      <div class="list-content">
-        <div 
-          v-for="item in latestItems" 
-          :key="item.id" 
-          class="item-card"
-          @click="goToDetail(item.id, item.type)"
+
+    <!-- 轮播图 -->
+    <div class="banner-swiper">
+      <div class="swiper-container">
+        <div
+            v-for="(banner, index) in banners"
+            :key="index"
+            class="swiper-item"
+            :class="{ active: currentBannerIndex === index }"
+            :style="{ backgroundImage: `url(${banner.imageUrl})` }"
+            @click="handleBannerClick(banner)"
         >
-          <div class="item-image">
-            <!-- 图片占位区域 -->
-          </div>
-          <div class="item-info">
-            <div class="item-title">{{ item.title }}</div>
-            <div class="item-price" v-if="item.price">¥{{ item.price }}</div>
-            <div class="item-meta">
-              <span>{{ item.author }}</span>
-              <span>{{ item.date }}</span>
+          <div class="banner-title">{{ banner.title }}</div>
+        </div>
+      </div>
+      <div class="indicator">
+        <span
+            v-for="(_, index) in banners"
+            :key="index"
+            :class="{ active: currentBannerIndex === index }"
+            @click="currentBannerIndex = index"
+        ></span>
+      </div>
+    </div>
+
+    <!-- 功能入口 -->
+    <div class="feature-entries">
+      <div
+          v-for="entry in featureEntries"
+          :key="entry.id"
+          class="entry-item"
+          @click="handleFeatureClick(entry)"
+      >
+        <div class="entry-icon" :style="{ backgroundColor: entry.color }">
+          <svg-icon :name="entry.icon" size="24" />
+        </div>
+        <div class="entry-name">{{ entry.name }}</div>
+      </div>
+    </div>
+
+    <!-- 内容区块 -->
+    <div class="content-blocks">
+      <!-- 热门商品 -->
+      <div class="content-block">
+        <div class="block-header">
+          <h3>热门商品</h3>
+          <div class="view-more" @click="router.push('/product/list')">查看更多 ></div>
+        </div>
+        <div class="product-list">
+          <product-item
+              v-for="product in hotProducts"
+              :key="product.id"
+              :product="product"
+              :show-description="false"
+              @click="router.push(`/product/detail/${product.id}`)"
+          ></product-item>
+        </div>
+      </div>
+
+      <!-- 最新失物招领 -->
+      <div class="content-block">
+        <div class="block-header">
+          <h3>最新失物招领</h3>
+          <div class="view-more" @click="router.push('/lost-found/list')">查看更多 ></div>
+        </div>
+        <div class="lost-found-list">
+          <lost-found-item
+              v-for="item in latestLostFound"
+              :key="item.id"
+              :item="item"
+              :show-description="false"
+              @click="router.push(`/lost-found/detail/${item.id}`)"
+          ></lost-found-item>
+        </div>
+      </div>
+
+      <!-- 热门话题 -->
+      <div class="content-block">
+        <div class="block-header">
+          <h3>热门话题</h3>
+          <div class="view-more" @click="router.push('/article/list')">查看更多 ></div>
+        </div>
+        <div class="article-list">
+          <div
+              v-for="article in hotArticles"
+              :key="article.id"
+              class="article-item"
+              @click="router.push(`/article/detail/${article.id}`)"
+          >
+            <div class="article-info">
+              <div class="article-title">{{ article.title }}</div>
+              <div class="article-brief">{{ article.brief }}</div>
+              <div class="article-meta">
+                <span class="author">{{ article.author.nickname }}</span>
+                <span class="dot">·</span>
+                <span class="view-count">{{ formatCount(article.viewCount) }} 阅读</span>
+                <span class="dot">·</span>
+                <span class="like-count">{{ formatCount(article.likeCount) }} 点赞</span>
+              </div>
+            </div>
+            <div class="article-image" v-if="article.coverImage">
+              <img :src="article.coverImage" alt="文章封面" />
             </div>
           </div>
         </div>
       </div>
     </div>
-    
-    <!-- 热门失物 -->
-    <div class="content-list">
-      <div class="list-header">
-        <h3>热门失物</h3>
-        <span @click="viewMore('lostfound')">查看更多</span>
-      </div>
-      
-      <div class="list-content">
-        <div 
-          v-for="item in lostFoundItems" 
-          :key="item.id" 
-          class="item-card"
-          @click="goToDetail(item.id, 'lostfound')"
-        >
-          <div class="item-image">
-            <!-- 图片占位区域 -->
-          </div>
-          <div class="item-info">
-            <div class="item-title">{{ item.title }}</div>
-            <div class="item-meta">
-              <span>{{ item.location }}</span>
-              <span>{{ item.date }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- 底部导航栏 -->
-    <div class="bottom-nav">
-      <div class="nav-item active">
-        <div class="nav-icon">首页</div>
-        <div class="nav-name">首页</div>
-      </div>
-      <div class="nav-item" @click="goToPath('/article/list')">
-        <div class="nav-icon">发现</div>
-        <div class="nav-name">发现</div>
-      </div>
-      <div class="nav-item" @click="goToPath('/publish')">
-        <div class="nav-icon">发布</div>
-        <div class="nav-name">发布</div>
-      </div>
-      <div class="nav-item" @click="goToPath('/chat')">
-        <div class="nav-icon">消息</div>
-        <div class="nav-name">消息</div>
-      </div>
-      <div class="nav-item" @click="goToPath('/user/' + userId)">
-        <div class="nav-icon">我的</div>
-        <div class="nav-name">我的</div>
-      </div>
-    </div>
+
+    <!-- 底部导航 -->
+    <footer-navigation :active-tab="'home'" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/store/user'
+import ProductItem from '@/components/product/ProductItem.vue'
+import LostFoundItem from '@/components/lostFound/LostFoundItem.vue'
+import FooterNavigation from '@/components/common/FooterNavigation.vue'
+import api from '@/api'
+import '@/style/Home.css'
 
 const router = useRouter()
-const userStore = useUserStore()
-
-// 获取用户ID
-const userId = computed(() => userStore.userId || '1')
-
-// 最新发布商品数据
-const latestItems = ref([
+const searchKeyword = ref('')
+const banners = ref([
   {
-    id: '1',
-    title: '九成新 iPhone 13 Pro Max',
-    price: '4999',
-    author: '用户1',
-    date: '10分钟前',
-    type: 'product'
+    id: 1,
+    title: '校园二手交易',
+    imageUrl: 'https://picsum.photos/id/1018/800/400',
+    link: '/product/list'
   },
   {
-    id: '2',
-    title: '全新未拆封 AirPods Pro 2',
-    price: '1599',
-    author: '用户2',
-    date: '30分钟前',
-    type: 'product'
+    id: 2,
+    title: '失物招领平台',
+    imageUrl: 'https://picsum.photos/id/1015/800/400',
+    link: '/lost-found/list'
   },
   {
-    id: '3',
-    title: 'iPad Pro 2021款 95新',
-    price: '3999',
-    author: '用户3',
-    date: '1小时前',
-    type: 'product'
+    id: 3,
+    title: '校园社区交流',
+    imageUrl: 'https://picsum.photos/id/1019/800/400',
+    link: '/article/list'
   }
 ])
-
-// 失物招领数据
-const lostFoundItems = ref([
+const currentBannerIndex = ref(0)
+const featureEntries = ref([
   {
-    id: '1',
-    title: '在图书馆丢失一张学生卡',
-    location: '中心图书馆',
-    date: '2小时前'
+    id: 1,
+    name: '二手交易',
+    icon: 'shop',
+    color: '#FF9500',
+    route: '/product/list'
   },
   {
-    id: '2',
-    title: '捡到一个黑色钱包',
-    location: '教学楼',
-    date: '3小时前'
+    id: 2,
+    name: '失物招领',
+    icon: 'search',
+    color: '#34C759',
+    route: '/lost-found/list'
   },
   {
-    id: '3',
-    title: '丢失蓝牙耳机',
-    location: '食堂',
-    date: '5小时前'
+    id: 3,
+    name: '校园论坛',
+    icon: 'message',
+    color: '#007AFF',
+    route: '/article/list'
+  },
+  {
+    id: 4,
+    name: '求助信息',
+    icon: 'help',
+    color: '#5856D6',
+    route: '/article/list?type=help'
+  },
+  {
+    id: 5,
+    name: '校园活动',
+    icon: 'calendar',
+    color: '#FF2D55',
+    route: '/article/list?type=activity'
   }
 ])
+const hotProducts = ref([])
+const latestLostFound = ref([])
+const hotArticles = ref([])
 
-// 页面挂载时获取数据
-onMounted(() => {
-  // 这里可以调用API获取数据
-  console.log('页面已挂载，可以获取数据')
+const handleSearch = () => {
+  if (!searchKeyword.value.trim()) return
+  router.push({ path: '/search', query: { keyword: searchKeyword.value } })
+}
+
+const handleBannerClick = (banner) => router.push(banner.link)
+const handleFeatureClick = (entry) => router.push(entry.route)
+const formatCount = (count) => count < 1000 ? count : (count / 1000).toFixed(1) + 'k'
+
+let bannerTimer = null
+const startBannerAutoPlay = () => {
+  bannerTimer = setInterval(() => {
+    currentBannerIndex.value = (currentBannerIndex.value + 1) % banners.value.length
+  }, 3000)
+}
+
+const fetchHomeData = async () => {
+  try {
+    hotProducts.value = (await api.product.getProductList({ sort: 'hot', limit: 4 })).data.list
+    latestLostFound.value = (await api.lostFound.getLostFoundList({ sort: 'latest', limit: 3 })).data.list
+    hotArticles.value = (await api.article.getArticleList({ sort: 'hot', limit: 3 })).data.list
+  } catch (error) {
+    console.error('获取首页数据失败:', error)
+  }
+}
+
+onMounted(() => { 
+  startBannerAutoPlay()
+  fetchHomeData() 
 })
 
-// 跳转到搜索页
-const goToSearch = () => {
-  router.push('/search')
-}
-
-// 跳转到详情页
-const goToDetail = (id, type) => {
-  if (type === 'product') {
-    router.push(`/product/${id}`)
-  } else if (type === 'lostfound') {
-    router.push(`/lost-found/${id}`)
-  } else {
-    router.push(`/article/${id}`)
-  }
-}
-
-// 查看更多
-const viewMore = (type) => {
-  if (type === 'lostfound') {
-    router.push('/lost-found-list')
-  } else if (type === 'latest') {
-    router.push('/product-list')
-  } else {
-    router.push('/article-list')
-  }
-}
-
-// 点击分类
-const handleCategoryClick = (category) => {
-  switch (category) {
-    case 'secondhand':
-      router.push('/product-list')
-      break
-    case 'lostfound':
-      router.push('/lost-found-list')
-      break
-    case 'group':
-      router.push('/article-list')
-      break
-    case 'ai':
-      router.push('/ai/assist')
-      break
-    default:
-      break
-  }
-}
-
-// 导航到指定路径
-const goToPath = (path) => {
-  if (path === '/chat') {
-    router.push('/chat-list')
-  } else if (path === '/user/' + userId) {
-    if (userStore.isLoggedIn) {
-      router.push('/profile')
-    } else {
-      router.push('/login')
-    }
-  } else {
-    router.push(path)
-  }
-}
+onBeforeUnmount(() => { 
+  if (bannerTimer) clearInterval(bannerTimer) 
+})
 </script>

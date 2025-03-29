@@ -1,291 +1,250 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useUserStore } from '@/store/user'
-
-// 引入页面组件
-import Home from '@/pages/Home.vue'
-import Login from '@/pages/Login.vue'
-import Register from '@/pages/Register.vue'
-import ForgotPassword from '@/pages/ForgotPassword.vue'
-import ArticleDetail from '@/pages/ArticleDetail.vue'
-import ArticleList from '@/pages/ArticleList.vue'
-import ProductDetail from '@/pages/ProductDetail.vue'
-import ProductList from '@/pages/ProductList.vue'
-import LostFoundDetail from '@/pages/LostFoundDetail.vue'
-import LostFoundList from '@/pages/LostFoundList.vue'
-import UserHomepage from '@/pages/UserHomepage.vue'
-import PublishSelector from '@/pages/PublishSelector.vue'
-import PublishArticle from '@/pages/PublishArticle.vue'
-import PublishProduct from '@/pages/PublishProduct.vue'
-import PublishLostFound from '@/pages/PublishLostFound.vue'
-import Chat from '@/pages/Chat.vue'
-import ChatList from '@/pages/ChatList.vue'
-import Search from '@/pages/Search.vue'
-import SearchResults from '@/pages/SearchResults.vue'
-import Profile from '@/pages/Profile.vue'
-import Settings from '@/pages/Settings.vue'
-import ChangePassword from '@/pages/ChangePassword.vue'
-import PrivacySettings from '@/pages/PrivacySettings.vue'
-import AIAssist from '@/pages/AIAssist.vue'
-import NotFound from '@/pages/NotFound.vue'
 
 // 路由配置
 const routes = [
   {
     path: '/',
-    redirect: '/home'
-  },
-  {
-    path: '/home',
     name: 'Home',
-    component: Home,
-    meta: {
-      requiresAuth: false,
-      title: '首页'
-    }
+    component: () => import('../pages/Home.vue')
   },
   {
     path: '/login',
     name: 'Login',
-    component: Login,
+    component: () => import('../pages/auth/Login.vue'),
     meta: {
-      requiresAuth: false,
-      title: '登录'
+      requiresGuest: true
     }
   },
   {
     path: '/register',
     name: 'Register',
-    component: Register,
+    component: () => import('../pages/auth/Register.vue'),
     meta: {
-      requiresAuth: false,
-      title: '注册'
+      requiresGuest: true
     }
   },
   {
     path: '/forgot-password',
     name: 'ForgotPassword',
-    component: ForgotPassword,
+    component: () => import('../pages/auth/ForgotPassword.vue'),
     meta: {
-      requiresAuth: false,
-      title: '忘记密码'
+      requiresGuest: true
     }
   },
   {
-    path: '/article/:id',
-    name: 'ArticleDetail',
-    component: ArticleDetail,
-    meta: {
-      requiresAuth: false,
-      title: '文章详情'
-    }
-  },
-  {
-    path: '/article-list',
-    name: 'ArticleList',
-    component: ArticleList,
-    meta: {
-      requiresAuth: false,
-      title: '文章列表'
-    }
-  },
-  {
-    path: '/product/:id',
-    name: 'ProductDetail',
-    component: ProductDetail,
-    meta: {
-      requiresAuth: false,
-      title: '商品详情'
-    }
-  },
-  {
-    path: '/product-list',
+    path: '/product/list',
     name: 'ProductList',
-    component: ProductList,
-    meta: {
-      requiresAuth: false,
-      title: '二手商品'
-    }
+    component: () => import('../pages/product/List.vue')
   },
   {
-    path: '/lost-found/:id',
-    name: 'LostFoundDetail',
-    component: LostFoundDetail,
-    meta: {
-      requiresAuth: false,
-      title: '失物招领详情'
-    }
+    path: '/product/detail/:id',
+    name: 'ProductDetail',
+    component: () => import('../pages/product/Detail.vue'),
+    props: true
   },
   {
-    path: '/lost-found-list',
+    path: '/lost-found/list',
     name: 'LostFoundList',
-    component: LostFoundList,
+    component: () => import('../pages/lostFound/List.vue')
+  },
+  {
+    path: '/lost-found/detail/:id',
+    name: 'LostFoundDetail',
+    component: () => import('../pages/lostFound/Detail.vue'),
+    props: true
+  },
+  {
+    path: '/article/list',
+    name: 'ArticleList',
+    component: () => import('../pages/article/List.vue')
+  },
+  {
+    path: '/article/detail/:id',
+    name: 'ArticleDetail',
+    component: () => import('../pages/article/Detail.vue'),
+    props: true
+  },
+  {
+    path: '/publish',
+    name: 'Publish',
+    component: () => import('../pages/publish/Selector.vue'),
     meta: {
-      requiresAuth: false,
-      title: '失物招领'
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/publish/product',
+    name: 'PublishProduct',
+    component: () => import('../pages/publish/Product.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/publish/lost-found',
+    name: 'PublishLostFound',
+    component: () => import('../pages/publish/LostFound.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/publish/article',
+    name: 'PublishArticle',
+    component: () => import('../pages/publish/Article.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/message',
+    name: 'Message',
+    component: () => import('../pages/Message.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/chat',
+    name: 'Chat',
+    component: () => import('../pages/chat/Index.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/chat/list',
+    name: 'ChatList',
+    component: () => import('../pages/chat/List.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/chat/conversation/:id',
+    name: 'ChatConversation',
+    component: () => import('../pages/chat/Conversation.vue'),
+    props: true,
+    meta: {
+      requiresAuth: true
     }
   },
   {
     path: '/user/:id',
     name: 'UserHomepage',
-    component: UserHomepage,
+    component: () => import('../pages/user/Homepage.vue'),
+    props: true
+  },
+  {
+    path: '/user/profile',
+    name: 'UserProfile',
+    component: () => import('../pages/user/Profile.vue'),
     meta: {
-      requiresAuth: false,
-      title: '用户主页'
+      requiresAuth: true
     }
   },
   {
-    path: '/profile',
-    name: 'Profile',
-    component: Profile,
+    path: '/user/settings',
+    name: 'UserSettings',
+    component: () => import('../pages/user/Settings.vue'),
     meta: {
-      requiresAuth: true,
-      title: '个人资料'
+      requiresAuth: true
     }
   },
   {
     path: '/settings',
     name: 'Settings',
-    component: Settings,
+    component: () => import('../pages/settings/Index.vue'),
     meta: {
-      requiresAuth: true,
-      title: '设置'
+      requiresAuth: true
     }
   },
   {
-    path: '/password/change',
-    name: 'ChangePassword',
-    component: ChangePassword,
-    meta: {
-      requiresAuth: true,
-      title: '修改密码'
-    }
-  },
-  {
-    path: '/privacy/settings',
+    path: '/settings/privacy',
     name: 'PrivacySettings',
-    component: PrivacySettings,
+    component: () => import('../pages/settings/Privacy.vue'),
     meta: {
-      requiresAuth: true,
-      title: '隐私设置'
+      requiresAuth: true
     }
   },
   {
-    path: '/ai/assist',
-    name: 'AIAssist',
-    component: AIAssist,
+    path: '/settings/change-password',
+    name: 'ChangePassword',
+    component: () => import('../pages/settings/ChangePassword.vue'),
     meta: {
-      requiresAuth: true,
-      title: 'AI助手'
+      requiresAuth: true
     }
   },
   {
     path: '/search',
     name: 'Search',
-    component: Search,
-    meta: {
-      requiresAuth: false,
-      title: '搜索'
-    }
+    component: () => import('../pages/search/Index.vue')
   },
   {
-    path: '/search-results',
+    path: '/search/results',
     name: 'SearchResults',
-    component: SearchResults,
-    meta: {
-      requiresAuth: false,
-      title: '搜索结果'
-    }
+    component: () => import('../pages/search/Results.vue')
   },
   {
-    path: '/publish',
-    name: 'PublishSelector',
-    component: PublishSelector,
-    meta: {
-      requiresAuth: true,
-      title: '发布'
-    }
+    path: '/location-picker',
+    name: 'LocationPicker',
+    component: () => import('../pages/common/LocationPicker.vue')
   },
   {
-    path: '/publish-article',
-    name: 'PublishArticle',
-    component: PublishArticle,
+    path: '/ai-assist',
+    name: 'AIAssist',
+    component: () => import('../pages/common/AIAssist.vue'),
     meta: {
-      requiresAuth: true,
-      title: '发布文章'
+      requiresAuth: true
     }
   },
-  {
-    path: '/publish-product',
-    name: 'PublishProduct',
-    component: PublishProduct,
-    meta: {
-      requiresAuth: true,
-      title: '发布商品'
-    }
-  },
-  {
-    path: '/publish-lost-found',
-    name: 'PublishLostFound',
-    component: PublishLostFound,
-    meta: {
-      requiresAuth: true,
-      title: '发布失物招领'
-    }
-  },
-  {
-    path: '/chat/:id',
-    name: 'Chat',
-    component: Chat,
-    meta: {
-      requiresAuth: true,
-      title: '聊天'
-    }
-  },
-  {
-    path: '/chat-list',
-    name: 'ChatList',
-    component: ChatList,
-    meta: {
-      requiresAuth: true,
-      title: '消息列表'
-    }
-  },
-  // 404页面
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
-    component: NotFound,
-    meta: {
-      requiresAuth: false,
-      title: '页面不存在'
-    }
+    component: () => import('../pages/NotFound.vue')
   }
 ]
 
 // 创建路由实例
 const router = createRouter({
-  history: createWebHistory(),
-  routes
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
+  // 滚动行为
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0 }
+    }
+  }
 })
 
-// 全局导航守卫
+// 路由守卫
 router.beforeEach((to, from, next) => {
-  // 设置页面标题
-  document.title = to.meta.title ? `${to.meta.title} - 校园二手交易与失物招领平台` : '校园二手交易与失物招领平台'
+  // 从localStorage获取token
+  const token = localStorage.getItem('token')
   
-  // 检查是否需要登录权限
-  if (to.meta.requiresAuth) {
-    const userStore = useUserStore()
-    if (!userStore.isLoggedIn) {
+  // 需要登录的页面
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    if (!token) {
       next({
         path: '/login',
         query: { redirect: to.fullPath }
       })
-      return
+    } else {
+      next()
     }
+  } 
+  // 只有未登录用户可以访问的页面（如登录、注册）
+  else if (to.matched.some(record => record.meta.requiresGuest)) {
+    if (token) {
+      next({ path: '/' })
+    } else {
+      next()
+    }
+  } else {
+    next()
   }
-  
-  next()
 })
 
 export default router

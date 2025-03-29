@@ -2,12 +2,14 @@ import request from '@/utils/request'
 
 /**
  * 获取商品列表
- * @param {Object} params 查询参数
- * @param {number} params.page 页码，默认1
- * @param {number} params.size 每页数量，默认10
+ * @param {object} params 查询参数
  * @param {string} params.category 商品分类
- * @param {string} params.sort 排序方式：priceLow-价格从低到高，priceHigh-价格从高到低，newest-最新，popularity-最热
- * @returns {Promise}
+ * @param {string} params.keywords 搜索关键词
+ * @param {string} params.sort 排序方式(new/hot/price-asc/price-desc)
+ * @param {number} params.page 页码
+ * @param {number} params.pageSize 每页数量
+ * @param {number} params.limit 限制返回数量
+ * @returns {Promise} Promise对象
  */
 export function getProductList(params) {
   return request({
@@ -19,35 +21,35 @@ export function getProductList(params) {
 
 /**
  * 获取商品详情
- * @param {string} id 商品ID
- * @returns {Promise}
+ * @param {number} id 商品ID
+ * @returns {Promise} Promise对象
  */
 export function getProductDetail(id) {
   return request({
-    url: `/api/product/${id}`,
+    url: `/api/product/detail/${id}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 获取商品分类
+ * @returns {Promise} Promise对象
+ */
+export function getProductCategories() {
+  return request({
+    url: '/api/product/categories',
     method: 'get'
   })
 }
 
 /**
  * 发布商品
- * @param {Object} data 商品信息
- * @param {string} data.title 商品标题
- * @param {string} data.description 商品描述
- * @param {number} data.price 商品价格
- * @param {number} data.originalPrice 原价
- * @param {string} data.condition 商品成色
- * @param {Array} data.images 图片URL数组
- * @param {string} data.category 商品分类
- * @param {string} data.location 交易地点
- * @param {Object} data.contactInfo 联系方式
- * @param {Array} data.deliveryMethod 交易方式
- * @param {Array} data.tags 标签
- * @returns {Promise}
+ * @param {object} data 商品信息
+ * @returns {Promise} Promise对象
  */
-export function createProduct(data) {
+export function publishProduct(data) {
   return request({
-    url: '/api/product/create',
+    url: '/api/product/publish',
     method: 'post',
     data
   })
@@ -55,9 +57,9 @@ export function createProduct(data) {
 
 /**
  * 更新商品信息
- * @param {string} id 商品ID
- * @param {Object} data 更新的商品信息
- * @returns {Promise}
+ * @param {number} id 商品ID
+ * @param {object} data 商品信息
+ * @returns {Promise} Promise对象
  */
 export function updateProduct(id, data) {
   return request({
@@ -69,8 +71,8 @@ export function updateProduct(id, data) {
 
 /**
  * 删除商品
- * @param {string} id 商品ID
- * @returns {Promise}
+ * @param {number} id 商品ID
+ * @returns {Promise} Promise对象
  */
 export function deleteProduct(id) {
   return request({
@@ -80,39 +82,29 @@ export function deleteProduct(id) {
 }
 
 /**
- * 收藏商品
- * @param {string} id 商品ID
- * @returns {Promise}
+ * 商品收藏/取消收藏
+ * @param {number} id 商品ID
+ * @param {boolean} isFavorite 是否收藏
+ * @returns {Promise} Promise对象
  */
-export function favoriteProduct(id) {
+export function favoriteProduct(id, isFavorite) {
   return request({
-    url: `/api/product/${id}/favorite`,
-    method: 'post'
-  })
-}
-
-/**
- * 取消收藏商品
- * @param {string} id 商品ID
- * @returns {Promise}
- */
-export function unfavoriteProduct(id) {
-  return request({
-    url: `/api/product/${id}/unfavorite`,
-    method: 'delete'
+    url: `/api/product/favorite/${id}`,
+    method: 'post',
+    data: {
+      isFavorite
+    }
   })
 }
 
 /**
  * 获取用户收藏的商品列表
- * @param {Object} params 查询参数
- * @param {number} params.page 页码，默认1
- * @param {number} params.size 每页数量，默认10
- * @returns {Promise}
+ * @param {object} params 查询参数
+ * @returns {Promise} Promise对象
  */
 export function getFavoriteProducts(params) {
   return request({
-    url: '/api/user/favorite-products',
+    url: '/api/product/favorites',
     method: 'get',
     params
   })
@@ -120,15 +112,13 @@ export function getFavoriteProducts(params) {
 
 /**
  * 获取用户发布的商品列表
- * @param {string} userId 用户ID
- * @param {Object} params 查询参数
- * @param {number} params.page 页码，默认1
- * @param {number} params.size 每页数量，默认10
- * @returns {Promise}
+ * @param {object} params 查询参数
+ * @param {number} params.userId 用户ID
+ * @returns {Promise} Promise对象
  */
-export function getUserProducts(userId, params) {
+export function getUserProducts(params) {
   return request({
-    url: `/api/user/${userId}/products`,
+    url: '/api/product/user',
     method: 'get',
     params
   })

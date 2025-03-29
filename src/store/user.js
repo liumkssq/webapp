@@ -1,109 +1,92 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login, getUserInfo, logout } from '@/api/user'
+import { getUserInfo } from '@/api/user'
 
 export const useUserStore = defineStore('user', () => {
   // 状态
+  const currentUser = ref(null)
   const token = ref(localStorage.getItem('token') || '')
-  const userId = ref(localStorage.getItem('userId') || '')
-  const username = ref('')
-  const nickname = ref('')
-  const avatar = ref('')
-  const phone = ref('')
-  const userInfo = ref({})
+  const unreadMessageCount = ref(0)
   
-  // 计算属性
-  const isLoggedIn = computed(() => !!token.value)
+  // 登录状态
+  const isLoggedIn = computed(() => {
+    return !!token.value && !!currentUser.value
+  })
   
-  // 操作方法
-  // 登录
-  const userLogin = async (loginForm) => {
-    try {
-      const { data } = await login(loginForm)
-      token.value = data.token
-      userId.value = data.userId
-      
-      // 存储到本地
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('userId', data.userId)
-      
-      // 获取用户信息
-      await fetchUserInfo()
-      
-      return true
-    } catch (error) {
-      console.error('登录失败', error)
-      return false
-    }
-  }
+  // 用户ID
+  const userId = computed(() => {
+    return currentUser.value?.id
+  })
   
-  // 获取用户信息
-  const fetchUserInfo = async () => {
+  // 加载用户信息
+  const loadUserInfo = async () => {
     try {
       if (!token.value) return
       
-      const { data } = await getUserInfo()
-      username.value = data.username
-      nickname.value = data.nickname
-      avatar.value = data.avatar
-      phone.value = data.phone
-      userInfo.value = data
-      
-      return data
+      const res = await getUserInfo()
+      if (res.code === 200 && res.data) {
+        setUser(res.data)
+      } else {
+        // 如果获取用户信息失败，可能是token已过期
+        clearUser()
+      }
     } catch (error) {
-      console.error('获取用户信息失败', error)
+      console.error('加载用户信息失败:', error)
+      // 出错时清除用户状态
+      clearUser()
     }
   }
   
-  // 登出
-  const userLogout = async () => {
-    try {
-      if (token.value) {
-        await logout()
-      }
-    } catch (error) {
-      console.error('登出请求失败', error)
-    } finally {
-      // 清除本地存储
-      localStorage.removeItem('token')
-      localStorage.removeItem('userId')
-      
-      // 重置状态
-      token.value = ''
-      userId.value = ''
-      username.value = ''
-      nickname.value = ''
-      avatar.value = ''
-      phone.value = ''
-      userInfo.value = {}
-    }
+  // 设置用户信息
+  const setUser = (user) => {
+    currentUser.value = user
+  }
+  
+  // 设置token
+  const setToken = (newToken) => {
+    token.value = newToken
+    localStorage.setItem('token', newToken)
   }
   
   // 更新用户信息
-  const updateUserInfo = (info) => {
-    if (info.username) username.value = info.username
-    if (info.nickname) nickname.value = info.nickname
-    if (info.avatar) avatar.value = info.avatar
-    if (info.phone) phone.value = info.phone
+  const updateUserInfo = (userData) => {
+    if (!currentUser.value) return
     
-    userInfo.value = {
-      ...userInfo.value,
-      ...info
+    currentUser.value = {
+      ...currentUser.value,
+      ...userData
     }
   }
   
+  // 更新未读消息数量
+  const updateUnreadMessageCount = (count) => {
+    unreadMessageCount.value = count
+  }
+  
+  // 清除用户状态
+  const clearUser = () => {
+    currentUser.value = null
+    token.value = ''
+    unreadMessageCount.value = 0
+    localStorage.removeItem('token')
+  }
+  
+  // 初始化加载
+  if (token.value) {
+    loadUserInfo()
+  }
+  
   return {
+    currentUser,
     token,
-    userId,
-    username,
-    nickname,
-    avatar,
-    phone,
-    userInfo,
+    unreadMessageCount,
     isLoggedIn,
-    userLogin,
-    fetchUserInfo,
-    userLogout,
-    updateUserInfo
+    userId,
+    setUser,
+    setToken,
+    updateUserInfo,
+    updateUnreadMessageCount,
+    loadUserInfo,
+    clearUser
   }
 })

@@ -8,7 +8,27 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AppLoading: typeof import('./components/AppLoading.vue')['default']
+    AppMessage: typeof import('./components/AppMessage.vue')['default']
+    ArticleItem: typeof import('./components/article/ArticleItem.vue')['default']
+    BackToTop: typeof import('./components/common/BackToTop.vue')['default']
+    BaiduMap: typeof import('./components/map/BaiduMap.vue')['default']
+    BaiduMapSearch: typeof import('./components/map/BaiduMapSearch.vue')['default']
+    EmptyState: typeof import('./components/common/EmptyState.vue')['default']
+    FooterNav: typeof import('./components/FooterNav.vue')['default']
+    FooterNavigation: typeof import('./components/common/FooterNavigation.vue')['default']
+    HeaderNav: typeof import('./components/HeaderNav.vue')['default']
+    HeaderNavigation: typeof import('./components/common/HeaderNavigation.vue')['default']
+    LostFoundItem: typeof import('./components/lostFound/LostFoundItem.vue')['default']
+    LostFoundList: typeof import('./components/LostFoundList.vue')['default']
+    ProductItem: typeof import('./components/product/ProductItem.vue')['default']
+    ProductList: typeof import('./components/ProductList.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SvgIcon: typeof import('./components/SvgIcon.vue')['default']
+    Toast: typeof import('./components/common/Toast.vue')['default']
+    ToggleSwitch: typeof import('./components/common/ToggleSwitch.vue')['default']
+    UploadDialog: typeof import('./components/dialog/UploadDialog.vue')['default']
+    UserEditDialog: typeof import('./components/dialog/UserEditDialog.vue')['default']
   }
 }

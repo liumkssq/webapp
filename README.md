@@ -1,156 +1,121 @@
-# 校园二手交易与失物招领平台
+# 校园信息平台
 
-## 项目介绍
-本项目是一个针对校园用户的二手交易和失物招领平台，专注于移动端体验，提供了用户身份管理、商品浏览、失物招领、即时通讯等功能。
+校园信息平台是一个基于Vue 3和Vite构建的综合性校园服务平台，旨在为校园生活提供便捷的信息交流、商品交易、失物招领等服务。
+
+## 功能特点
+
+- 用户管理：注册、登录、个人信息管理
+- 二手交易：发布、搜索、购买二手商品
+- 失物招领：发布、查找失物和招领信息
+- 校园资讯：发布、浏览校园热门话题和活动
+- 即时通讯：用户之间的私聊功能
+- 位置服务：基于百度地图的位置选择和展示
 
 ## 技术栈
-- 前端框架：Vue 3 (使用 Composition API)
-- 构建工具：Vite
-- UI组件：Tailwind CSS
-- 状态管理：Pinia
-- 路由管理：Vue Router
-- HTTP请求：Axios
-- 模拟数据：Mock.js
+
+- **前端框架**：Vue 3 + Composition API
+- **构建工具**：Vite
+- **状态管理**：Pinia
+- **路由管理**：Vue Router
+- **HTTP请求**：Axios
+- **地图服务**：百度地图JavaScript API
 
 ## 项目结构
+
 ```
-src/
- ├─ api/                    // API封装
- │    ├─ user.js            // 用户相关接口
- │    ├─ article.js         // 文章相关接口
- │    ├─ product.js         // 商品相关接口
- │    ├─ lostFound.js       // 失物招领相关接口
- │    ├─ chat.js            // 聊天相关接口
- │    └─ swagger.json       // API文档
- ├─ assets/                 // 静态资源
- ├─ components/             // 组件
- │    ├─ common/            // 公共组件
- │    ├─ article/           // 文章相关组件
- │    ├─ product/           // 商品相关组件
- │    ├─ lostFound/         // 失物招领相关组件
- │    ├─ chat/              // 聊天相关组件
- │    └─ ui/                // UI组件
- ├─ mock/                   // Mock数据
- │    ├─ index.js           // Mock入口
- │    └─ modules/           // Mock模块
- │         ├─ user.js       // 用户相关Mock
- │         └─ article.js    // 文章相关Mock
- ├─ pages/                  // 页面
- │    ├─ Home.vue           // 首页
- │    ├─ Login.vue          // 登录页
- │    ├─ Register.vue       // 注册页
- │    ├─ ForgotPassword.vue // 忘记密码页
- │    ├─ ArticleDetail.vue  // 文章详情页
- │    └─ UserHomepage.vue   // 用户主页
- ├─ router/                 // 路由
- │    └─ index.js           // 路由配置
- ├─ store/                  // 状态管理
- │    ├─ index.js           // 状态管理入口
- │    └─ user.js            // 用户状态
- ├─ styles/                 // 样式
- │    └─ index.css          // 全局样式
- ├─ utils/                  // 工具
- │    ├─ index.js           // 工具函数
- │    └─ request.js         // 请求封装
- ├─ App.vue                 // 根组件
- └─ main.js                 // 入口文件
+Webapp/
+├── public/               # 静态资源
+├── src/
+│   ├── api/              # API接口定义
+│   ├── assets/           # 项目资源文件
+│   ├── components/       # 公共组件
+│   │   ├── common/       # 通用组件
+│   │   ├── product/      # 商品相关组件
+│   │   ├── article/      # 文章相关组件
+│   │   ├── lostFound/    # 失物招领相关组件
+│   │   ├── map/          # 地图相关组件
+│   │   └── user/         # 用户相关组件
+│   ├── mock/             # 模拟数据
+│   │   ├── index.js      # 模拟数据入口
+│   │   └── modules/      # 模拟数据模块
+│   ├── pages/            # 页面组件
+│   ├── router/           # 路由配置
+│   ├── store/            # 状态管理
+│   ├── utils/            # 工具函数
+│   ├── App.vue           # 根组件
+│   └── main.js           # 入口文件
+├── .env                  # 环境变量
+├── .eslintrc.js          # ESLint配置
+├── index.html            # HTML模板
+├── package.json          # 项目依赖
+└── vite.config.js        # Vite配置
 ```
 
-## 功能模块
-
-### 用户身份管理
-- 登录与注册
-- 第三方登录（微信、QQ、微博）
-- 忘记密码
-- 个人资料管理
-
-### 主页展示
-- 热门商品和文章推荐
-- 分类导航
-- 轮播图展示
-
-### 文章与商品
-- 文章列表与详情页
-- 商品列表与详情页
-- 评论与点赞功能
-
-### 失物招领
-- 失物招领列表与详情页
-- 地点标记
-- 状态管理（已找回/未找回）
-
-### 发布功能
-- 发布商品
-- 发布文章
-- 发布失物招领信息
-- AI辅助发布
-
-### 即时通讯
-- 私聊功能
-- 群聊功能
-- 消息提醒
-- AI聊天
-
-### 个人中心
-- 个人资料展示
-- 发布记录
-- 收藏与点赞管理
-- 关注与粉丝列表
-
-## 开发进度
-
-### 已完成
-- [x] 项目基础架构搭建
-- [x] 路由配置
-- [x] 用户状态管理
-- [x] API 接口封装
-- [x] Mock 数据基础配置
-- [x] 登录页面
-- [x] 注册页面
-- [x] 忘记密码页面
-- [x] 主页基础结构
-- [x] 用户主页基础结构
-- [x] 文章详情页基础结构
-
-### 待完成
-- [ ] UI组件开发
-- [ ] 商品列表与详情页面
-- [ ] 失物招领列表与详情页面
-- [ ] 发布功能页面
-- [ ] 聊天功能实现
-- [ ] 搜索与通知功能
-- [ ] AI辅助功能
-- [ ] 样式美化
-- [ ] 移动端适配优化
-- [ ] 性能优化
-
-## 安装与运行
+## 开始使用
 
 ### 安装依赖
+
 ```bash
 npm install
 ```
 
 ### 开发环境运行
+
 ```bash
 npm run dev
 ```
 
-### 构建生产环境
+### 生产环境构建
+
 ```bash
 npm run build
 ```
 
-### 预览生产构建
-```bash
-npm run preview
-```
+## 模拟数据
 
-## API 文档
-API 文档使用 Swagger 格式编写，位于 `src/api/swagger.json`，可导入到 Swagger UI 查看。
+项目使用Mock.js模拟后端API数据，便于前端开发和测试。模拟数据位于`src/mock`目录下，分为以下模块：
 
-## Mock 数据
-项目使用 Mock.js 模拟后端接口，开发环境下自动启用 Mock 数据。如需关闭，请修改 `src/main.js` 中的导入配置。
+- user.js：用户相关数据
+- product.js：商品相关数据
+- article.js：文章相关数据
+- lostFound.js：失物招领相关数据
+- chat.js：聊天相关数据
 
-## 前后端分离
-项目采用前后端分离设计，API 接口统一封装在 `src/api` 目录下，可无缝切换 Mock 数据和真实后端接口。
+## API接口
+
+项目API接口位于`src/api`目录下，分为以下模块：
+
+- user.js：用户相关接口
+- product.js：商品相关接口
+- article.js：文章相关接口
+- lostFound.js：失物招领相关接口
+- chat.js：聊天相关接口
+- map.js：地图相关接口
+
+## 地图功能
+
+项目使用百度地图JavaScript API实现地图相关功能，包括：
+
+- 位置选择
+- 地址搜索
+- 定位功能
+- 距离计算
+
+## 贡献指南
+
+1. Fork本项目
+2. 创建您的特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交您的更改 (`git commit -m 'Add some amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 打开一个Pull Request
+
+## 许可证
+
+本项目采用MIT许可证，详见LICENSE文件。
+
+## 联系方式
+
+如有任何问题或建议，请通过以下方式联系我们：
+
+- 邮箱：example@example.com
+- GitHub Issues

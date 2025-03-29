@@ -311,12 +311,12 @@ const goToBindPhone = () => {
 
 // 导航到修改密码页面
 const goToChangePwd = () => {
-  router.push('/password/change')
+  router.push('/settings/change-password')
 }
 
 // 导航到设置页面
 const goToSettings = () => {
-  router.push('/settings')
+  router.push('/user/settings')
 }
 
 // 退出登录

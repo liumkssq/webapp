@@ -2,14 +2,29 @@ import request from '@/utils/request'
 
 /**
  * 用户登录
- * @param {Object} data - 登录信息
- * @param {string} data.username - 用户名
- * @param {string} data.password - 密码
- * @returns {Promise} 返回Promise对象
+ * @param {object} data 登录信息
+ * @param {string} data.username 用户名/手机号/邮箱
+ * @param {string} data.password 密码
+ * @returns {Promise} Promise对象
  */
 export function login(data) {
   return request({
-    url: '/user/login',
+    url: '/api/user/login',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 验证码登录
+ * @param {object} data 登录信息
+ * @param {string} data.phone 手机号
+ * @param {string} data.verificationCode 验证码
+ * @returns {Promise} Promise对象
+ */
+export function loginByVerificationCode(data) {
+  return request({
+    url: '/api/user/login',
     method: 'post',
     data
   })
@@ -17,95 +32,105 @@ export function login(data) {
 
 /**
  * 用户注册
- * @param {Object} data - 注册信息
- * @param {string} data.username - 用户名
- * @param {string} data.password - 密码
- * @param {string} data.email - 邮箱
- * @param {string} data.phone - 手机号
- * @returns {Promise} 返回Promise对象
+ * @param {object} data 注册信息
+ * @param {string} data.username 用户名
+ * @param {string} data.password 密码
+ * @param {string} data.phone 手机号
+ * @param {string} data.verificationCode 验证码
+ * @returns {Promise} Promise对象
  */
 export function register(data) {
   return request({
-    url: '/user/register',
+    url: '/api/user/register',
     method: 'post',
     data
   })
 }
 
 /**
- * 发送验证码
- * @param {Object} data - 手机号信息
- * @param {string} data.phone - 手机号
- * @returns {Promise} 返回Promise对象
- */
-export function sendVerifyCode(data) {
-  return request({
-    url: '/user/send-verify-code',
-    method: 'post',
-    data
-  })
-}
-
-/**
- * 重置密码
- * @param {Object} data - 重置密码信息
- * @param {string} data.phone - 手机号
- * @param {string} data.code - 验证码
- * @param {string} data.newPassword - 新密码
- * @returns {Promise} 返回Promise对象
- */
-export function resetPassword(data) {
-  return request({
-    url: '/user/reset-password',
-    method: 'post',
-    data
-  })
-}
-
-/**
- * 获取用户信息
- * @returns {Promise} 返回Promise对象
+ * 获取当前用户信息
+ * @returns {Promise} Promise对象
  */
 export function getUserInfo() {
   return request({
-    url: '/user/info',
+    url: '/api/user/info',
     method: 'get'
   })
 }
 
 /**
- * 获取用户主页信息
- * @param {string} userId - 用户ID
- * @returns {Promise} 返回Promise对象
+ * 获取用户详细资料
+ * @param {number} id 用户ID
+ * @returns {Promise} Promise对象
  */
-export function getUserProfile(userId) {
+export function getUserProfile(id) {
   return request({
-    url: `/user/profile/${userId}`,
+    url: `/api/user/profile/${id}`,
     method: 'get'
   })
 }
 
 /**
  * 更新用户信息
- * @param {Object} data - 用户信息
- * @returns {Promise} 返回Promise对象
+ * @param {object} data 用户信息
+ * @returns {Promise} Promise对象
  */
 export function updateUserInfo(data) {
   return request({
-    url: '/user/update',
+    url: '/api/user/info',
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 修改密码
+ * @param {object} data 密码信息
+ * @param {string} data.oldPassword 旧密码
+ * @param {string} data.newPassword 新密码
+ * @returns {Promise} Promise对象
+ */
+export function changePassword(data) {
+  return request({
+    url: '/api/user/password',
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 发送验证码
+ * @param {object} data 手机信息
+ * @param {string} data.phone 手机号
+ * @returns {Promise} Promise对象
+ */
+export function sendVerificationCode(data) {
+  return request({
+    url: '/api/user/verification-code',
     method: 'post',
     data
   })
 }
 
 /**
- * 上传用户头像
- * @param {FormData} data - 表单数据，包含图片文件
- * @returns {Promise} 返回Promise对象
+ * 退出登录
+ * @returns {Promise} Promise对象
+ */
+export function logout() {
+  return request({
+    url: '/api/user/logout',
+    method: 'post'
+  })
+}
+
+/**
+ * 上传头像
+ * @param {FormData} data 包含头像文件的FormData
+ * @returns {Promise} Promise对象
  */
 export function uploadAvatar(data) {
   return request({
-    url: '/user/upload-avatar',
+    url: '/api/user/avatar',
     method: 'post',
     data,
     headers: {
@@ -115,68 +140,24 @@ export function uploadAvatar(data) {
 }
 
 /**
- * 关注用户
- * @param {string} userId - 被关注的用户ID
- * @returns {Promise} 返回Promise对象
+ * 获取用户通知
+ * @returns {Promise} Promise对象
  */
-export function followUser(userId) {
+export function getNotifications() {
   return request({
-    url: '/user/follow',
-    method: 'post',
-    data: { userId }
+    url: '/api/user/notifications',
+    method: 'get'
   })
 }
 
 /**
- * 取消关注用户
- * @param {string} userId - 被取消关注的用户ID
- * @returns {Promise} 返回Promise对象
+ * 标记通知为已读
+ * @param {number} id 通知ID
+ * @returns {Promise} Promise对象
  */
-export function unfollowUser(userId) {
+export function markNotificationAsRead(id) {
   return request({
-    url: '/user/unfollow',
-    method: 'post',
-    data: { userId }
-  })
-}
-
-/**
- * 获取我的关注列表
- * @param {Object} params - 查询参数
- * @param {number} params.page - 页码
- * @param {number} params.size - 每页记录数
- * @returns {Promise} 返回Promise对象
- */
-export function getFollowingList(params) {
-  return request({
-    url: '/user/following',
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 获取我的粉丝列表
- * @param {Object} params - 查询参数
- * @param {number} params.page - 页码
- * @param {number} params.size - 每页记录数
- * @returns {Promise} 返回Promise对象
- */
-export function getFollowersList(params) {
-  return request({
-    url: '/user/followers',
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 退出登录
- * @returns {Promise} 返回Promise对象
- */
-export function logout() {
-  return request({
-    url: '/user/logout',
-    method: 'post'
+    url: `/api/user/notification/read/${id}`,
+    method: 'put'
   })
 }
