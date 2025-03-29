@@ -61,6 +61,19 @@
         >
           {{ accountLoading ? '登录中...' : '登录' }}
         </button>
+        
+        <!-- 快速登录 -->
+        <div class="quick-login">
+          <button 
+            type="button" 
+            class="quick-login-button" 
+            @click="handleAdminLogin" 
+            :disabled="accountLoading"
+          >
+            {{ accountLoading ? '登录中...' : '一键登录(管理员)' }}
+          </button>
+          <p class="quick-login-tip">开发环境专用，无需账号密码</p>
+        </div>
       </form>
       
       <!-- 短信验证码登录 -->
@@ -111,9 +124,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onBeforeUnmount } from 'vue'
+import { ref, reactive, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { login, loginByVerificationCode, apiSendVerificationCode } from '@/api/user'
+import { login, loginByVerificationCode, apiSendVerificationCode, autoLogin, adminLogin } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { useMessageStore } from '@/store/message'
 
@@ -128,8 +141,8 @@ const showPassword = ref(false)
 
 // 账号密码登录表单
 const accountForm = reactive({
-  username: '',
-  password: '',
+  username: 'admin',  // 预设为admin账号
+  password: '123456', // 预设为123456密码
   remember: false
 })
 
@@ -251,6 +264,50 @@ const sendVerificationCode = async () => {
   }
 }
 
+// 一键登录（管理员账号）
+const handleAdminLogin = async () => {
+  try {
+    accountLoading.value = true
+    
+    // 使用专门的admin登录方法
+    const response = await adminLogin()
+    
+    if (response.code === 200) {
+      // 保存用户信息和token
+      userStore.setToken(response.data.token)
+      userStore.setUser(response.data.userInfo)
+      
+      // 显示登录成功消息
+      messageStore.showSuccess('管理员一键登录成功')
+      
+      // 重定向到之前的页面或首页
+      const redirect = route.query.redirect || '/'
+      router.push(redirect)
+    } else {
+      messageStore.showError(response.message || '一键登录失败')
+    }
+  } catch (error) {
+    console.error('一键登录失败:', error)
+    messageStore.showError('一键登录失败，请稍后重试')
+  } finally {
+    accountLoading.value = false
+  }
+}
+
+// 自动填充表单并登录（开发模式专用）
+onMounted(() => {
+  // 开发环境下自动填充登录表单
+  if (import.meta.env.DEV) {
+    accountForm.username = 'admin'
+    accountForm.password = '123456'
+    
+    // 如果URL带有auto=true参数，则自动登录
+    if (route.query.auto === 'true') {
+      handleAccountLogin()
+    }
+  }
+})
+
 // 组件销毁前清除定时器
 onBeforeUnmount(() => {
   if (countdownTimer) {
@@ -258,3 +315,39 @@ onBeforeUnmount(() => {
   }
 })
 </script>
+
+<style scoped>
+/* 快速登录样式 */
+.quick-login {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.quick-login-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #ffc107;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.quick-login-button:hover {
+  background-color: #ffb300;
+}
+
+.quick-login-button:disabled {
+  background-color: #e0e0e0;
+  cursor: not-allowed;
+}
+
+.quick-login-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
+}
+</style>

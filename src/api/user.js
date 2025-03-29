@@ -16,6 +16,35 @@ export function login(data) {
 }
 
 /**
+ * 自动登录（仅用于开发环境测试）
+ * 无需提供用户名和密码，会自动登录为管理员账号
+ * @returns {Promise} Promise对象
+ */
+export function autoLogin() {
+  return request({
+    url: '/api/user/login?admin_test=true',
+    method: 'post',
+    data: {}
+  })
+}
+
+/**
+ * 管理员账号登录（简化方式）
+ * 直接使用admin/123456登录，开发环境使用
+ * @returns {Promise} Promise对象
+ */
+export function adminLogin() {
+  return request({
+    url: '/api/user/login',
+    method: 'post',
+    data: {
+      username: 'admin',
+      password: '123456'
+    }
+  })
+}
+
+/**
  * 验证码登录
  * @param {object} data 登录信息
  * @param {string} data.phone 手机号
@@ -162,5 +191,21 @@ export function markNotificationAsRead(id) {
   return request({
     url: `/api/user/notification/read/${id}`,
     method: 'put'
+  })
+}
+
+/**
+ * 重置密码
+ * @param {object} data 重置密码信息
+ * @param {string} data.phone 手机号
+ * @param {string} data.verificationCode 验证码
+ * @param {string} data.newPassword 新密码
+ * @returns {Promise} Promise对象
+ */
+export function resetPassword(data) {
+  return request({
+    url: '/api/user/reset-password',
+    method: 'post',
+    data
   })
 }

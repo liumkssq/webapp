@@ -18,6 +18,20 @@ service.interceptors.request.use(
       config.headers.Authorization = `Bearer ${userStore.token}`
     }
     
+    // 开发环境下打印请求信息
+    if (import.meta.env.DEV) {
+      console.log('【请求】', config.method.toUpperCase(), config.url, config.data);
+    }
+    
+    // 确保POST请求的数据格式正确
+    if (config.method === 'post' && config.data && typeof config.data === 'object') {
+      // 对象已经是正确格式，axios会自动处理
+      // 这里打印一下便于调试
+      if (import.meta.env.DEV) {
+        console.log('【请求数据】', config.data);
+      }
+    }
+    
     return config
   },
   error => {
