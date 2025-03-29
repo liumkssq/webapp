@@ -12,8 +12,15 @@ import ProductDetail from '@/pages/ProductDetail.vue'
 import LostFoundDetail from '@/pages/LostFoundDetail.vue'
 import UserHomepage from '@/pages/UserHomepage.vue'
 import PublishSelector from '@/pages/PublishSelector.vue'
+import PublishArticle from '@/pages/PublishArticle.vue'
+import PublishProduct from '@/pages/PublishProduct.vue'
+import PublishLostFound from '@/pages/PublishLostFound.vue'
 import Chat from '@/pages/Chat.vue'
 import ChatList from '@/pages/ChatList.vue'
+import Search from '@/pages/Search.vue'
+import SearchResults from '@/pages/SearchResults.vue'
+import Profile from '@/pages/Profile.vue'
+import NotFound from '@/pages/NotFound.vue'
 
 // 路由配置
 const routes = [
@@ -103,12 +110,66 @@ const routes = [
     }
   },
   {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
+    meta: {
+      requiresAuth: true,
+      title: '个人资料'
+    }
+  },
+  {
+    path: '/search',
+    name: 'Search',
+    component: Search,
+    meta: {
+      requiresAuth: false,
+      title: '搜索'
+    }
+  },
+  {
+    path: '/search-results',
+    name: 'SearchResults',
+    component: SearchResults,
+    meta: {
+      requiresAuth: false,
+      title: '搜索结果'
+    }
+  },
+  {
     path: '/publish',
     name: 'PublishSelector',
     component: PublishSelector,
     meta: {
       requiresAuth: true,
       title: '发布'
+    }
+  },
+  {
+    path: '/publish-article',
+    name: 'PublishArticle',
+    component: PublishArticle,
+    meta: {
+      requiresAuth: true,
+      title: '发布文章'
+    }
+  },
+  {
+    path: '/publish-product',
+    name: 'PublishProduct',
+    component: PublishProduct,
+    meta: {
+      requiresAuth: true,
+      title: '发布商品'
+    }
+  },
+  {
+    path: '/publish-lost-found',
+    name: 'PublishLostFound',
+    component: PublishLostFound,
+    meta: {
+      requiresAuth: true,
+      title: '发布失物招领'
     }
   },
   {
@@ -127,6 +188,16 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: '消息列表'
+    }
+  },
+  // 404页面
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: NotFound,
+    meta: {
+      requiresAuth: false,
+      title: '页面不存在'
     }
   }
 ]

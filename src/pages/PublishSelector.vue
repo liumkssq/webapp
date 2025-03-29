@@ -5,7 +5,7 @@
     </div>
     
     <div class="publish-options">
-      <div class="option-item" @click="goToPublish('product')">
+      <div class="option-item" @click="selectPublishType('product')">
         <div class="option-icon">商品</div>
         <div class="option-content">
           <h3>发布二手商品</h3>
@@ -13,7 +13,7 @@
         </div>
       </div>
       
-      <div class="option-item" @click="goToPublish('lost-found')">
+      <div class="option-item" @click="selectPublishType('lost-found')">
         <div class="option-icon">失物</div>
         <div class="option-content">
           <h3>发布失物招领</h3>
@@ -21,7 +21,7 @@
         </div>
       </div>
       
-      <div class="option-item" @click="goToPublish('article')">
+      <div class="option-item" @click="selectPublishType('article')">
         <div class="option-icon">文章</div>
         <div class="option-content">
           <h3>发布文章</h3>
@@ -50,20 +50,21 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-// 跳转到发布页面
-const goToPublish = (type) => {
+// 选择发布类型
+const selectPublishType = (type) => {
   switch (type) {
+    case 'article':
+      router.push('/publish-article')
+      break
     case 'product':
-      router.push('/publish/product')
+      router.push('/publish-product')
       break
     case 'lost-found':
-      router.push('/publish/lost-found')
-      break
-    case 'article':
-      router.push('/publish/article')
+      router.push('/publish-lost-found')
       break
     default:
-      break
+      // 默认发布商品
+      router.push('/publish-product')
   }
 }
 
