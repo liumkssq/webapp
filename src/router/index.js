@@ -211,9 +211,13 @@ const routes = [
     component: () => import('../pages/search/Results.vue')
   },
   {
-    path: '/location-picker',
+    path: '/map/location-picker/:from?',
     name: 'LocationPicker',
-    component: () => import('../pages/common/LocationPicker.vue')
+    component: () => import('@/pages/map/LocationPicker.vue'),
+    meta: {
+      title: '选择位置',
+      keepAlive: false
+    }
   },
   {
     path: '/lost-found/detail',
@@ -233,6 +237,15 @@ const routes = [
     component: () => import('../pages/common/AIAssist.vue'),
     meta: {
       requiresAuth: true
+    }
+  },
+  {
+    path: '/map/nearby',
+    name: 'NearbySearch',
+    component: () => import('@/pages/map/NearbySearch.vue'),
+    meta: {
+      title: '附近商品',
+      keepAlive: false
     }
   },
   {
