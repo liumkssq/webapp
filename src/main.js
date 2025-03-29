@@ -17,8 +17,6 @@ import AppLoading from '@/components/AppLoading.vue'
 // 导入 Mock 服务（始终导入以确保开发时可用）
 console.log('导入 Mock 服务')
 import './mock'
-import Toast from "@/components/common/Toast.vue";
-import ToggleSwitch from "./components/common/ToggleSwitch.vue";
 console.log('Mock 服务导入完成')
 
 // 创建应用实例
@@ -33,8 +31,6 @@ app.use(router)
 
 // 使用Vant UI
 app.use(Vant)
-app.use(Toast)
-app.use(ToggleSwitch)
 
 // 注册全局组件
 app.component('SvgIcon', SvgIcon)

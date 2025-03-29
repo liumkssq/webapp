@@ -155,22 +155,3 @@ export function commentProduct(id, data) {
     data
   })
 }
-
-/**
- * 搜索附近商品
- * @param {Object} params - 搜索参数
- * @param {number} params.longitude - 经度
- * @param {number} params.latitude - 纬度
- * @param {number} params.radius - 搜索半径（米）
- * @param {string} [params.sortBy] - 排序方式: all(默认), price, distance, time
- * @param {number} [params.page] - 页码
- * @param {number} [params.pageSize] - 每页数量
- * @returns {Promise} - 返回附近商品列表
- */
-export function searchNearbyProducts(params) {
-  return request({
-    url: '/api/product/nearby',
-    method: 'get',
-    params
-  });
-}
