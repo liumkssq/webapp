@@ -1,5 +1,5 @@
 import Mock from 'mockjs'
-import { getQueryParams } from '../utils'
+import { getUrlParams } from '../utils'
 
 const Random = Mock.Random
 
@@ -130,7 +130,7 @@ const getArticleList = (config) => {
     category, tag, sort,
     keyword, userId, isFavorite,
     page = 1, limit = 10 
-  } = getQueryParams(config.url)
+  } = getUrlParams(config.url)
   
   // 筛选条件
   let filteredArticles = [...articles]
@@ -209,7 +209,9 @@ const getArticleList = (config) => {
 
 // 获取文章详情
 const getArticleDetail = (config) => {
-  const id = config.url.match(/\/api\/article\/(\d+)/)[1]
+  const id = config.url.match(/\/api\/article\/detail\/(\d+)/)[1]
+  
+  // 查找文章
   const article = articles.find(article => article.id === Number(id))
   
   if (!article) {
@@ -222,38 +224,10 @@ const getArticleDetail = (config) => {
   // 增加浏览量
   article.viewCount += 1
   
-  // 随机生成相关推荐
-  const recommendCount = Random.natural(3, 6)
-  const sameCategoryArticles = articles.filter(a => a.category === article.category && a.id !== article.id)
-  const recommendations = []
-  
-  for (let i = 0; i < recommendCount && i < sameCategoryArticles.length; i++) {
-    const randomIndex = Random.natural(0, sameCategoryArticles.length - 1)
-    const recommendedArticle = { ...sameCategoryArticles[randomIndex] }
-    
-    // 只保留必要字段
-    recommendations.push({
-      id: recommendedArticle.id,
-      title: recommendedArticle.title,
-      summary: recommendedArticle.summary,
-      category: recommendedArticle.category,
-      author: {
-        id: recommendedArticle.author.id,
-        name: recommendedArticle.author.name,
-        avatar: recommendedArticle.author.avatar
-      },
-      createTime: recommendedArticle.createTime,
-      viewCount: recommendedArticle.viewCount,
-      images: recommendedArticle.images ? [recommendedArticle.images[0]] : undefined
-    })
-  }
-  
+  // 返回文章详情
   return {
     code: 200,
-    data: {
-      ...article,
-      recommendations
-    },
+    data: article,
     message: '获取成功'
   }
 }
@@ -262,52 +236,39 @@ const getArticleDetail = (config) => {
 const publishArticle = (config) => {
   const data = JSON.parse(config.body)
   
-  // 验证必要字段
-  if (!data.title || !data.content || !data.category) {
-    return {
-      code: 400,
-      message: '请填写完整信息'
-    }
-  }
-  
-  // 创建新文章
-  const newId = articles.length + 1
-  const now = new Date().toISOString()
-  
+  // 生成新文章
   const newArticle = {
-    id: newId,
-    ...data,
+    id: articles.length + 1,
+    title: data.title,
+    content: data.content,
+    summary: data.summary || data.content.slice(0, 100),
+    category: data.category || '其他',
+    tags: data.tags || [],
+    images: data.images || [],
     author: {
       id: 1,
       name: '测试用户',
       avatar: Random.image('100x100', Random.color(), Random.color(), 'png', 'TU'),
-      school: '测试大学',
-      bio: '这是一个测试账号'
+      school: '测试大学'
     },
-    createTime: now,
-    updateTime: now,
+    createTime: new Date().toISOString(),
+    updateTime: new Date().toISOString(),
     viewCount: 0,
     commentCount: 0,
     likeCount: 0,
     isLiked: false,
     collectCount: 0,
-    isCollected: false
+    isCollected: false,
+    comments: []
   }
   
-  // 生成摘要
-  if (!newArticle.summary) {
-    // 从内容截取摘要
-    newArticle.summary = newArticle.content.length > 100 
-      ? newArticle.content.substring(0, 100) + '...'
-      : newArticle.content
-  }
-  
+  // 添加到文章列表
   articles.unshift(newArticle)
   
   return {
     code: 200,
     data: {
-      id: newId
+      id: newArticle.id
     },
     message: '发布成功'
   }
@@ -328,26 +289,32 @@ const updateArticle = (config) => {
     }
   }
   
-  // 验证是否为作者
-  if (article.author.id !== 1) {
-    return {
-      code: 403,
-      message: '无权限修改'
-    }
-  }
-  
   // 更新文章信息
-  Object.assign(article, data, {
-    updateTime: new Date().toISOString()
-  })
-  
-  // 更新摘要
-  if (!article.summary || data.content) {
-    // 从内容截取摘要
-    article.summary = article.content.length > 100 
-      ? article.content.substring(0, 100) + '...'
-      : article.content
+  if (data.title) {
+    article.title = data.title
   }
+  
+  if (data.content) {
+    article.content = data.content
+  }
+  
+  if (data.summary) {
+    article.summary = data.summary
+  }
+  
+  if (data.category) {
+    article.category = data.category
+  }
+  
+  if (data.tags) {
+    article.tags = data.tags
+  }
+  
+  if (data.images) {
+    article.images = data.images
+  }
+  
+  article.updateTime = new Date().toISOString()
   
   return {
     code: 200,
@@ -361,25 +328,17 @@ const deleteArticle = (config) => {
   const id = config.url.match(/\/api\/article\/(\d+)/)[1]
   
   // 查找文章索引
-  const index = articles.findIndex(article => article.id === Number(id))
+  const articleIndex = articles.findIndex(article => article.id === Number(id))
   
-  if (index === -1) {
+  if (articleIndex === -1) {
     return {
       code: 404,
       message: '文章不存在'
     }
   }
   
-  // 验证是否为作者
-  if (articles[index].author.id !== 1) {
-    return {
-      code: 403,
-      message: '无权限删除'
-    }
-  }
-  
   // 删除文章
-  articles.splice(index, 1)
+  articles.splice(articleIndex, 1)
   
   return {
     code: 200,

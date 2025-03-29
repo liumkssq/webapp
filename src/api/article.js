@@ -82,18 +82,50 @@ export function deleteArticle(id) {
 }
 
 /**
- * 文章点赞/取消点赞
+ * 收藏文章
  * @param {number} id 文章ID
- * @param {boolean} isLike 是否点赞
  * @returns {Promise} Promise对象
  */
-export function likeArticle(id, isLike) {
+export function collectArticle(id) {
+  return request({
+    url: `/api/article/collect/${id}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 取消收藏文章
+ * @param {number} id 文章ID
+ * @returns {Promise} Promise对象
+ */
+export function uncollectArticle(id) {
+  return request({
+    url: `/api/article/uncollect/${id}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 点赞文章
+ * @param {number} id 文章ID
+ * @returns {Promise} Promise对象
+ */
+export function likeArticle(id) {
   return request({
     url: `/api/article/like/${id}`,
-    method: 'post',
-    data: {
-      isLike
-    }
+    method: 'post'
+  })
+}
+
+/**
+ * 取消点赞文章
+ * @param {number} id 文章ID
+ * @returns {Promise} Promise对象
+ */
+export function unlikeArticle(id) {
+  return request({
+    url: `/api/article/unlike/${id}`,
+    method: 'post'
   })
 }
 

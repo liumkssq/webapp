@@ -5,6 +5,7 @@ import { delay, randomInt } from './utils'
 // 导入所有模块
 import userMock from './modules/user'
 import productMock from './modules/product'
+import articleMock from './modules/article'
 
 // 创建 mock 实例
 const mock = new MockAdapter(axios, {
@@ -99,6 +100,7 @@ const registerMockApis = (mockModule) => {
 const registerAllMocks = () => {
   registerMockApis(userMock)
   registerMockApis(productMock)
+  registerMockApis(articleMock)
   // 在这里添加更多模块的注册
   
   console.log('[API Mock] 接口模拟服务已启动')
