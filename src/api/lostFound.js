@@ -89,13 +89,15 @@ export function updateLostFoundStatus(id, status) {
 
 /**
  * 获取用户发布的失物招领列表
+ * @param {number} userId 用户ID
  * @param {object} params 查询参数
- * @param {number} params.userId 用户ID
+ * @param {number} params.page 页码
+ * @param {number} params.limit 每页数量
  * @returns {Promise} Promise对象
  */
-export function getUserLostFound(params) {
+export function getUserLostFound(userId, params) {
   return request({
-    url: '/api/lost-found/user',
+    url: `/api/lost-found/user/${userId}`,
     method: 'get',
     params
   })

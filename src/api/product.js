@@ -123,3 +123,31 @@ export function getUserProducts(params) {
     params
   })
 }
+
+/**
+ * 取消收藏商品
+ * @param {number} id 商品ID
+ * @returns {Promise} Promise对象
+ */
+export function unfavoriteProduct(id) {
+  return request({
+    url: `/api/product/unfavorite/${id}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 对商品发表评论
+ * @param {number} id 商品ID
+ * @param {object} data 评论数据
+ * @param {string} data.content 评论内容
+ * @param {number} data.parentId 父评论ID（回复时使用）
+ * @returns {Promise} Promise对象
+ */
+export function commentProduct(id, data) {
+  return request({
+    url: `/api/product/comment/${id}`,
+    method: 'post',
+    data
+  })
+}
