@@ -704,7 +704,7 @@ const goToUserProfile = (userId) => {
 // 跳转到其他失物招领详情
 const goToLostFoundDetail = (id) => {
   if (id === item.value.id) return
-  router.push(`/lost-found/${id}`)
+  router.push(`/lost-found/detail/${id}`)
 }
 
 // 显示提示消息

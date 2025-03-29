@@ -652,7 +652,7 @@ const goToSellerProducts = (sellerId) => {
 // 跳转到其他商品详情
 const goToProductDetail = (productId) => {
   if (productId === product.value.id) return
-  router.push(`/product/${productId}`)
+  router.push(`/product/detail/${productId}`)
 }
 
 // 显示提示消息

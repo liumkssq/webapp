@@ -327,7 +327,7 @@ const formatTime = (time) => {
 
 // 跳转到商品详情
 const goToProductDetail = (id) => {
-  router.push(`/product/${id}`)
+  router.push(`/product/detail/${id}`)
 }
 
 // 处理图片加载错误

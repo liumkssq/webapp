@@ -204,7 +204,7 @@ const goToSearch = () => {
 
 // 跳转到详情页
 const goToDetail = (id) => {
-  router.push(`/article/${id}`)
+  router.push(`/article/detail/${id}`)
 }
 
 // 返回上一页
