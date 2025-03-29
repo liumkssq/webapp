@@ -1,127 +1,77 @@
 <template>
-  <div class="ai-assist-page">
-    <!-- iOS风格顶部状态栏 -->
-    <div class="status-bar">
-      <span class="time">9:41</span>
-      <div class="status-icons">
-        <span>5G</span>
-        <span>100%</span>
-      </div>
-    </div>
+  <div class="ai-assist-container">
+    <header-navigation title="AI助手" />
     
-    <!-- 导航栏 -->
-    <div class="navigation-bar">
-      <div class="back-btn" @click="goBack">
-        <i class="icon-back"></i>
-      </div>
-      <div class="nav-title">AI助手</div>
-    </div>
-    
-    <!-- AI助手内容 -->
-    <div class="ai-container">
+    <div class="ai-content">
       <div class="ai-header">
         <div class="ai-avatar">
-          <img src="https://via.placeholder.com/80" alt="AI助手" class="avatar-img">
+          <svg-icon name="robot" size="40" />
         </div>
-        <div class="ai-title">
-          <h3>智能创作助手</h3>
-          <p>帮您提升内容质量，优化创作体验</p>
-        </div>
+        <h2>校园AI助手</h2>
+        <p>我能帮你优化内容、生成文案、提供创意建议</p>
       </div>
       
-      <!-- 功能选择 -->
-      <div class="feature-grid">
-        <div class="feature-card" @click="useFeature('content-generation')">
-          <div class="feature-icon">
-            <i class="icon-magic"></i>
+      <div class="chat-container">
+        <div class="chat-messages" ref="messagesContainer">
+          <!-- 欢迎消息 -->
+          <div class="message ai-message">
+            <div class="message-content">
+              <p>你好！我是校园AI助手。我可以帮你：</p>
+              <ul>
+                <li>优化你的商品描述</li>
+                <li>生成失物招领文案</li>
+                <li>改进文章内容</li>
+                <li>提供创意建议</li>
+              </ul>
+              <p>有什么我能帮到你的吗？</p>
+            </div>
           </div>
-          <div class="feature-title">内容生成</div>
-          <div class="feature-desc">自动生成高质量文章、描述</div>
+          
+          <!-- 历史消息 -->
+          <template v-for="(message, index) in messages" :key="index">
+            <div class="message" :class="message.type === 'user' ? 'user-message' : 'ai-message'">
+              <div class="message-content">
+                <p v-html="formatMessage(message.content)"></p>
+              </div>
+            </div>
+          </template>
+          
+          <!-- 加载状态 -->
+          <div class="message ai-message" v-if="isLoading">
+            <div class="message-content loading">
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+            </div>
+          </div>
         </div>
         
-        <div class="feature-card" @click="useFeature('image-enhance')">
-          <div class="feature-icon">
-            <i class="icon-image"></i>
-          </div>
-          <div class="feature-title">图片增强</div>
-          <div class="feature-desc">优化图片效果，提升质量</div>
-        </div>
-        
-        <div class="feature-card" @click="useFeature('text-polish')">
-          <div class="feature-icon">
-            <i class="icon-edit"></i>
-          </div>
-          <div class="feature-title">文本润色</div>
-          <div class="feature-desc">提高表达质量，修正语法</div>
-        </div>
-        
-        <div class="feature-card" @click="useFeature('title-generator')">
-          <div class="feature-icon">
-            <i class="icon-title"></i>
-          </div>
-          <div class="feature-title">标题生成</div>
-          <div class="feature-desc">生成吸引人的标题</div>
-        </div>
-        
-        <div class="feature-card" @click="useFeature('price-suggest')">
-          <div class="feature-icon">
-            <i class="icon-price"></i>
-          </div>
-          <div class="feature-title">价格建议</div>
-          <div class="feature-desc">智能分析合理定价</div>
-        </div>
-        
-        <div class="feature-card" @click="useFeature('lost-found-assistant')">
-          <div class="feature-icon">
-            <i class="icon-help"></i>
-          </div>
-          <div class="feature-title">寻物助手</div>
-          <div class="feature-desc">高效描述失物招领信息</div>
-        </div>
-      </div>
-      
-      <!-- 使用记录 -->
-      <div class="usage-history">
-        <div class="section-title">
-          <h3>最近使用</h3>
-          <span class="view-all" @click="viewAllHistory">查看全部</span>
-        </div>
-        
-        <div class="history-list" v-if="usageHistory.length > 0">
+        <!-- 快捷回复选项 -->
+        <div class="quick-replies" v-if="messages.length === 0 && !isLoading">
           <div 
-            v-for="(item, index) in usageHistory" 
+            v-for="(prompt, index) in quickPrompts" 
             :key="index" 
-            class="history-item"
-            @click="continueSession(item)"
+            class="quick-reply-item"
+            @click="sendQuickPrompt(prompt)"
           >
-            <div class="history-icon">
-              <i :class="`icon-${item.type}`"></i>
-            </div>
-            <div class="history-info">
-              <div class="history-title">{{ item.title }}</div>
-              <div class="history-time">{{ formatTime(item.time) }}</div>
-            </div>
-            <div class="history-arrow">
-              <i class="icon-arrow-right"></i>
-            </div>
+            {{ prompt.title }}
           </div>
         </div>
         
-        <div class="empty-history" v-else>
-          <div class="empty-icon">
-            <i class="icon-empty"></i>
-          </div>
-          <div class="empty-text">暂无使用记录</div>
-        </div>
-      </div>
-      
-      <!-- 使用提示 -->
-      <div class="usage-tips">
-        <div class="tip-title">使用小贴士</div>
-        <div class="tip-content">
-          <p>• 每日免费使用次数：5次</p>
-          <p>• 内容生成后可以自由编辑</p>
-          <p>• 优质的提示语能产出更好的结果</p>
+        <!-- 输入区域 -->
+        <div class="chat-input">
+          <textarea 
+            v-model="userInput" 
+            placeholder="输入你的问题..." 
+            @keydown.enter.prevent="handleEnterPress"
+          ></textarea>
+          <button 
+            class="send-button" 
+            :disabled="!userInput.trim() || isLoading"
+            @click="sendMessage"
+          >
+            <svg-icon name="send" size="20" />
+          </button>
         </div>
       </div>
     </div>
@@ -129,67 +79,324 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import HeaderNavigation from '@/components/common/HeaderNavigation.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 const router = useRouter()
+const userInput = ref('')
+const isLoading = ref(false)
+const messagesContainer = ref(null)
 
-// 使用记录
-const usageHistory = ref([
-  {
-    type: 'content-generation',
-    title: '二手iPhone描述生成',
-    time: new Date(Date.now() - 3600000 * 2) // 2小时前
-  },
-  {
-    type: 'text-polish',
-    title: '失物招领文本润色',
-    time: new Date(Date.now() - 3600000 * 5) // 5小时前
-  },
-  {
-    type: 'title-generator',
-    title: '笔记本电脑标题优化',
-    time: new Date(Date.now() - 86400000) // 1天前
-  }
-])
+// 聊天消息
+const messages = reactive([])
 
-// 使用AI功能
-const useFeature = (featureType) => {
-  router.push(`/ai/${featureType}`)
+// 快捷提示选项
+const quickPrompts = [
+  { title: '优化我的商品描述', content: '我想要优化以下商品描述，让它更吸引人：' },
+  { title: '生成失物招领信息', content: '帮我生成一个失物招领启事，物品是：' },
+  { title: '润色我的文章', content: '请帮我润色以下文章内容：' },
+  { title: '给我创意建议', content: '我想发布一个关于校园活动的帖子，请给我一些创意建议。' }
+]
+
+// 发送快捷提示
+const sendQuickPrompt = (prompt) => {
+  userInput.value = prompt.content
 }
 
-// 查看全部历史
-const viewAllHistory = () => {
-  router.push('/ai/history')
-}
-
-// 继续上次会话
-const continueSession = (sessionData) => {
-  router.push(`/ai/${sessionData.type}?id=${Date.now()}`)
-}
-
-// 格式化时间
-const formatTime = (time) => {
-  const now = new Date()
-  const diffMs = now - time
-  const diffSec = Math.floor(diffMs / 1000)
-  const diffMin = Math.floor(diffSec / 60)
-  const diffHour = Math.floor(diffMin / 60)
-  const diffDay = Math.floor(diffHour / 24)
+// 发送消息
+const sendMessage = async () => {
+  if (!userInput.value.trim() || isLoading.value) return
   
-  if (diffDay > 0) {
-    return `${diffDay}天前`
-  } else if (diffHour > 0) {
-    return `${diffHour}小时前`
-  } else if (diffMin > 0) {
-    return `${diffMin}分钟前`
-  } else {
-    return '刚刚'
+  // 添加用户消息
+  messages.push({
+    type: 'user',
+    content: userInput.value
+  })
+  
+  // 保存用户输入并清空输入框
+  const input = userInput.value
+  userInput.value = ''
+  
+  // 滚动到底部
+  await scrollToBottom()
+  
+  // 显示加载状态
+  isLoading.value = true
+  
+  try {
+    // 模拟AI响应延迟
+    setTimeout(() => {
+      // 模拟AI回复
+      let response
+      
+      if (input.includes('商品描述') || input.includes('优化')) {
+        response = '这是一个优化的商品描述：<br><br>"全新未拆封的iPhone 13，128GB，午夜色。购于官方Apple Store，保修期至2023年9月，附完整发票和包装。屏幕已贴高清钢化膜，赠送官方硅胶保护壳。校内交易，可面交验机，价格可小刀。"<br><br>这样的描述包含了产品状态、购买渠道、保修信息、附件情况和交易方式等关键信息，会让买家更有购买信心。'
+      } else if (input.includes('失物招领') || input.includes('丢失')) {
+        response = '这是一个失物招领启事模板：<br><br>"寻物启事：5月10日下午在图书馆三楼自习室丢失一个黑色笔记本电脑包，内有Dell XPS 13笔记本和充电器。包上有明显的蓝色贴纸标记。如有拾到，请联系手机号：133****8888，微信同号，必有酬谢！"<br><br>这个启事包含了物品特征、丢失地点、时间和联系方式等关键信息。'
+      } else if (input.includes('文章') || input.includes('润色')) {
+        response = '我可以帮你润色文章内容。请直接复制你的文章内容给我，我会帮你改进语言表达、修正语法错误，让文章更加流畅自然。'
+      } else {
+        response = '感谢你的问题！我是校园AI助手，可以帮你优化商品描述、生成失物招领文案、润色文章或提供创意建议。请告诉我更具体的需求，我会尽力协助你。'
+      }
+      
+      // 添加AI回复
+      messages.push({
+        type: 'ai',
+        content: response
+      })
+      
+      // 关闭加载状态
+      isLoading.value = false
+      
+      // 滚动到底部
+      scrollToBottom()
+    }, 1500)
+  } catch (error) {
+    console.error('AI响应错误:', error)
+    isLoading.value = false
+    
+    // 添加错误消息
+    messages.push({
+      type: 'ai',
+      content: '抱歉，我遇到了一点问题。请稍后再试。'
+    })
+    
+    scrollToBottom()
   }
 }
 
-// 返回上一页
-const goBack = () => {
-  router.back()
+// 处理回车键发送
+const handleEnterPress = (event) => {
+  // Ctrl+Enter 或 Shift+Enter 换行
+  if (event.ctrlKey || event.shiftKey) {
+    return
+  }
+  
+  // 普通回车发送消息
+  sendMessage()
 }
+
+// 格式化消息内容（支持简单HTML）
+const formatMessage = (content) => {
+  return content
+}
+
+// 滚动到底部
+const scrollToBottom = async () => {
+  await nextTick()
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+// 监听消息变化，自动滚动
+watch(messages, () => {
+  scrollToBottom()
+})
+
+onMounted(() => {
+  scrollToBottom()
+})
 </script>
+
+<style scoped>
+.ai-assist-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.ai-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+  padding: 0 16px;
+  overflow: hidden;
+}
+
+.ai-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  text-align: center;
+}
+
+.ai-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  background-color: rgba(var(--primary-rgb), 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.ai-header h2 {
+  margin: 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.ai-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 280px;
+  margin: 0;
+}
+
+.chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.message {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+.user-message {
+  justify-content: flex-end;
+}
+
+.message-content {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.user-message .message-content {
+  background-color: var(--primary-color);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-message .message-content {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+}
+
+.message-content p {
+  margin: 0;
+}
+
+.message-content ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.message-content.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+}
+
+.loading .dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--text-tertiary);
+  border-radius: 50%;
+  margin: 0 3px;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.loading .dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading .dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.quick-reply-item {
+  background-color: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary-color);
+  border-radius: 16px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.quick-reply-item:hover {
+  background-color: rgba(var(--primary-rgb), 0.2);
+}
+
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  background-color: var(--bg-secondary);
+  border-radius: 24px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+.chat-input textarea {
+  flex: 1;
+  height: 24px;
+  max-height: 120px;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-size: 15px;
+  font-family: inherit;
+  padding: 4px 8px;
+  outline: none;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.send-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  background-color: var(--primary-color);
+  border: none;
+  color: white;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>

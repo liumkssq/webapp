@@ -71,6 +71,17 @@ const emit = defineEmits(['back', 'leftClick', 'rightClick'])
 const handleBack = () => {
   emit('back')
 }
+
+// 修改导航链接，使其与路由配置匹配
+const navigation = {
+  home: '/',
+  message: '/message',
+  publish: '/publish',  // 修改为/publish，使用Selector组件选择发布类型
+  product: '/product/list',
+  lostFound: '/lost-found/list',
+  article: '/article/list',
+  user: '/user/profile'
+}
 </script>
 
 <style scoped>

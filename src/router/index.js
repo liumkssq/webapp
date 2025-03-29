@@ -81,6 +81,13 @@ const routes = [
     }
   },
   {
+    path: '/publish-product',
+    component: () => import('../pages/publish/Product.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
     path: '/publish/lost-found',
     name: 'PublishLostFound',
     component: () => import('../pages/publish/LostFound.vue'),
@@ -89,8 +96,22 @@ const routes = [
     }
   },
   {
+    path: '/publish-lost-found',
+    component: () => import('../pages/publish/LostFound.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
     path: '/publish/article',
     name: 'PublishArticle',
+    component: () => import('../pages/publish/Article.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/publish-article',
     component: () => import('../pages/publish/Article.vue'),
     meta: {
       requiresAuth: true
@@ -193,6 +214,13 @@ const routes = [
   {
     path: '/ai-assist',
     name: 'AIAssist',
+    component: () => import('../pages/common/AIAssist.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/ai/assist',
     component: () => import('../pages/common/AIAssist.vue'),
     meta: {
       requiresAuth: true
