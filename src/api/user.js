@@ -209,3 +209,27 @@ export function resetPassword(data) {
     data
   })
 }
+
+/**
+ * 关注用户
+ * @param {number} id 要关注的用户ID
+ * @returns {Promise} Promise对象
+ */
+export function followUser(id) {
+  return request({
+    url: `/api/user/follow/${id}`,
+    method: 'post'
+  })
+}
+
+/**
+ * 取消关注用户
+ * @param {number} id 要取消关注的用户ID
+ * @returns {Promise} Promise对象
+ */
+export function unfollowUser(id) {
+  return request({
+    url: `/api/user/unfollow/${id}`,
+    method: 'post'
+  })
+}

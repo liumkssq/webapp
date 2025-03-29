@@ -597,5 +597,83 @@ export default {
         data: null
       };
     }
+  },
+  
+  // 关注用户
+  'POST /api/user/follow/:id': (config) => {
+    try {
+      // 获取被关注用户的ID
+      const targetId = config.url.match(/\/api\/user\/follow\/(\d+)/)[1];
+      
+      // 假设登录用户的ID是从token中获取的
+      // 这里简化处理，假设当前用户是管理员
+      const currentUserId = 1;
+      
+      // 查找被关注的用户
+      const targetUser = users.find(u => u.id == targetId);
+      if (!targetUser) {
+        return {
+          code: 404,
+          message: '用户不存在'
+        };
+      }
+      
+      // 更新用户的关注状态
+      // 在实际情况中，这里应该修改数据库中的关注关系
+      // 在mock中，我们只需要返回成功响应即可
+      
+      return {
+        code: 200,
+        message: '关注成功',
+        data: {
+          isFollowing: true
+        }
+      };
+    } catch (error) {
+      console.error('关注用户模拟接口错误:', error);
+      return {
+        code: 500,
+        message: '服务器内部错误'
+      };
+    }
+  },
+  
+  // 取消关注用户
+  'POST /api/user/unfollow/:id': (config) => {
+    try {
+      // 获取被取消关注用户的ID
+      const targetId = config.url.match(/\/api\/user\/unfollow\/(\d+)/)[1];
+      
+      // 假设登录用户的ID是从token中获取的
+      // 这里简化处理，假设当前用户是管理员
+      const currentUserId = 1;
+      
+      // 查找被取消关注的用户
+      const targetUser = users.find(u => u.id == targetId);
+      if (!targetUser) {
+        return {
+          code: 404,
+          message: '用户不存在'
+        };
+      }
+      
+      // 更新用户的关注状态
+      // 在实际情况中，这里应该修改数据库中的关注关系
+      // 在mock中，我们只需要返回成功响应即可
+      
+      return {
+        code: 200,
+        message: '取消关注成功',
+        data: {
+          isFollowing: false
+        }
+      };
+    } catch (error) {
+      console.error('取消关注用户模拟接口错误:', error);
+      return {
+        code: 500,
+        message: '服务器内部错误'
+      };
+    }
   }
 }
