@@ -5,6 +5,7 @@ import lostFoundMock from './modules/lostFound'
 import mapMock from './modules/map'
 import articleMock from './modules/article'
 import productMock from './modules/product'
+import im from './modules/im'
 
 // 配置Mock
 Mock.setup({
@@ -38,6 +39,7 @@ registerMock(lostFoundMock)
 registerMock(mapMock)
 registerMock(articleMock)
 registerMock(productMock)
+registerMock(im)
 
 console.log('[Mock] Mock系统初始化完成')
 export default Mock

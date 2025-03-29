@@ -128,9 +128,10 @@ const routes = [
   {
     path: '/chat',
     name: 'Chat',
-    component: () => import('../pages/chat/Index.vue'),
+    component: () => import('@/pages/chat/ConversationList.vue'),
     meta: {
-      requiresAuth: true
+      requiresAuth: true,
+      title: '消息'
     }
   },
   {
@@ -143,11 +144,11 @@ const routes = [
   },
   {
     path: '/chat/conversation/:id',
-    name: 'ChatConversation',
-    component: () => import('../pages/chat/Conversation.vue'),
-    props: true,
+    name: 'ConversationDetail',
+    component: () => import('@/pages/chat/ConversationDetail.vue'),
     meta: {
-      requiresAuth: true
+      requiresAuth: true,
+      title: '聊天'
     }
   },
   {

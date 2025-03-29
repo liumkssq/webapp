@@ -11,6 +11,39 @@ const service = axios.create({
   }
 })
 
+// 请求标记存储，用于取消请求
+const pendingRequests = new Map()
+
+// 生成请求标记
+const generateRequestKey = (config) => {
+  const { url, method, params, data } = config
+  return [url, method, JSON.stringify(params), JSON.stringify(data)].join('&')
+}
+
+// 添加请求标记
+const addPendingRequest = (config) => {
+  const requestKey = generateRequestKey(config)
+  
+  if (pendingRequests.has(requestKey)) {
+    // 取消前一个相同请求
+    const controller = pendingRequests.get(requestKey)
+    controller.abort()
+  }
+  
+  // 创建新的 AbortController
+  const controller = new AbortController()
+  config.signal = controller.signal
+  pendingRequests.set(requestKey, controller)
+  
+  return config
+}
+
+// 移除请求标记
+const removePendingRequest = (config) => {
+  const requestKey = generateRequestKey(config)
+  pendingRequests.delete(requestKey)
+}
+
 // 请求拦截器
 service.interceptors.request.use(
   config => {
@@ -21,6 +54,9 @@ service.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    
+    // 处理重复请求
+    config = addPendingRequest(config)
     
     return config
   },
@@ -33,6 +69,9 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
+    // 移除请求标记
+    removePendingRequest(response.config)
+    
     const res = response.data
     
     // 如果接口返回的状态码不是200，认为请求出错
@@ -56,6 +95,17 @@ service.interceptors.response.use(
     return res
   },
   error => {
+    // 请求被取消，直接返回
+    if (axios.isCancel(error)) {
+      console.log('请求被取消:', error.message)
+      return Promise.reject(new Error('请求已取消'))
+    }
+    
+    // 移除请求标记
+    if (error.config) {
+      removePendingRequest(error.config)
+    }
+    
     console.error('响应错误', error)
     
     let message = '网络错误'
