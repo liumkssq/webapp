@@ -1,0 +1,284 @@
+/* Home页面样式 */
+.home-page {
+  padding-bottom: 70px;
+}
+
+/* 搜索栏 */
+.search-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 12px 16px;
+  background-color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.search-bar input {
+  flex: 1;
+  height: 36px;
+  border-radius: 18px;
+  padding: 0 16px;
+  background-color: var(--bg-secondary);
+  border: none;
+  font-size: var(--font-size-subhead);
+}
+
+.search-bar button {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: var(--font-size-subhead);
+  font-weight: 500;
+}
+
+/* 轮播图 */
+.banner-swiper {
+  position: relative;
+  height: 180px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.swiper-container {
+  height: 100%;
+  position: relative;
+}
+
+.swiper-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  z-index: 1;
+}
+
+.swiper-item.active {
+  opacity: 1;
+  z-index: 2;
+}
+
+.banner-title {
+  color: white;
+  font-size: var(--font-size-title-3);
+  font-weight: 600;
+  padding: 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  width: 100%;
+}
+
+.indicator {
+  position: absolute;
+  bottom: 10px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 3;
+}
+
+.indicator span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.indicator span.active {
+  width: 20px;
+  border-radius: 4px;
+  background-color: white;
+}
+
+/* 功能入口 */
+.feature-entries {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  padding: 5px 16px 20px;
+  margin-bottom: 20px;
+}
+
+.entry-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+
+.entry-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  color: white;
+  font-size: 24px;
+  transition: transform 0.2s ease;
+}
+
+.entry-item:hover .entry-icon {
+  transform: scale(1.05);
+}
+
+.entry-name {
+  font-size: var(--font-size-caption-1);
+  color: var(--text-secondary);
+}
+
+/* 内容区块 */
+.content-blocks {
+  padding: 0 16px;
+}
+
+.content-block {
+  margin-bottom: 24px;
+}
+
+.block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.block-header h3 {
+  font-size: var(--font-size-title-3);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.view-more {
+  font-size: var(--font-size-subhead);
+  color: var(--primary-color);
+  cursor: pointer;
+}
+
+/* 商品列表 */
+.product-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* 失物招领列表 */
+.lost-found-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 文章列表 */
+.article-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.article-item {
+  display: flex;
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.article-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.article-info {
+  flex: 1;
+  padding-right: 16px;
+}
+
+.article-title {
+  font-size: var(--font-size-headline);
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.article-brief {
+  font-size: var(--font-size-subhead);
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.article-meta {
+  font-size: var(--font-size-caption-1);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+}
+
+.article-meta .dot {
+  margin: 0 6px;
+}
+
+.article-image {
+  flex: 0 0 120px;
+  height: 90px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.article-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-normal);
+}
+
+.article-item:hover .article-image img {
+  transform: scale(1.05);
+}
+
+/* 响应式适配 */
+@media (max-width: 480px) {
+  .feature-entries {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  .entry-item:nth-child(n+5) {
+    display: none;
+  }
+  
+  .product-list {
+    grid-template-columns: 1fr;
+  }
+  
+  .banner-swiper {
+    height: 150px;
+  }
+  
+  .article-image {
+    flex: 0 0 100px;
+    height: 75px;
+  }
+}

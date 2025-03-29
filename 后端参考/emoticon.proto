@@ -1,0 +1,47 @@
+syntax = "proto3";
+package web;
+
+option go_package = "web/v1;web";
+
+import "tagger/tagger.proto";
+
+message EmoticonItem{
+  int32 emoticon_id = 1;
+  string url = 2;
+}
+
+// 删除表情包接口请求参数
+message EmoticonDeleteRequest{
+  int32 emoticon_id = 1 [(tagger.tags) = "binding:\"required\""];
+}
+
+// 删除表情包接口响应参数
+message EmoticonDeleteResponse{}
+
+// 用户表情包列表接口请求参数
+message EmoticonListRequest{}
+
+// 用户表情包列表接口响应参数
+message EmoticonListResponse{
+  repeated EmoticonItem items = 2;
+}
+
+// 表情包上传接口请求参数
+message EmoticonUploadRequest{}
+
+// 表情包上传接口响应参数
+message EmoticonUploadResponse{
+  int32 emoticon_id = 1;
+  string url = 2;
+}
+
+// 删除表情包接口请求参数
+message EmoticonCreateRequest{
+  string url = 1 [(tagger.tags) = "binding:\"required\""];
+}
+
+// 删除表情包接口响应参数
+message EmoticonCreateResponse{
+  int32 emoticon_id = 1;
+  string url = 2;
+}
