@@ -43,26 +43,50 @@ const registerMockApis = (mockModule) => {
     switch (method) {
       case 'GET':
         mock.onGet(new RegExp(mockUrl)).reply(config => {
-          const response = handler(config)
-          return respond(config, response.code === 200 ? 200 : response.code, response)
+          try {
+            const response = handler(config)
+            // 成功响应始终返回200状态码，而不是API响应中的code
+            return respond(config, 200, response)
+          } catch (error) {
+            console.error(`[Mock Error][GET ${url}]:`, error)
+            return respond(config, 500, { code: 500, message: '模拟服务器内部错误', data: null })
+          }
         })
         break
       case 'POST':
         mock.onPost(new RegExp(mockUrl)).reply(config => {
-          const response = handler(config)
-          return respond(config, response.code === 200 ? 200 : response.code, response)
+          try {
+            const response = handler(config)
+            // 成功响应始终返回200状态码，而不是API响应中的code
+            return respond(config, 200, response)
+          } catch (error) {
+            console.error(`[Mock Error][POST ${url}]:`, error)
+            return respond(config, 500, { code: 500, message: '模拟服务器内部错误', data: null })
+          }
         })
         break
       case 'PUT':
         mock.onPut(new RegExp(mockUrl)).reply(config => {
-          const response = handler(config)
-          return respond(config, response.code === 200 ? 200 : response.code, response)
+          try {
+            const response = handler(config)
+            // 成功响应始终返回200状态码，而不是API响应中的code
+            return respond(config, 200, response)
+          } catch (error) {
+            console.error(`[Mock Error][PUT ${url}]:`, error)
+            return respond(config, 500, { code: 500, message: '模拟服务器内部错误', data: null })
+          }
         })
         break
       case 'DELETE':
         mock.onDelete(new RegExp(mockUrl)).reply(config => {
-          const response = handler(config)
-          return respond(config, response.code === 200 ? 200 : response.code, response)
+          try {
+            const response = handler(config)
+            // 成功响应始终返回200状态码，而不是API响应中的code
+            return respond(config, 200, response)
+          } catch (error) {
+            console.error(`[Mock Error][DELETE ${url}]:`, error)
+            return respond(config, 500, { code: 500, message: '模拟服务器内部错误', data: null })
+          }
         })
         break
       default:
