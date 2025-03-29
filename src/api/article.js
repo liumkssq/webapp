@@ -186,3 +186,18 @@ export function getUserArticles(params) {
     params
   })
 }
+
+/**
+ * 获取用户收藏的文章列表
+ * @param {object} params 查询参数
+ * @param {number} params.page 页码
+ * @param {number} params.limit 每页数量
+ * @returns {Promise} Promise对象
+ */
+export function getFavoriteArticles(params) {
+  return request({
+    url: '/api/article/favorite',
+    method: 'get',
+    params
+  })
+}

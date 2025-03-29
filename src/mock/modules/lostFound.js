@@ -541,8 +541,10 @@ const lostFoundMock = {
   
   // 获取用户发布的失物招领列表
   'GET /api/lost-found/user/:id': config => {
-    const { id } = config.params
-    const { page = 1, limit = 10 } = getUrlParams(config.url)
+    // 确保config.params存在
+    const id = config?.params?.id || config.url.match(/\/user\/(\d+)/)?.[1]
+    // 安全地从URL中提取参数，提供默认值
+    const { page = 1, limit = 10 } = config.params || getUrlParams(config.url) || {}
     
     // 生成列表数据
     const items = generateLostFoundItems(15).map(item => {

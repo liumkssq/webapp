@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { Toast, Dialog, Notify } from 'vant'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
@@ -17,15 +18,19 @@ import './mock'
 
 // 创建应用实例
 const app = createApp(App)
+const pinia = createPinia()
 
 // 使用 Pinia 状态管理
-app.use(createPinia())
+app.use(pinia)
 
 // 使用路由
 app.use(router)
 
 // 使用Vant UI
 app.use(Vant)
+app.use(Toast)
+app.use(Dialog)
+app.use(Notify)
 
 // 注册全局组件
 app.component('SvgIcon', SvgIcon)

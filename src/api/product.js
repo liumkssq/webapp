@@ -100,11 +100,13 @@ export function favoriteProduct(id, isFavorite) {
 /**
  * 获取用户收藏的商品列表
  * @param {object} params 查询参数
+ * @param {number} params.page 页码
+ * @param {number} params.limit 每页数量
  * @returns {Promise} Promise对象
  */
 export function getFavoriteProducts(params) {
   return request({
-    url: '/api/product/favorites',
+    url: '/api/product/favorite',
     method: 'get',
     params
   })

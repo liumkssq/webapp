@@ -89,7 +89,7 @@ service.interceptors.response.use(
       message = error.message
     }
     
-    Toast.fail(message)
+    Toast(message)
     
     return Promise.reject(error)
   }
