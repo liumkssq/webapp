@@ -112,6 +112,9 @@ export function sendVerificationCode(data) {
   })
 }
 
+// 重命名为apiSendVerificationCode以避免与Login.vue中的sendVerificationCode函数冲突
+export { sendVerificationCode as apiSendVerificationCode }
+
 /**
  * 退出登录
  * @returns {Promise} Promise对象

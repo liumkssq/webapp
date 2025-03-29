@@ -87,7 +87,7 @@
           <button 
             type="button" 
             class="send-code-button" 
-            @click="sendCode" 
+            @click="sendVerificationCode" 
             :disabled="codeSending || countdown > 0"
           >
             {{ countdown > 0 ? `${countdown}秒后重新获取` : '获取验证码' }}
@@ -113,7 +113,7 @@
 <script setup>
 import { ref, reactive, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { login, loginByVerificationCode, sendVerificationCode as apiSendVerificationCode } from '@/api/user'
+import { login, loginByVerificationCode, apiSendVerificationCode } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { useMessageStore } from '@/store/message'
 
@@ -213,7 +213,7 @@ const handleSmsLogin = async () => {
 }
 
 // 发送验证码
-const sendCode = async () => {
+const sendVerificationCode = async () => {
   // 简单的手机号验证
   const phoneRegex = /^1[3-9]\d{9}$/
   if (!phoneRegex.test(smsForm.phone)) {

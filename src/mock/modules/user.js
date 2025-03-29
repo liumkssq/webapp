@@ -27,50 +27,69 @@ const tokens = {}
 export default {
   // 登录
   'POST /api/user/login': (options) => {
-    const { username, password, phone, verificationCode } = JSON.parse(options.body)
-    
-    // 密码登录
-    if (username && password) {
-      const user = users.find(u => u.username === username || u.phone === username || u.email === username)
-      
-      if (user && password === '123456') {
-        const token = 'token_' + Mock.Random.guid()
-        tokens[token] = user.id
-        
+    try {
+      // 确保请求体存在且不为空
+      if (!options.body) {
         return {
-          code: 200,
-          message: '登录成功',
-          data: {
-            token,
-            userInfo: user
+          code: 400,
+          message: '请求体不能为空',
+          data: null
+        }
+      }
+      
+      const requestData = JSON.parse(options.body)
+      const { username, password, phone, verificationCode } = requestData
+      
+      // 密码登录
+      if (username && password) {
+        const user = users.find(u => u.username === username || u.phone === username || u.email === username)
+        
+        if (user && password === '123456') {
+          const token = 'token_' + Mock.Random.guid()
+          tokens[token] = user.id
+          
+          return {
+            code: 200,
+            message: '登录成功',
+            data: {
+              token,
+              userInfo: user
+            }
           }
         }
       }
-    }
-    
-    // 验证码登录
-    if (phone && verificationCode) {
-      const user = users.find(u => u.phone === phone)
       
-      if (user && verificationCode === '1234') {
-        const token = 'token_' + Mock.Random.guid()
-        tokens[token] = user.id
+      // 验证码登录
+      if (phone && verificationCode) {
+        const user = users.find(u => u.phone === phone)
         
-        return {
-          code: 200,
-          message: '登录成功',
-          data: {
-            token,
-            userInfo: user
+        if (user && verificationCode === '1234') {
+          const token = 'token_' + Mock.Random.guid()
+          tokens[token] = user.id
+          
+          return {
+            code: 200,
+            message: '登录成功',
+            data: {
+              token,
+              userInfo: user
+            }
           }
         }
       }
-    }
-    
-    return {
-      code: 401,
-      message: '用户名或密码错误',
-      data: null
+      
+      return {
+        code: 401,
+        message: '用户名或密码错误',
+        data: null
+      }
+    } catch (error) {
+      console.error('登录处理错误:', error)
+      return {
+        code: 500,
+        message: '服务器内部错误',
+        data: null
+      }
     }
   },
   
