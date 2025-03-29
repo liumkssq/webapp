@@ -15,8 +15,13 @@
         <i class="icon-back"></i>
       </div>
       <div class="nav-title">个人资料</div>
-      <div class="save-btn" @click="saveProfile" v-if="isEditing">
-        保存
+      <div class="nav-actions">
+        <div class="settings-btn" @click="goToSettings">
+          <i class="icon-settings"></i>
+        </div>
+        <div class="save-btn" @click="saveProfile" v-if="isEditing">
+          保存
+        </div>
       </div>
     </div>
     
@@ -141,6 +146,13 @@
       
       <div class="setting-item" @click="goToChangePwd">
         <div class="setting-label">修改密码</div>
+        <div class="setting-action">
+          <i class="icon-arrow-right"></i>
+        </div>
+      </div>
+      
+      <div class="setting-item" @click="goToSettings">
+        <div class="setting-label">更多设置</div>
         <div class="setting-action">
           <i class="icon-arrow-right"></i>
         </div>
@@ -297,16 +309,26 @@ const goToBindPhone = () => {
   showToast('手机号绑定功能开发中...')
 }
 
-// 前往修改密码
+// 导航到修改密码页面
 const goToChangePwd = () => {
-  router.push('/change-password')
+  router.push('/password/change')
+}
+
+// 导航到设置页面
+const goToSettings = () => {
+  router.push('/settings')
 }
 
 // 退出登录
 const logout = async () => {
   try {
     await userStore.userLogout()
-    router.replace('/login')
+    showToast('退出登录成功')
+    
+    // 跳转到登录页
+    setTimeout(() => {
+      router.push('/login')
+    }, 1500)
   } catch (error) {
     console.error('退出登录失败', error)
     showToast('退出登录失败，请重试')

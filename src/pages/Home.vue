@@ -211,9 +211,11 @@ const goToDetail = (id, type) => {
 // 查看更多
 const viewMore = (type) => {
   if (type === 'lostfound') {
-    router.push('/lost-found/list')
+    router.push('/lost-found-list')
+  } else if (type === 'latest') {
+    router.push('/product-list')
   } else {
-    router.push('/article/list')
+    router.push('/article-list')
   }
 }
 
@@ -221,16 +223,16 @@ const viewMore = (type) => {
 const handleCategoryClick = (category) => {
   switch (category) {
     case 'secondhand':
-      router.push('/article/list')
+      router.push('/product-list')
       break
     case 'lostfound':
-      router.push('/lost-found/list')
+      router.push('/lost-found-list')
       break
     case 'group':
-      router.push('/group/list')
+      router.push('/article-list')
       break
     case 'ai':
-      router.push('/ai/chat')
+      router.push('/ai/assist')
       break
     default:
       break
@@ -239,6 +241,16 @@ const handleCategoryClick = (category) => {
 
 // 导航到指定路径
 const goToPath = (path) => {
-  router.push(path)
+  if (path === '/chat') {
+    router.push('/chat-list')
+  } else if (path === '/user/' + userId) {
+    if (userStore.isLoggedIn) {
+      router.push('/profile')
+    } else {
+      router.push('/login')
+    }
+  } else {
+    router.push(path)
+  }
 }
 </script>

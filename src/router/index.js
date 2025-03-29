@@ -9,7 +9,9 @@ import ForgotPassword from '@/pages/ForgotPassword.vue'
 import ArticleDetail from '@/pages/ArticleDetail.vue'
 import ArticleList from '@/pages/ArticleList.vue'
 import ProductDetail from '@/pages/ProductDetail.vue'
+import ProductList from '@/pages/ProductList.vue'
 import LostFoundDetail from '@/pages/LostFoundDetail.vue'
+import LostFoundList from '@/pages/LostFoundList.vue'
 import UserHomepage from '@/pages/UserHomepage.vue'
 import PublishSelector from '@/pages/PublishSelector.vue'
 import PublishArticle from '@/pages/PublishArticle.vue'
@@ -20,6 +22,10 @@ import ChatList from '@/pages/ChatList.vue'
 import Search from '@/pages/Search.vue'
 import SearchResults from '@/pages/SearchResults.vue'
 import Profile from '@/pages/Profile.vue'
+import Settings from '@/pages/Settings.vue'
+import ChangePassword from '@/pages/ChangePassword.vue'
+import PrivacySettings from '@/pages/PrivacySettings.vue'
+import AIAssist from '@/pages/AIAssist.vue'
 import NotFound from '@/pages/NotFound.vue'
 
 // 路由配置
@@ -92,12 +98,30 @@ const routes = [
     }
   },
   {
+    path: '/product-list',
+    name: 'ProductList',
+    component: ProductList,
+    meta: {
+      requiresAuth: false,
+      title: '二手商品'
+    }
+  },
+  {
     path: '/lost-found/:id',
     name: 'LostFoundDetail',
     component: LostFoundDetail,
     meta: {
       requiresAuth: false,
       title: '失物招领详情'
+    }
+  },
+  {
+    path: '/lost-found-list',
+    name: 'LostFoundList',
+    component: LostFoundList,
+    meta: {
+      requiresAuth: false,
+      title: '失物招领'
     }
   },
   {
@@ -116,6 +140,42 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: '个人资料'
+    }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: Settings,
+    meta: {
+      requiresAuth: true,
+      title: '设置'
+    }
+  },
+  {
+    path: '/password/change',
+    name: 'ChangePassword',
+    component: ChangePassword,
+    meta: {
+      requiresAuth: true,
+      title: '修改密码'
+    }
+  },
+  {
+    path: '/privacy/settings',
+    name: 'PrivacySettings',
+    component: PrivacySettings,
+    meta: {
+      requiresAuth: true,
+      title: '隐私设置'
+    }
+  },
+  {
+    path: '/ai/assist',
+    name: 'AIAssist',
+    component: AIAssist,
+    meta: {
+      requiresAuth: true,
+      title: 'AI助手'
     }
   },
   {
