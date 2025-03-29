@@ -285,7 +285,8 @@ export default {
   
   // 获取当前用户信息
   'GET /api/user/info': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
+    // 确保options和headers存在
+    const token = options?.headers?.Authorization?.split(' ')[1]
     
     if (!token || !tokens[token]) {
       return {
