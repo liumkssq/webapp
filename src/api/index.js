@@ -1,11 +1,14 @@
 // 导入所有API模块
 import * as user from './user'
 import * as chat from './chat'
+import * as map from './map'
+import * as lostFound from './lostFound'
 
 // 创建API对象，便于统一管理
 const api = {
   user,
   chat,
+  map,
   
   // 占位API，后续实现
   product: {

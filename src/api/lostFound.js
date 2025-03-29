@@ -2,14 +2,13 @@ import request from '@/utils/request'
 
 /**
  * 获取失物招领列表
- * @param {object} params 查询参数
- * @param {string} params.type 类型(lost/found/all)
- * @param {string} params.keywords 搜索关键词
- * @param {string} params.sort 排序方式(latest/hot)
- * @param {string} params.status 状态(open/pending/closed/all)
+ * @param {Object} params 查询参数
  * @param {number} params.page 页码
- * @param {number} params.pageSize 每页数量
- * @param {number} params.limit 限制返回数量
+ * @param {number} params.limit 每页数量
+ * @param {string} params.type 类型(lost/found/all)
+ * @param {string} params.status 状态(pending/found/claimed/closed/all)
+ * @param {string} params.sort 排序方式(latest/hot)
+ * @param {string} params.keywords 搜索关键词
  * @returns {Promise} Promise对象
  */
 export function getLostFoundList(params) {
@@ -33,64 +32,9 @@ export function getLostFoundDetail(id) {
 }
 
 /**
- * 发布失物招领信息
- * @param {object} data 失物招领信息
- * @returns {Promise} Promise对象
- */
-export function publishLostFound(data) {
-  return request({
-    url: '/api/lost-found/publish',
-    method: 'post',
-    data
-  })
-}
-
-/**
- * 更新失物招领信息
- * @param {number} id 失物招领ID
- * @param {object} data 失物招领信息
- * @returns {Promise} Promise对象
- */
-export function updateLostFound(id, data) {
-  return request({
-    url: `/api/lost-found/${id}`,
-    method: 'put',
-    data
-  })
-}
-
-/**
- * 删除失物招领信息
- * @param {number} id 失物招领ID
- * @returns {Promise} Promise对象
- */
-export function deleteLostFound(id) {
-  return request({
-    url: `/api/lost-found/${id}`,
-    method: 'delete'
-  })
-}
-
-/**
- * 更新失物招领状态
- * @param {number} id 失物招领ID
- * @param {string} status 状态(open/pending/closed)
- * @returns {Promise} Promise对象
- */
-export function updateLostFoundStatus(id, status) {
-  return request({
-    url: `/api/lost-found/status/${id}`,
-    method: 'put',
-    data: {
-      status
-    }
-  })
-}
-
-/**
- * 获取用户发布的失物招领列表
+ * 获取用户发布的失物招领
  * @param {number} userId 用户ID
- * @param {object} params 查询参数
+ * @param {Object} params 查询参数
  * @param {number} params.page 页码
  * @param {number} params.limit 每页数量
  * @returns {Promise} Promise对象
@@ -104,17 +48,85 @@ export function getUserLostFound(userId, params) {
 }
 
 /**
- * 发表评论
+ * 发布失物招领
+ * @param {Object} data 失物招领数据
+ * @returns {Promise} Promise对象
+ */
+export function publishLostFound(data) {
+  return request({
+    url: '/api/lost-found',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 更新失物招领
  * @param {number} id 失物招领ID
- * @param {object} data 评论数据
+ * @param {Object} data 更新数据
+ * @returns {Promise} Promise对象
+ */
+export function updateLostFound(id, data) {
+  return request({
+    url: `/api/lost-found/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 删除失物招领
+ * @param {number} id 失物招领ID
+ * @returns {Promise} Promise对象
+ */
+export function deleteLostFound(id) {
+  return request({
+    url: `/api/lost-found/${id}`,
+    method: 'delete'
+  })
+}
+
+/**
+ * 更新失物招领状态
+ * @param {number} id 失物招领ID
+ * @param {string} status 状态(pending/found/claimed/closed)
+ * @returns {Promise} Promise对象
+ */
+export function updateLostFoundStatus(id, status) {
+  return request({
+    url: `/api/lost-found/${id}/status`,
+    method: 'put',
+    data: { status }
+  })
+}
+
+/**
+ * 评论失物招领
+ * @param {number} id 失物招领ID
+ * @param {Object} data 评论数据
  * @param {string} data.content 评论内容
- * @param {number} data.parentId 父评论ID（回复时使用）
  * @returns {Promise} Promise对象
  */
 export function commentLostFound(id, data) {
   return request({
-    url: `/api/lost-found/comment/${id}`,
+    url: `/api/lost-found/${id}/comment`,
     method: 'post',
     data
+  })
+}
+
+/**
+ * 上传失物招领图片
+ * @param {FormData} data 包含图片文件的FormData
+ * @returns {Promise} Promise对象
+ */
+export function uploadLostFoundImages(data) {
+  return request({
+    url: '/api/lost-found/images',
+    method: 'post',
+    data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   })
 }

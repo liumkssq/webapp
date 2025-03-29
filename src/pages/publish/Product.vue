@@ -159,13 +159,16 @@
       <!-- 交易地点 -->
       <div class="form-section" v-if="productForm.deliveryMethod.includes('meetup')">
         <div class="section-title">交易地点 <span class="required">*</span></div>
-        <div class="input-container">
-          <input 
-            type="text" 
-            v-model="productForm.location" 
-            placeholder="请输入交易地点，如：图书馆、食堂、宿舍楼" 
-            class="text-input"
-          >
+        <div class="location-picker" @click="navigateToLocationPicker">
+          <div v-if="productForm.location" class="selected-location">
+            <i class="icon-location"></i>
+            <span>{{ productForm.location }}</span>
+          </div>
+          <div v-else class="placeholder-location">
+            <i class="icon-location"></i>
+            <span>点击选择交易地点</span>
+          </div>
+          <i class="icon-arrow-right"></i>
         </div>
       </div>
       
@@ -226,7 +229,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 
@@ -244,6 +247,7 @@ const productForm = reactive({
   images: [],
   deliveryMethod: ['meetup'],
   location: '',
+  locationCoords: null,
   contactInfo: {
     phone: '',
     wechat: ''
@@ -397,4 +401,77 @@ const showToast = (message) => {
 const goBack = () => {
   router.back()
 }
+
+// 跳转到地图选择页面
+const navigateToLocationPicker = () => {
+  // 将当前地址传递给地图选择页面（如果有）
+  const query = productForm.locationCoords ? 
+    { location: JSON.stringify(productForm.locationCoords) } : 
+    {};
+  
+  // 导航到地图选择页面，并设置回调
+  router.push({
+    path: '/location-picker',
+    query: {
+      ...query,
+      callback: '/publish-product'
+    }
+  });
+}
+
+// 在onMounted中添加
+onMounted(() => {
+  // 检查是否有地图选择的回调数据
+  const locationData = router.currentRoute.value.query.location;
+  if (locationData) {
+    try {
+      const location = JSON.parse(locationData);
+      productForm.location = location.address;
+      productForm.locationCoords = {
+        lng: location.lng,
+        lat: location.lat
+      };
+      
+      // 清除URL中的location参数
+      router.replace({
+        path: router.currentRoute.value.path
+      });
+    } catch (e) {
+      console.error('解析位置信息失败', e);
+    }
+  }
+});
 </script>
+
+<style scoped>
+/* 样式部分添加位置选择器样式 */
+
+.location-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.selected-location, .placeholder-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.placeholder-location {
+  color: var(--placeholder-color);
+}
+
+.icon-location {
+  font-size: 18px;
+  color: var(--primary-color);
+}
+
+.icon-arrow-right {
+  font-size: 16px;
+  color: var(--icon-color);
+}
+</style>

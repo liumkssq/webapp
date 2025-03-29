@@ -4,6 +4,10 @@ import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
 
+// 导入Vant UI
+import Vant from 'vant'
+import 'vant/lib/index.css'
+
 // 导入全局组件
 import SvgIcon from '@/components/SvgIcon.vue'
 import AppLoading from '@/components/AppLoading.vue'
@@ -19,6 +23,9 @@ app.use(createPinia())
 
 // 使用路由
 app.use(router)
+
+// 使用Vant UI
+app.use(Vant)
 
 // 注册全局组件
 app.component('SvgIcon', SvgIcon)

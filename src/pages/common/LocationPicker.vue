@@ -56,9 +56,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import HeaderNavigation from '../components/common/HeaderNavigation.vue'
-import BaiduMap from '../components/map/BaiduMap.vue'
-import Toast from '../components/common/Toast.vue'
+import HeaderNavigation from '@/components/common/HeaderNavigation.vue'
+import BaiduMap from '@/components/map/BaiduMap.vue'
+import Toast from '@/components/common/Toast.vue'
 
 const router = useRouter()
 const route = useRoute()

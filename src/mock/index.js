@@ -2,6 +2,7 @@ import Mock from 'mockjs'
 import userMock from './modules/user'
 import chatMock from './modules/chat'
 import lostFoundMock from './modules/lostFound'
+import mapMock from './modules/map'
 
 // 配置Mock
 Mock.setup({
@@ -28,6 +29,7 @@ const registerMock = mockModules => {
 registerMock(userMock)
 registerMock(chatMock)
 registerMock(lostFoundMock)
+registerMock(mapMock)
 
 // 暴露Mock对象，方便后续可能的扩展
 export default Mock
