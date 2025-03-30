@@ -233,3 +233,19 @@ export function unfollowUser(id) {
     method: 'post'
   })
 }
+
+/**
+ * 验证重置密码的验证码
+ * @param {object} data 验证信息
+ * @param {string} data.phone 手机号
+ * @param {string} data.verificationCode 验证码
+ * @param {string} data.type 验证类型
+ * @returns {Promise} Promise对象
+ */
+export function verifyCode(data) {
+  return request({
+    url: '/api/user/verify-code',
+    method: 'post',
+    data
+  })
+}

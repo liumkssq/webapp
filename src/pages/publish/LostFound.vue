@@ -14,10 +14,16 @@
       <div class="back-btn" @click="goBack">
         <i class="icon-back"></i>
       </div>
-      <div class="nav-title">发布{{ formType === 'lost' ? '寻物启事' : '招领启事' }}</div>
+      <div class="nav-title">{{ isLost ? '发布失物寻找' : '发布拾物归还' }}</div>
       <div class="publish-btn" @click="publishLostFound" :class="{ disabled: !isFormValid }">
         发布
       </div>
+    </div>
+    
+    <!-- AI助手按钮 -->
+    <div class="ai-assistant-btn" @click="showContentGenerator = true">
+      <i class="icon-ai"></i>
+      <span>AI文案助手</span>
     </div>
     
     <!-- 表单类型切换 -->
@@ -112,12 +118,12 @@
           {{ formType === 'lost' ? '丢失地点' : '拾取地点' }} 
           <span class="required">*</span>
         </div>
-        <div class="location-select" @click="showLocationPicker = true">
-          <div class="selected-location">
-            {{ lostFoundForm.location || '请选择地点' }}
-          </div>
-          <i class="icon-arrow-right"></i>
-        </div>
+        <location-field
+          v-model="locationData"
+          :placeholder="formType === 'lost' ? '在哪里丢失的？' : '在哪里拾取的？'"
+          :required="true"
+          @update:model-value="handleLocationUpdate"
+        />
       </div>
       
       <!-- 丢失/拾取时间 -->
@@ -206,40 +212,6 @@
       </div>
     </div>
     
-    <!-- 地点选择器弹窗 -->
-    <div class="location-picker" v-if="showLocationPicker">
-      <div class="picker-mask" @click="showLocationPicker = false"></div>
-      <div class="picker-content">
-        <div class="picker-header">
-          <div class="picker-title">选择地点</div>
-          <div class="picker-close" @click="showLocationPicker = false">
-            <i class="icon-close"></i>
-          </div>
-        </div>
-        
-        <div class="picker-body">
-          <div 
-            v-for="location in locationOptions" 
-            :key="location" 
-            class="picker-item"
-            @click="selectLocation(location)"
-          >
-            {{ location }}
-          </div>
-          
-          <div class="custom-location">
-            <input 
-              type="text" 
-              v-model="customLocation" 
-              placeholder="输入其他地点" 
-              class="custom-input"
-            >
-            <button class="confirm-btn" @click="confirmCustomLocation">确定</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    
     <!-- 日期选择器弹窗 -->
     <div class="date-picker" v-if="showDatePicker">
       <div class="picker-mask" @click="showDatePicker = false"></div>
@@ -287,13 +259,47 @@
     
     <!-- 提示信息 -->
     <div class="toast" v-if="toast.show">{{ toast.message }}</div>
+    
+    <!-- AI图片分析弹出层 -->
+    <van-popup
+      v-model:show="showImageAnalyzer"
+      position="bottom"
+      round
+      :style="{ height: '75%' }"
+    >
+      <image-analyzer
+        :images="lostFoundForm.images"
+        @select-title="handleSelectTitle"
+        @select-tag="handleSelectTag"
+        @apply-all="handleApplyAllSuggestions"
+      />
+    </van-popup>
+    
+    <!-- AI内容生成弹出层 -->
+    <van-popup
+      v-model:show="showContentGenerator"
+      position="bottom"
+      round
+      :style="{ height: '85%' }"
+    >
+      <content-generator
+        :product-info="lostFoundForm"
+        :initial-prompt="generateInitialPrompt()"
+        @close="showContentGenerator = false"
+        @use-content="handleUseGeneratedContent"
+      />
+    </van-popup>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { showToast } from 'vant'
+import ImageAnalyzer from '@/components/ai/ImageAnalyzer.vue'
+import ContentGenerator from '@/components/ai/ContentGenerator.vue'
+import LocationField from '@/components/form/LocationField.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -308,6 +314,7 @@ const lostFoundForm = reactive({
   images: [],
   description: '',
   location: '',
+  locationCoords: null,
   lostFoundTime: '',
   reward: 0,
   contactWay: 'phone',
@@ -540,14 +547,63 @@ const publishLostFound = async () => {
   }
 }
 
-// 显示提示信息
-const showToast = (message) => {
-  toast.message = message
-  toast.show = true
+// AI助手相关状态
+const showImageAnalyzer = ref(false)
+const showContentGenerator = ref(false)
+
+// 计算是否是"失物"类型
+const isLost = computed(() => formType.value === 'lost')
+
+// 生成初始提示词
+const generateInitialPrompt = () => {
+  const type = isLost.value ? '失物寻找' : '拾物归还'
+  const category = lostFoundForm.category || ''
   
-  setTimeout(() => {
-    toast.show = false
-  }, 2000)
+  return `帮我生成一个${type}的${category}描述`
+}
+
+// 处理AI图片分析结果
+const handleSelectTitle = (title) => {
+  lostFoundForm.title = title
+}
+
+const handleSelectTag = (tag) => {
+  if (!lostFoundForm.tags) {
+    lostFoundForm.tags = []
+  }
+  if (!lostFoundForm.tags.includes(tag)) {
+    lostFoundForm.tags.push(tag)
+  }
+}
+
+const handleApplyAllSuggestions = (suggestions) => {
+  if (suggestions.title) {
+    lostFoundForm.title = suggestions.title
+  }
+  
+  if (suggestions.description) {
+    lostFoundForm.description = suggestions.description
+  }
+  
+  if (suggestions.tags && suggestions.tags.length > 0) {
+    lostFoundForm.tags = [...suggestions.tags]
+  }
+}
+
+// 处理AI内容生成结果
+const handleUseGeneratedContent = (data) => {
+  const { content, type } = data
+  
+  if (type === 'description') {
+    lostFoundForm.description = content
+  } else if (type === 'title') {
+    lostFoundForm.title = content
+  } else if (type === 'tags') {
+    const tags = content.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+    lostFoundForm.tags = tags
+  }
+  
+  showContentGenerator.value = false
 }
 
 // 返回上一页
@@ -555,6 +611,74 @@ const goBack = () => {
   router.back()
 }
 
-// 初始化日期时间
-initDateTimeInput()
+// 跳转到地图选择页面
+const navigateToLocationPicker = () => {
+  // 将当前地址传递给地图选择页面（如果有）
+  const query = lostFoundForm.locationCoords ? 
+    { location: JSON.stringify(lostFoundForm.locationCoords) } : 
+    {};
+  
+  // 导航到地图选择页面，并设置回调
+  router.push({
+    path: '/location-picker',
+    query: {
+      ...query,
+      callback: '/publish-lost-found'
+    }
+  });
+}
+
+// 在onMounted中添加location数据处理
+onMounted(() => {
+  // 初始化日期时间
+  initDateTimeInput()
+  
+  // 检查是否有地图选择的回调数据
+  const locationData = router.currentRoute.value.query.location;
+  if (locationData) {
+    try {
+      const location = JSON.parse(locationData);
+      lostFoundForm.location = location.address;
+      lostFoundForm.locationCoords = {
+        lng: location.lng,
+        lat: location.lat
+      };
+      
+      // 清除URL中的location参数
+      router.replace({
+        path: router.currentRoute.value.path
+      });
+    } catch (e) {
+      console.error('解析位置信息失败', e);
+    }
+  }
+  
+  // 如果已有location数据，设置locationData ref
+  if (lostFoundForm.location && lostFoundForm.locationCoords) {
+    locationData.value = {
+      point: {
+        lng: lostFoundForm.locationCoords.lng,
+        lat: lostFoundForm.locationCoords.lat
+      },
+      address: lostFoundForm.location
+    };
+  }
+});
+
+// 位置数据
+const locationData = ref(null);
+
+// 处理位置更新
+const handleLocationUpdate = (location) => {
+  if (location) {
+    lostFoundForm.location = location.address;
+    lostFoundForm.locationCoords = {
+      lng: location.point.lng,
+      lat: location.point.lat
+    };
+  } else {
+    lostFoundForm.location = '';
+    lostFoundForm.locationCoords = null;
+  }
+};
 </script>

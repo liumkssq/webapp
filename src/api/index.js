@@ -4,6 +4,7 @@ import * as chat from './chat'
 import * as map from './map'
 import * as lostFound from './lostFound'
 import * as im from './im'
+import * as ai from './ai'
 
 // 创建API对象，便于统一管理
 const api = {
@@ -11,6 +12,8 @@ const api = {
   chat,
   map,
   im,
+  lostFound,
+  ai,
   
   // 占位API，后续实现
   product: {

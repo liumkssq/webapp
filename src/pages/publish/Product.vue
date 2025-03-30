@@ -20,6 +20,12 @@
       </div>
     </div>
     
+    <!-- AI助手按钮 -->
+    <div class="ai-assistant-btn" @click="showContentGenerator = true">
+      <i class="icon-ai"></i>
+      <span>AI文案助手</span>
+    </div>
+    
     <!-- 商品信息表单 -->
     <div class="product-form">
       <!-- 商品图片上传 -->
@@ -43,6 +49,12 @@
           </div>
         </div>
         <div class="images-tip">请上传清晰的商品照片，最多5张</div>
+        
+        <!-- AI图片分析入口 -->
+        <div class="ai-image-analyzer-btn" v-if="productForm.images.length > 0" @click="showImageAnalyzer = true">
+          <i class="icon-analyze"></i>
+          <span>AI图片分析</span>
+        </div>
       </div>
       
       <!-- 商品标题 -->
@@ -225,13 +237,46 @@
     
     <!-- 提示信息 -->
     <div class="toast" v-if="toast.show">{{ toast.message }}</div>
+    
+    <!-- AI图片分析弹出层 -->
+    <van-popup
+      v-model:show="showImageAnalyzer"
+      position="bottom"
+      round
+      :style="{ height: '75%' }"
+    >
+      <image-analyzer
+        :images="productForm.images"
+        @select-title="handleSelectTitle"
+        @select-tag="handleSelectTag"
+        @apply-all="handleApplyAllSuggestions"
+      />
+    </van-popup>
+    
+    <!-- AI内容生成弹出层 -->
+    <van-popup
+      v-model:show="showContentGenerator"
+      position="bottom"
+      round
+      :style="{ height: '85%' }"
+    >
+      <content-generator
+        :product-info="productForm"
+        :initial-prompt="generateInitialPrompt()"
+        @close="showContentGenerator = false"
+        @use-content="handleUseGeneratedContent"
+      />
+    </van-popup>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { showToast } from 'vant'
+import ImageAnalyzer from '@/components/ai/ImageAnalyzer.vue'
+import ContentGenerator from '@/components/ai/ContentGenerator.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -387,16 +432,6 @@ const publishProduct = async () => {
   }
 }
 
-// 显示提示信息
-const showToast = (message) => {
-  toast.message = message
-  toast.show = true
-  
-  setTimeout(() => {
-    toast.show = false
-  }, 2000)
-}
-
 // 返回上一页
 const goBack = () => {
   router.back()
@@ -441,6 +476,66 @@ onMounted(() => {
     }
   }
 });
+
+// AI助手相关状态
+const showImageAnalyzer = ref(false)
+const showContentGenerator = ref(false)
+
+// 处理AI图片分析结果
+const handleSelectTitle = (title) => {
+  productForm.title = title
+}
+
+const handleSelectTag = (tag) => {
+  if (!productForm.tags) {
+    productForm.tags = []
+  }
+  if (!productForm.tags.includes(tag)) {
+    productForm.tags.push(tag)
+  }
+}
+
+const handleApplyAllSuggestions = (suggestions) => {
+  if (suggestions.title) {
+    productForm.title = suggestions.title
+  }
+  
+  if (suggestions.description) {
+    productForm.description = suggestions.description
+  }
+  
+  if (suggestions.price && !productForm.price) {
+    productForm.price = suggestions.price
+  }
+  
+  if (suggestions.tags && suggestions.tags.length > 0) {
+    productForm.tags = [...suggestions.tags]
+  }
+}
+
+// 处理AI内容生成结果
+const handleUseGeneratedContent = (data) => {
+  const { content, type } = data
+  
+  if (type === 'description') {
+    productForm.description = content
+  } else if (type === 'title') {
+    productForm.title = content
+  } else if (type === 'tags') {
+    const tags = content.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+    productForm.tags = tags
+  }
+  
+  showContentGenerator.value = false
+}
+
+// 生成初始提示词
+const generateInitialPrompt = () => {
+  const category = productForm.category || ''
+  const condition = productForm.condition || ''
+  
+  return `帮我生成一个${condition}的${category}商品描述`
+}
 </script>
 
 <style scoped>

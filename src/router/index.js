@@ -283,6 +283,11 @@ const routes = [
     component: () => import('../pages/common/LocationPicker.vue')
   },
   {
+    path: '/map-picker',
+    name: 'MapPicker',
+    component: () => import('../pages/map/MapPickerPage.vue')
+  },
+  {
     path: '/lost-found/detail',
     component: () => import('../pages/lostFound/Detail.vue'),
     props: route => ({ id: Number(route.query.id) })
@@ -306,6 +311,11 @@ const routes = [
     path: '/map-example',
     name: 'MapExample',
     component: () => import('../components/examples/MapExample.vue')
+  },
+  {
+    path: '/map/demo',
+    name: 'MapDemo',
+    component: () => import('../pages/map/MapDemo.vue')
   },
   {
     path: '/product-publish-example',

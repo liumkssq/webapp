@@ -49,7 +49,7 @@
         <div class="form-options">
           <div class="remember-me">
             <input type="checkbox" id="remember" v-model="accountForm.remember" />
-            <label for="remember">记住我</label>
+            <label for="remember" @click.stop>记住我</label>
           </div>
           <router-link to="/forgot-password">忘记密码?</router-link>
         </div>
