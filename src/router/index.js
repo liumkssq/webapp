@@ -340,6 +340,22 @@ const router = createRouter({
     } else {
       return { top: 0 }
     }
+  },
+  // 确保保留查询参数
+  parseQuery: (query) => {
+    // 使用默认的查询字符串解析
+    return new URLSearchParams(query)
+  },
+  stringifyQuery: (query) => {
+    // 将查询对象转换为字符串
+    const searchParams = new URLSearchParams()
+    for (const key in query) {
+      if (query[key] !== undefined && query[key] !== null) {
+        searchParams.append(key, query[key])
+      }
+    }
+    const queryString = searchParams.toString()
+    return queryString ? `?${queryString}` : ''
   }
 })
 

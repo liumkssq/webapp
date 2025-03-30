@@ -6,7 +6,7 @@
         <van-icon name="arrow-left" size="18" />
       </div>
       <div class="page-title">选择位置</div>
-      <div class="right-button" @click="handleConfirm" :class="{ disabled: !selectedLocation.address }">
+      <div class="right-button" @click="handleConfirmLocation" :class="{ disabled: !selectedLocation.address }">
         确定
       </div>
     </div>
@@ -49,12 +49,73 @@ const router = useRouter()
 const route = useRoute()
 const mapRef = ref(null)
 
+// 初始中心点和缺失的变量
+const initialCenter = ref({ lng: 116.404, lat: 39.915 }) // 默认北京
+const hasInitialLocation = ref(false)
+
 // 选中的位置信息
 const selectedLocation = reactive({
   address: '',
   lat: null,
   lng: null
 })
+
+// 处理百度地图位置选择事件
+const handleSelectLocation = (location) => {
+  console.log('选择位置:', location)
+  selectedLocation.address = location.address
+  selectedLocation.lng = location.point.lng
+  selectedLocation.lat = location.point.lat
+}
+
+// 处理百度地图确认位置事件
+const handleConfirmLocation = () => {
+  if (!selectedLocation || !selectedLocation.address) {
+    showToast('请先选择一个位置');
+    return;
+  }
+
+  // 构建要传递的数据对象
+  const locationData = {
+    lng: selectedLocation.lng,
+    lat: selectedLocation.lat,
+    address: selectedLocation.address
+  };
+
+  // 正确格式化location数据
+  const encodedLocation = encodeURIComponent(JSON.stringify(locationData));
+  
+  // 获取回调路径
+  const callbackPath = route.query.callback || '/';
+  
+  // 确保生成的URL使用单个问号
+  const queryChar = callbackPath.includes('?') ? '&' : '?';
+  
+  const finalUrl = `${callbackPath}${queryChar}location=${encodedLocation}`;
+  console.log('跳转URL:', finalUrl);
+  
+  // 跳转到回调页面，并传递位置数据
+  window.location.href = finalUrl;
+}
+
+// 定位成功处理
+const handleLocateSuccess = (location) => {
+  console.log('定位成功:', location)
+  selectedLocation.address = location.address
+  selectedLocation.lng = location.point.lng
+  selectedLocation.lat = location.point.lat
+  // 更新初始中心点
+  initialCenter.value = {
+    lng: location.point.lng,
+    lat: location.point.lat
+  }
+}
+
+// 定位失败处理
+const handleLocateError = (error) => {
+  console.error('定位失败:', error)
+  showToast('获取您的位置失败，请手动选择')
+}
 
 // 监听位置选择消息
 const handleMessage = (event) => {
@@ -75,32 +136,6 @@ const handleMapLoad = () => {
 // 返回上一页
 const handleBack = () => {
   router.back()
-}
-
-// 确认选择
-const handleConfirm = () => {
-  if (!selectedLocation.address) {
-    showToast('请先选择位置')
-    return
-  }
-  
-  // 获取回调页面路径
-  const callbackPath = route.query.callback || '/'
-  
-  // 构建返回参数
-  const locationData = JSON.stringify({
-    lng: selectedLocation.lng,
-    lat: selectedLocation.lat,
-    address: selectedLocation.address
-  })
-  
-  // 返回选中的位置信息
-  router.push({
-    path: callbackPath,
-    query: {
-      location: locationData
-    }
-  })
 }
 
 onMounted(() => {

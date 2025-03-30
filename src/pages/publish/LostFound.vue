@@ -633,6 +633,63 @@ onMounted(() => {
   // 初始化日期时间
   initDateTimeInput();
   
+  // 检查是否有地图选择的回调数据
+  let locationDataFromUrl = null;
+  const fullPath = window.location.href;
+  console.log('URL完整路径:', fullPath);
+  
+  // 1. 先尝试常规方式获取
+  locationDataFromUrl = router.currentRoute.value.query.location;
+  console.log('Router查询参数:', router.currentRoute.value.query);
+  
+  // 2. 如果没有获取到，检查URL中是否有格式问题
+  if (!locationDataFromUrl) {
+    console.log('尝试从URL直接提取位置数据');
+    
+    // 使用正则表达式提取location参数，支持各种URL格式
+    const locationMatch = fullPath.match(/[?&]location=([^&]+)/);
+    if (locationMatch && locationMatch[1]) {
+      locationDataFromUrl = decodeURIComponent(locationMatch[1]);
+      console.log('从URL中提取的位置数据:', locationDataFromUrl);
+    }
+  }
+  
+  if (locationDataFromUrl) {
+    try {
+      console.log('接收到位置数据:', locationDataFromUrl);
+      // 如果已经是对象，则不需要解析
+      let location = typeof locationDataFromUrl === 'string' ? 
+                    JSON.parse(decodeURIComponent(locationDataFromUrl)) : 
+                    locationDataFromUrl;
+      console.log('解析后的位置数据:', location);
+      
+      // 确保有address属性
+      if (location.address) {
+        lostFoundForm.location = location.address;
+        lostFoundForm.locationCoords = {
+          lng: location.lng,
+          lat: location.lat
+        };
+        
+        showToast('已自动填入地点');
+        console.log('已设置位置信息:', lostFoundForm.location, lostFoundForm.locationCoords);
+      } else {
+        console.error('位置数据缺少address属性:', location);
+        showToast('位置数据不完整，请重新选择');
+      }
+      
+      // 清除URL中的location参数
+      router.replace({
+        path: router.currentRoute.value.path
+      });
+    } catch (e) {
+      console.error('解析位置信息失败', e);
+      showToast('位置信息解析失败');
+    }
+  } else {
+    console.log('未检测到位置数据');
+  }
+  
   // 设置初始位置数据（如果已有）
   if (lostFoundForm.location && lostFoundForm.locationCoords) {
     locationData.value = {

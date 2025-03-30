@@ -165,7 +165,6 @@ let countdownTimer = null
 const handleAccountLogin = async () => {
   try {
     accountLoading.value = true
-    
     const response = await login({
       username: accountForm.username,
       password: accountForm.password
@@ -173,8 +172,7 @@ const handleAccountLogin = async () => {
     
     if (response.code === 200) {
       // 保存用户信息和token
-      userStore.setToken(response.data.token)
-      userStore.setUser(response.data.userInfo)
+      userStore.login(response.data.token, response.data.userInfo)
       
       // 显示登录成功消息
       messageStore.showSuccess('登录成功')
@@ -183,7 +181,7 @@ const handleAccountLogin = async () => {
       const redirect = route.query.redirect || '/'
       router.push(redirect)
     } else {
-      messageStore.showError(response.message || '登录失败，请检查账号和密码')
+      messageStore.showError(response.message || '登录失败')
     }
   } catch (error) {
     console.error('登录失败:', error)
@@ -205,8 +203,7 @@ const handleSmsLogin = async () => {
     
     if (response.code === 200) {
       // 保存用户信息和token
-      userStore.setToken(response.data.token)
-      userStore.setUser(response.data.userInfo)
+      userStore.login(response.data.token, response.data.userInfo)
       
       // 显示登录成功消息
       messageStore.showSuccess('登录成功')
@@ -274,8 +271,7 @@ const handleAdminLogin = async () => {
     
     if (response.code === 200) {
       // 保存用户信息和token
-      userStore.setToken(response.data.token)
-      userStore.setUser(response.data.userInfo)
+      userStore.login(response.data.token, response.data.userInfo)
       
       // 显示登录成功消息
       messageStore.showSuccess('管理员一键登录成功')
