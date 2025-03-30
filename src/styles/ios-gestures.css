@@ -1,0 +1,82 @@
+/* iOS 风格手势样式 */
+
+/* 上下文变量 */
+:root {
+  --page-transition-duration: 300ms;
+  --swipe-percent: 0;
+  --previous-page-shadow: rgba(0, 0, 0, 0.1);
+}
+
+/* 通用页面容器样式 */
+.page-container {
+  position: relative;
+  min-height: 100vh;
+  background-color: #fff;
+  overflow-x: hidden;
+  transition: transform var(--page-transition-duration) cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* 当前页面过渡时的样式 */
+.van-slide-left-leave-active,
+.van-slide-right-leave-active {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 滑动返回的样式 */
+.swiping-back .page-container {
+  transition: none;
+}
+
+/* 手势返回的阴影效果 */
+.van-slide-right-enter-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  background: linear-gradient(to right, var(--previous-page-shadow), transparent);
+  opacity: calc(var(--swipe-percent, 0) * 0.8);
+  z-index: 3;
+}
+
+/* 滑动过程中的渐变蒙层效果 */
+.van-page-shadow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 1;
+  opacity: calc(1 - var(--swipe-percent, 0));
+  pointer-events: none;
+  transition: opacity var(--page-transition-duration) cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* 边缘手势区域 */
+.edge-gesture-area {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 100%;
+  z-index: 9999;
+  pointer-events: auto;
+  background: transparent;
+}
+
+/* 禁用iOS默认滑动返回手势 */
+.page-container.disable-edge-swipe {
+  touch-action: pan-y;
+}
+
+/* 特殊容器中禁用边缘滑动 */
+.disable-edge-swipe .edge-gesture-area {
+  display: none;
+}

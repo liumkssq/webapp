@@ -1,0 +1,42 @@
+/* iOS风格滑动过渡效果 */
+
+/* 滑动左侧进入效果 */
+.van-slide-left-enter-active,
+.van-slide-left-leave-active,
+.van-slide-right-enter-active,
+.van-slide-right-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 从右向左滑动 */
+.van-slide-left-enter-from {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.van-slide-left-leave-to {
+  transform: translateX(-30%);
+  opacity: 0;
+}
+
+/* 从左向右滑动 */
+.van-slide-right-enter-from {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.van-slide-right-leave-to {
+  transform: translateX(30%);
+  opacity: 0;
+}
+
+/* 淡入淡出效果 */
+.van-fade-enter-active,
+.van-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.van-fade-enter-from,
+.van-fade-leave-to {
+  opacity: 0;
+}

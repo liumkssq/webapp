@@ -1,0 +1,31 @@
+/* Vant组件自定义样式 */
+
+/* 启用触摸返回手势的遮罩层 */
+.van-overlay--touch-enabled {
+  touch-action: none;
+}
+
+/* 页面容器支持边缘手势 */
+.van-popup-slide-left,
+.van-popup-slide-right {
+  touch-action: pan-y;
+}
+
+/* 为所有页面容器添加触摸响应区域 */
+.app {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 左侧边缘区域，用于检测返回手势 */
+.app::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 20px;  /* 边缘宽度 */
+  height: 100%;
+  z-index: 9999;
+  background: transparent;
+  touch-action: pan-x;
+}
