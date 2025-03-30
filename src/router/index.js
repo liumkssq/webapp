@@ -151,6 +151,73 @@ const routes = [
       title: '聊天'
     }
   },
+  // 新增IM相关路由
+  {
+    path: '/im/message',
+    name: 'ImMessage',
+    component: () => import('@/pages/im/ImMessagePage.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '消息'
+    }
+  },
+  {
+    path: '/im/contacts',
+    name: 'ContactList',
+    component: () => import('@/pages/im/ContactList.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '联系人'
+    }
+  },
+  {
+    path: '/im/friend-requests',
+    name: 'FriendRequests',
+    component: () => import('@/pages/im/FriendRequests.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '新朋友'
+    }
+  },
+  {
+    path: '/im/user/:id',
+    name: 'ImUserProfile',
+    component: () => import('@/pages/im/UserProfile.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '个人资料'
+    },
+    props: true
+  },
+  {
+    path: '/im/groups',
+    name: 'GroupList',
+    component: () => import('@/pages/im/GroupList.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '群聊列表'
+    }
+  },
+  {
+    path: '/im/group/:id',
+    name: 'GroupDetail',
+    component: () => import('@/pages/chat/ConversationDetail.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '群聊'
+    },
+    props: true
+  },
+  {
+    path: '/im/chat/:id',
+    name: 'ImConversationDetail',
+    component: () => import('@/pages/chat/ConversationDetail.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '聊天'
+    },
+    props: true
+  },
   {
     path: '/user/:id',
     name: 'UserHomepage',
@@ -235,6 +302,16 @@ const routes = [
     meta: {
       requiresAuth: true
     }
+  },
+  {
+    path: '/map-example',
+    name: 'MapExample',
+    component: () => import('../components/examples/MapExample.vue')
+  },
+  {
+    path: '/product-publish-example',
+    name: 'ProductPublishExample',
+    component: () => import('../components/examples/ProductPublishExample.vue')
   },
   {
     path: '/:pathMatch(.*)*',

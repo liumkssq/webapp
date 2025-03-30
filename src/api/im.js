@@ -1,516 +1,328 @@
 import request from '@/utils/request'
+import { generateMockData } from '@/utils/mock'
 
-/**
- * 获取会话列表
- * @returns {Promise<Object>} 会话列表，包含目标用户信息和最后一条消息
- */
-export function getConversationList() {
-  return request({
-    url: '/api/im/conversations',
-    method: 'get'
-  })
-}
-
-/**
- * 获取会话详情
- * @param {number} conversationId 会话ID
- * @returns {Promise<Object>} 会话详情，包含所有消息
- */
-export function getConversationDetail(conversationId) {
-  return request({
-    url: `/api/im/conversations/${conversationId}`,
-    method: 'get'
-  })
-}
-
-/**
- * 获取消息历史
- * @param {number} conversationId 会话ID
- * @param {Object} params 查询参数
- * @param {number} params.page 页码
- * @param {number} params.limit 每页条数
- * @returns {Promise<Object>} 分页的消息列表
- */
-export function getMessageHistory(conversationId, params) {
-  return request({
-    url: `/api/im/conversations/${conversationId}/messages`,
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 发送文本消息
- * @param {number} conversationId 会话ID
- * @param {string} content 消息内容
- * @returns {Promise<Object>} 发送的消息对象
- */
-export function sendTextMessage(conversationId, content) {
-  return request({
-    url: `/api/im/conversations/${conversationId}/messages`,
-    method: 'post',
-    data: {
-      type: 'text',
-      content
-    }
-  })
-}
-
-/**
- * 发送图片消息
- * @param {number} conversationId 会话ID
- * @param {File} file 图片文件
- * @returns {Promise<Object>} 发送的消息对象
- */
-export function sendImageMessage(conversationId, file) {
-  const formData = new FormData()
-  formData.append('image', file)
+// 获取联系人列表
+export function getContactList(params) {
+  // 生成模拟好友数据，按字母分组
+  const mockData = generateMockData('contactList', params)
   
-  return request({
-    url: `/api/im/conversations/${conversationId}/images`,
-    method: 'post',
-    data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
+  // 返回Promise格式的模拟响应
+  return Promise.resolve({
+    code: 200,
+    message: '获取联系人列表成功',
+    data: mockData
   })
 }
 
-/**
- * 发送语音消息
- * @param {number} conversationId 会话ID
- * @param {File} file 语音文件
- * @param {number} duration 语音时长（秒）
- * @returns {Promise<Object>} 发送的消息对象
- */
-export function sendVoiceMessage(conversationId, file, duration) {
-  const formData = new FormData()
-  formData.append('voice', file)
-  formData.append('duration', duration)
-  
-  return request({
-    url: `/api/im/conversations/${conversationId}/voice`,
-    method: 'post',
-    data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
-}
-
-/**
- * 标记会话消息为已读
- * @param {number} conversationId 会话ID
- * @returns {Promise<Object>} 操作结果
- */
-export function markAsRead(conversationId) {
-  return request({
-    url: `/api/im/conversations/${conversationId}/read`,
-    method: 'put'
-  })
-}
-
-/**
- * 删除消息
- * @param {number} conversationId 会话ID
- * @param {string} messageId 消息ID
- * @returns {Promise<Object>} 操作结果
- */
-export function deleteMessage(conversationId, messageId) {
-  return request({
-    url: `/api/im/conversations/${conversationId}/messages/${messageId}`,
-    method: 'delete'
-  })
-}
-
-/**
- * 创建新会话
- * @param {number} targetUserId 目标用户ID
- * @returns {Promise<Object>} 新创建的会话对象
- */
-export function createConversation(targetUserId) {
-  return request({
-    url: '/api/im/conversations',
-    method: 'post',
-    data: {
-      targetUserId
-    }
-  })
-}
-
-/**
- * 获取未读消息数
- * @returns {Promise<Object>} 未读消息数量
- */
-export function getUnreadCount() {
-  return request({
-    url: '/api/im/unread',
-    method: 'get'
-  })
-}
-
-/**
- * 清空会话消息
- * @param {number} conversationId 会话ID
- * @returns {Promise<Object>} 操作结果
- */
-export function clearMessages(conversationId) {
-  return request({
-    url: `/api/im/conversations/${conversationId}/clear`,
-    method: 'delete'
-  })
-}
-
-/**
- * 删除会话
- * @param {string} conversationType 会话类型 private|group
- * @param {number} targetId 目标ID（用户ID或群组ID）
- * @returns {Promise<Object>} 操作结果
- */
-export function deleteConversationByType(conversationType, targetId) {
-  return request({
-    url: '/api/im/conversations',
-    method: 'delete',
-    data: { conversationType, targetId }
-  })
-}
-
-// --------------------- 群聊相关 API ---------------------
-
-/**
- * 获取群聊列表
- * @returns {Promise<Object>} 群聊列表
- */
-export function getGroupList() {
-  return request({
-    url: '/api/im/groups',
-    method: 'get'
-  })
-}
-
-/**
- * 获取群聊详情
- * @param {number} groupId 群聊ID
- * @returns {Promise<Object>} 群聊详情
- */
-export function getGroupDetail(groupId) {
-  return request({
-    url: `/api/im/groups/${groupId}`,
-    method: 'get'
-  })
-}
-
-/**
- * 创建群聊
- * @param {Object} data 群聊信息
- * @param {string} data.name 群聊名称
- * @param {string} data.avatar 群聊头像
- * @param {Array<number>} data.memberIds 成员ID列表
- * @returns {Promise<Object>} 创建的群聊对象
- */
-export function createGroup(data) {
-  return request({
-    url: '/api/im/groups',
-    method: 'post',
-    data
-  })
-}
-
-/**
- * 更新群聊信息
- * @param {number} groupId 群聊ID
- * @param {Object} data 更新的信息
- * @returns {Promise<Object>} 更新后的群聊对象
- */
-export function updateGroup(groupId, data) {
-  return request({
-    url: `/api/im/groups/${groupId}`,
-    method: 'put',
-    data
-  })
-}
-
-/**
- * 加入群聊
- * @param {number} groupId 群聊ID
- * @returns {Promise<Object>} 操作结果
- */
-export function joinGroup(groupId) {
-  return request({
-    url: `/api/im/groups/${groupId}/join`,
-    method: 'post'
-  })
-}
-
-/**
- * 退出群聊
- * @param {number} groupId 群聊ID
- * @returns {Promise<Object>} 操作结果
- */
-export function leaveGroup(groupId) {
-  return request({
-    url: `/api/im/groups/${groupId}/leave`,
-    method: 'post'
-  })
-}
-
-/**
- * 获取群聊消息
- * @param {number} groupId 群聊ID
- * @param {Object} params 查询参数
- * @returns {Promise<Object>} 群聊消息列表
- */
-export function getGroupMessages(groupId, params) {
-  return request({
-    url: `/api/im/groups/${groupId}/messages`,
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 发送群聊消息
- * @param {number} groupId 群聊ID
- * @param {Object} data 消息数据
- * @returns {Promise<Object>} 发送的消息对象
- */
-export function sendGroupMessage(groupId, data) {
-  return request({
-    url: `/api/im/groups/${groupId}/messages`,
-    method: 'post',
-    data
-  })
-}
-
-/**
- * 邀请用户加入群聊
- * @param {number} groupId 群聊ID
- * @param {Array<number>} userIds 用户ID列表
- * @returns {Promise<Object>} 操作结果
- */
-export function inviteToGroup(groupId, userIds) {
-  return request({
-    url: `/api/im/groups/${groupId}/invite`,
-    method: 'post',
-    data: {
-      userIds
-    }
-  })
-}
-
-/**
- * 移除群聊成员
- * @param {number} groupId 群聊ID
- * @param {number} userId 用户ID
- * @returns {Promise<Object>} 操作结果
- */
-export function removeGroupMember(groupId, userId) {
-  return request({
-    url: `/api/im/groups/${groupId}/members/${userId}`,
-    method: 'delete'
-  })
-}
-
-// --------------------- 好友相关 API ---------------------
-
-/**
- * 获取好友列表
- * @returns {Promise<Object>} 好友列表
- */
-export function getFriendList() {
-  return request({
-    url: '/api/im/friends',
-    method: 'get'
-  })
-}
-
-/**
- * 获取好友申请列表
- * @param {Object} params 查询参数
- * @param {number} [params.page=1] 页码
- * @param {number} [params.pageSize=20] 每页条数
- * @param {string} [params.status] 状态筛选 pending|accepted|rejected
- * @returns {Promise<Object>} 好友请求列表
- */
+// 获取好友申请列表
 export function getFriendRequests(params) {
-  return request({
-    url: '/api/im/friend-requests',
-    method: 'get',
-    params
+  const { status = 'all' } = params || {}
+  const mockData = generateMockData('friendRequests', { status })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取好友申请列表成功',
+    data: mockData
   })
 }
 
-/**
- * 发送好友申请
- * @param {Object} data 请求数据
- * @param {number} data.userId 用户ID
- * @param {string} [data.message] 申请消息
- * @returns {Promise<Object>} 操作结果
- */
+// 发送好友申请
 export function sendFriendRequest(data) {
-  return request({
-    url: '/api/im/friend-requests',
-    method: 'post',
-    data
+  return Promise.resolve({
+    code: 200,
+    message: '好友申请已发送',
+    data: { requestId: Math.floor(Math.random() * 10000) }
   })
 }
 
-/**
- * 处理好友申请
- * @param {number} requestId 申请ID
- * @param {Object} data 请求数据
- * @param {string} data.action 操作类型 accept|reject
- * @returns {Promise<Object>} 操作结果
- */
-export function handleFriendRequest(requestId, data) {
-  return request({
-    url: `/api/im/friend-requests/${requestId}`,
-    method: 'put',
-    data
+// 处理好友申请
+export function handleFriendRequest(data) {
+  const { requestId, action } = data
+  
+  return Promise.resolve({
+    code: 200,
+    message: action === 'accept' ? '已添加为好友' : '已拒绝好友申请',
+    data: { success: true }
   })
 }
 
-/**
- * 删除好友
- * @param {number} friendId 好友ID
- * @returns {Promise<Object>} 操作结果
- */
-export function deleteFriend(friendId) {
-  return request({
-    url: `/api/im/friends/${friendId}`,
-    method: 'delete'
+// 获取用户信息
+export function getUserInfo(id) {
+  const mockData = generateMockData('userInfo', { id })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取用户信息成功',
+    data: mockData
   })
 }
 
-/**
- * 设置好友备注
- * @param {number} friendId 好友ID
- * @param {string} remark 备注名
- * @returns {Promise<Object>} 操作结果
- */
-export function setFriendRemark(friendId, remark) {
-  return request({
-    url: `/api/im/friends/${friendId}/remark`,
-    method: 'put',
+// 设置好友备注
+export function setFriendNote(data) {
+  return Promise.resolve({
+    code: 200,
+    message: '设置备注成功',
+    data: { success: true }
+  })
+}
+
+// 删除好友
+export function deleteFriend(id) {
+  return Promise.resolve({
+    code: 200,
+    message: '删除好友成功',
+    data: { success: true }
+  })
+}
+
+// 获取群聊列表
+export function getGroupList() {
+  const mockData = generateMockData('groupList')
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取群聊列表成功',
+    data: mockData
+  })
+}
+
+// 创建群聊
+export function createGroup(data) {
+  return Promise.resolve({
+    code: 200,
+    message: '创建群聊成功',
     data: {
-      remark
+      groupId: Math.floor(Math.random() * 10000),
+      groupName: data.name,
+      createTime: new Date().toISOString()
     }
   })
 }
 
-/**
- * 获取好友详情
- * @param {number} friendId 好友ID
- * @returns {Promise<Object>} 好友详情
- */
-export function getFriendDetail(friendId) {
-  return request({
-    url: `/api/im/friends/${friendId}`,
-    method: 'get'
+// 获取群聊详情
+export function getGroupInfo(id) {
+  const mockData = generateMockData('groupInfo', { id })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取群聊信息成功',
+    data: mockData
   })
 }
 
-/**
- * 搜索用户
- * @param {string} keyword 搜索关键词
- * @returns {Promise<Object>} 搜索结果
- */
-export function searchUsers(keyword) {
-  return request({
-    url: '/api/im/users/search',
-    method: 'get',
-    params: {
-      keyword
-    }
+// 邀请好友加入群聊
+export function inviteToGroup(data) {
+  return Promise.resolve({
+    code: 200,
+    message: '邀请已发送',
+    data: { success: true }
   })
 }
 
-/**
- * 获取用户在线状态
- * @param {Array<number>} userIds 用户ID列表
- * @returns {Promise<Object>} 用户在线状态
- */
-export function getUsersOnlineStatus(userIds) {
-  return request({
-    url: '/api/im/users/online-status',
-    method: 'post',
+// 退出群聊
+export function leaveGroup(id) {
+  return Promise.resolve({
+    code: 200,
+    message: '已退出群聊',
+    data: { success: true }
+  })
+}
+
+// 获取用户详情
+export function getUserDetail(id) {
+  const mockData = generateMockData('userDetail', { id })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取用户详情成功',
+    data: mockData
+  })
+}
+
+// 获取会话列表
+export function getConversationList() {
+  const mockData = generateMockData('conversationList')
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取会话列表成功',
+    data: mockData
+  })
+}
+
+// 获取聊天记录
+export function getChatMessages(params) {
+  const { conversationId, page = 1, limit = 20 } = params
+  const mockData = generateMockData('chatMessages', { conversationId, page, limit })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取聊天记录成功',
+    data: mockData
+  })
+}
+
+// 发送消息
+export function sendMessage(data) {
+  const { conversationId, content, type } = data
+  
+  return Promise.resolve({
+    code: 200,
+    message: '发送消息成功',
     data: {
-      userIds
+      messageId: Math.floor(Math.random() * 100000),
+      conversationId,
+      content,
+      type,
+      timestamp: new Date().toISOString(),
+      status: 'sent'
     }
   })
 }
 
-/**
- * 设置会话置顶
- * @param {string} conversationType 会话类型 private|group
- * @param {number} targetId 目标ID（用户ID或群组ID）
- * @param {boolean} isSticky 是否置顶
- * @returns {Promise<Object>} 操作结果
- */
-export function setConversationSticky(conversationType, targetId, isSticky) {
-  return request({
-    url: '/api/im/conversations/sticky',
-    method: 'put',
-    data: { conversationType, targetId, isSticky }
+// 标记消息已读
+export function markMessageRead(conversationId) {
+  return Promise.resolve({
+    code: 200,
+    message: '标记消息已读成功',
+    data: { success: true }
   })
 }
 
-/**
- * 设置会话免打扰
- * @param {string} conversationType 会话类型 private|group
- * @param {number} targetId 目标ID（用户ID或群组ID）
- * @param {boolean} isMuted 是否免打扰
- * @returns {Promise<Object>} 操作结果
- */
-export function setConversationMuted(conversationType, targetId, isMuted) {
-  return request({
-    url: '/api/im/conversations/muted',
-    method: 'put',
-    data: { conversationType, targetId, isMuted }
+// 获取未读消息数
+export function getUnreadCount() {
+  return Promise.resolve({
+    code: 200,
+    message: '获取未读消息数成功',
+    data: Math.floor(Math.random() * 10) // 随机生成0-9的未读消息数
   })
 }
 
-/**
- * 清空会话消息
- * @param {string} conversationType 会话类型 private|group
- * @param {number} targetId 目标ID（用户ID或群组ID）
- * @returns {Promise<Object>} 操作结果
- */
-export function clearConversationMessages(conversationType, targetId) {
-  return request({
-    url: '/api/im/conversations/clear-messages',
-    method: 'put',
-    data: { conversationType, targetId }
+// 搜索联系人
+export function searchContacts(keyword) {
+  const mockData = generateMockData('searchContacts', { keyword })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '搜索联系人成功',
+    data: mockData
   })
 }
 
-/**
- * 搜索消息
- * @param {Object} params 搜索参数
- * @param {string} params.keyword 关键词
- * @param {string} [params.conversationType] 会话类型 private|group
- * @param {number} [params.targetId] 目标ID（用户ID或群组ID）
- * @param {number} [params.page=1] 页码
- * @param {number} [params.pageSize=20] 每页条数
- * @returns {Promise<Object>} 搜索结果
- */
-export function searchMessages(params) {
-  return request({
-    url: '/api/im/messages/search',
-    method: 'get',
-    params
+// 获取会话详情
+export function getConversationDetail(id) {
+  const mockData = generateMockData('conversationDetail', { id })
+  
+  return Promise.resolve({
+    code: 200,
+    message: '获取会话详情成功',
+    data: mockData
   })
 }
 
-/**
- * 查询用户在线状态
- * @param {number[]} userIds 用户ID列表
- * @returns {Promise<Object>} 用户在线状态
- */
-export function getUserOnlineStatus(userIds) {
-  return request({
-    url: '/api/im/users/online-status',
-    method: 'post',
-    data: { userIds }
+// 创建会话
+export function createConversation(data) {
+  return Promise.resolve({
+    code: 200,
+    message: '创建会话成功',
+    data: {
+      conversationId: Math.floor(Math.random() * 10000),
+      type: data.type || 'private',
+      createTime: new Date().toISOString()
+    }
   })
-} 
+}
+
+// 删除会话
+export function deleteConversation(id) {
+  return Promise.resolve({
+    code: 200,
+    message: '删除会话成功',
+    data: { success: true }
+  })
+}
+
+// 清空会话消息
+export function clearMessages(conversationId) {
+  return Promise.resolve({
+    code: 200,
+    message: '聊天记录已清空',
+    data: { success: true }
+  })
+}
+
+// 删除消息
+export function deleteMessage(messageId) {
+  return Promise.resolve({
+    code: 200,
+    message: '消息已删除',
+    data: { success: true }
+  })
+}
+
+// 获取消息历史
+export function getMessageHistory(conversationId, params = {}) {
+  const { page = 1, limit = 20 } = params
+  return getChatMessages({ conversationId, page, limit })
+}
+
+// 发送文本消息
+export function sendTextMessage(conversationId, content) {
+  return Promise.resolve({
+    code: 200,
+    message: '发送消息成功',
+    data: {
+      id: Math.floor(Math.random() * 100000),
+      conversationId,
+      senderId: 1, // 当前用户ID
+      type: 'text',
+      content,
+      timestamp: new Date().toISOString(),
+      status: 'sent'
+    }
+  })
+}
+
+// 发送图片消息
+export function sendImageMessage(conversationId, imageUrl) {
+  return Promise.resolve({
+    code: 200,
+    message: '发送图片成功',
+    data: {
+      id: Math.floor(Math.random() * 100000),
+      conversationId,
+      senderId: 1, // 当前用户ID
+      type: 'image',
+      content: imageUrl,
+      timestamp: new Date().toISOString(),
+      status: 'sent'
+    }
+  })
+}
+
+// 发送语音消息
+export function sendVoiceMessage(conversationId, audioUrl, duration) {
+  return Promise.resolve({
+    code: 200,
+    message: '发送语音成功',
+    data: {
+      id: Math.floor(Math.random() * 100000),
+      conversationId,
+      senderId: 1, // 当前用户ID
+      type: 'voice',
+      content: audioUrl,
+      duration: duration || Math.floor(Math.random() * 60) + 1, // 默认随机1-60秒
+      timestamp: new Date().toISOString(),
+      status: 'sent'
+    }
+  })
+}
+
+// 标记为已读
+export function markAsRead(conversationId) {
+  return Promise.resolve({
+    code: 200,
+    message: '标记为已读成功',
+    data: { success: true }
+  })
+}

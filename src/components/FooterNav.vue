@@ -11,18 +11,26 @@
         <i :class="item.icon"></i>
       </div>
       <div class="nav-name">{{ item.name }}</div>
+      
+      <!-- 未读消息提示 -->
+      <div v-if="item.path === '/message' && unreadCount > 0" class="badge">
+        {{ unreadCount > 99 ? '99+' : unreadCount }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { getUnreadCount } from '@/api/im'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+const unreadCount = ref(0)
+let pollingTimer = null
 
 // 导航项配置
 const navItems = [
@@ -50,7 +58,8 @@ const isActive = (path) => {
   }
   if (path === '/message' && [
     '/message', 
-    '/chat'
+    '/chat',
+    '/im'
   ].some(p => route.path.startsWith(p))) {
     return true
   }
@@ -80,8 +89,50 @@ const navigateTo = (path) => {
     return
   }
   
+  // 消息页面替换为新的联系人列表页面
+  if (path === '/message') {
+    router.push('/im/message')
+    return
+  }
+  
   router.push(path)
 }
+
+// 获取未读消息数
+const fetchUnreadCount = async () => {
+  if (!userStore.isLoggedIn) {
+    unreadCount.value = 0
+    return
+  }
+  
+  try {
+    const response = await getUnreadCount()
+    if (response.code === 200) {
+      unreadCount.value = response.data
+    }
+  } catch (error) {
+    console.error('获取未读消息数失败:', error)
+  }
+}
+
+// 轮询未读消息
+const startPolling = () => {
+  // 每30秒获取一次未读消息数
+  pollingTimer = setInterval(fetchUnreadCount, 30000)
+}
+
+// 组件挂载时初始化
+onMounted(() => {
+  fetchUnreadCount()
+  startPolling()
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -106,6 +157,7 @@ const navigateTo = (path) => {
   color: #8e8e93;
   font-size: 12px;
   padding: 8px 0;
+  position: relative;
 }
 
 .nav-item.active {
@@ -119,5 +171,22 @@ const navigateTo = (path) => {
 
 .nav-name {
   font-size: 11px;
+}
+
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 50%;
+  transform: translateX(12px);
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background-color: #ff3b30;
+  color: white;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
 }
 </style>
