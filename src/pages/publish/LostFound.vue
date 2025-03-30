@@ -611,60 +611,6 @@ const goBack = () => {
   router.back()
 }
 
-// 跳转到地图选择页面
-const navigateToLocationPicker = () => {
-  // 将当前地址传递给地图选择页面（如果有）
-  const query = lostFoundForm.locationCoords ? 
-    { location: JSON.stringify(lostFoundForm.locationCoords) } : 
-    {};
-  
-  // 导航到地图选择页面，并设置回调
-  router.push({
-    path: '/location-picker',
-    query: {
-      ...query,
-      callback: '/publish-lost-found'
-    }
-  });
-}
-
-// 在onMounted中添加location数据处理
-onMounted(() => {
-  // 初始化日期时间
-  initDateTimeInput()
-  
-  // 检查是否有地图选择的回调数据
-  const locationData = router.currentRoute.value.query.location;
-  if (locationData) {
-    try {
-      const location = JSON.parse(locationData);
-      lostFoundForm.location = location.address;
-      lostFoundForm.locationCoords = {
-        lng: location.lng,
-        lat: location.lat
-      };
-      
-      // 清除URL中的location参数
-      router.replace({
-        path: router.currentRoute.value.path
-      });
-    } catch (e) {
-      console.error('解析位置信息失败', e);
-    }
-  }
-  
-  // 如果已有location数据，设置locationData ref
-  if (lostFoundForm.location && lostFoundForm.locationCoords) {
-    locationData.value = {
-      point: {
-        lng: lostFoundForm.locationCoords.lng,
-        lat: lostFoundForm.locationCoords.lat
-      },
-      address: lostFoundForm.location
-    };
-  }
-});
-
 // 位置数据
 const locationData = ref(null);
 
@@ -681,4 +627,21 @@ const handleLocationUpdate = (location) => {
     lostFoundForm.locationCoords = null;
   }
 };
+
+// 在onMounted中初始化数据
+onMounted(() => {
+  // 初始化日期时间
+  initDateTimeInput();
+  
+  // 设置初始位置数据（如果已有）
+  if (lostFoundForm.location && lostFoundForm.locationCoords) {
+    locationData.value = {
+      point: {
+        lng: lostFoundForm.locationCoords.lng,
+        lat: lostFoundForm.locationCoords.lat
+      },
+      address: lostFoundForm.location
+    };
+  }
+});
 </script>

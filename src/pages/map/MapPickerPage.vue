@@ -13,27 +13,37 @@
     
     <!-- 地图容器 -->
     <div class="map-container">
-      <baidu-map
-        ref="mapRef"
-        :show-search="true"
-        :show-confirm-button="false"
-        :auto-locate="true"
-        @select-location="handleSelectLocation"
-        @locate-success="handleLocateSuccess"
-        @locate-error="handleLocateError"
-      />
+      <div class="map-wrapper">
+        <baidu-map
+          ref="mapRef"
+          :center="initialCenter"
+          :zoom="15"
+          :show-search="true"
+          :show-confirm-button="true"
+          :auto-locate="!hasInitialLocation"
+          :api-key="'W4T3NdSnqPJRPBaVoUhBLS6em9dbpeEr'"
+          @select-location="handleSelectLocation"
+          @confirm-location="handleConfirmLocation"
+          @locate-success="handleLocateSuccess"
+          @locate-error="handleLocateError"
+        ></baidu-map>
+      </div>
     </div>
     
-    <!-- Toast提示 -->
-    <van-toast id="van-toast" />
+    <!-- 底部已选位置信息 -->
+    <div class="bottom-info" v-if="selectedLocation.address">
+      <div class="location-info">
+        <van-icon name="location-o" />
+        <div class="address-text">{{ selectedLocation.address }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
-import BaiduMap from '@/components/map/BaiduMap.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -41,25 +51,25 @@ const mapRef = ref(null)
 
 // 选中的位置信息
 const selectedLocation = reactive({
-  point: null,
-  address: ''
+  address: '',
+  lat: null,
+  lng: null
 })
 
-// 处理位置选择
-const handleSelectLocation = (location) => {
-  selectedLocation.point = location.point
-  selectedLocation.address = location.address
+// 监听位置选择消息
+const handleMessage = (event) => {
+  // 腾讯地图选择器发送的消息
+  if (event.data && event.data.module === 'locationPicker') {
+    const loc = event.data.latlng
+    selectedLocation.address = event.data.poiaddress
+    selectedLocation.lat = loc.lat
+    selectedLocation.lng = loc.lng
+  }
 }
 
-// 处理定位成功
-const handleLocateSuccess = (location) => {
-  selectedLocation.point = location.point
-  selectedLocation.address = location.address
-}
-
-// 处理定位错误
-const handleLocateError = (error) => {
-  showToast('定位失败，请手动选择位置')
+// 地图加载完成
+const handleMapLoad = () => {
+  console.log('Map loaded')
 }
 
 // 返回上一页
@@ -79,8 +89,8 @@ const handleConfirm = () => {
   
   // 构建返回参数
   const locationData = JSON.stringify({
-    lng: selectedLocation.point.lng,
-    lat: selectedLocation.point.lat,
+    lng: selectedLocation.lng,
+    lat: selectedLocation.lat,
     address: selectedLocation.address
   })
   
@@ -94,31 +104,26 @@ const handleConfirm = () => {
 }
 
 onMounted(() => {
+  // 添加消息监听
+  window.addEventListener('message', handleMessage)
+  
   // 检查是否有初始位置
   const initialLocation = route.query.location
   if (initialLocation) {
     try {
       const location = JSON.parse(initialLocation)
-      // 设置初始位置
-      selectedLocation.point = {
-        lng: location.lng,
-        lat: location.lat
-      }
-      
-      if (location.address) {
-        selectedLocation.address = location.address
-      }
-      
-      // 延迟设置地图中心点，确保地图已初始化
-      setTimeout(() => {
-        if (mapRef.value) {
-          mapRef.value.setCenter(selectedLocation.point)
-        }
-      }, 500)
+      selectedLocation.address = location.address || ''
+      selectedLocation.lat = location.lat
+      selectedLocation.lng = location.lng
     } catch (e) {
       console.error('解析初始位置失败', e)
     }
   }
+})
+
+onUnmounted(() => {
+  // 移除消息监听
+  window.removeEventListener('message', handleMessage)
 })
 </script>
 
@@ -171,5 +176,26 @@ onMounted(() => {
 .map-container {
   flex: 1;
   position: relative;
+}
+
+.map-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.bottom-info {
+  padding: 12px 16px;
+  background-color: #fff;
+  border-top: 1px solid #f0f0f0;
+}
+
+.location-info {
+  display: flex;
+  align-items: center;
+}
+
+.address-text {
+  margin-left: 8px;
+  font-size: 14px;
 }
 </style>

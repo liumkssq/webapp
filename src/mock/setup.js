@@ -2,6 +2,7 @@ import Mock from 'mockjs'
 
 // 导入模块
 import './modules/im'
+import './modules/user'  // 添加用户模块
 
 // 配置 Mock.js 请求延时
 Mock.setup({

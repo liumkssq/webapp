@@ -68,6 +68,11 @@ const props = defineProps({
   autoLocate: {
     type: Boolean,
     default: false
+  },
+  // 百度地图API密钥
+  apiKey: {
+    type: String,
+    default: 'W4T3NdSnqPJRPBaVoUhBLS6em9dbpeEr'
   }
 })
 
@@ -306,7 +311,7 @@ onMounted(() => {
   if (typeof BMap === 'undefined') {
     // 如果没有加载，动态加载脚本
     const script = document.createElement('script')
-    script.src = `https://api.map.baidu.com/api?v=3.0&ak=W4T3NdSnqPJRPBaVoUhBLS6em9dbpeEr&callback=initBaiduMap`
+    script.src = `https://api.map.baidu.com/api?v=3.0&ak=${props.apiKey}&callback=initBaiduMap`
     document.head.appendChild(script)
     
     // 定义回调函数

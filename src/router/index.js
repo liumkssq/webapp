@@ -280,7 +280,7 @@ const routes = [
   {
     path: '/location-picker',
     name: 'LocationPicker',
-    component: () => import('../pages/common/LocationPicker.vue')
+    component: () => import('../pages/map/MapPickerPage.vue')
   },
   {
     path: '/map-picker',
