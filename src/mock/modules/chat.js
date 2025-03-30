@@ -336,6 +336,7 @@ const uploadChatFile = (config) => {
 }
 
 export default {
+  'GET /api/chat/sessions': getConversationList,
   'GET /api/chat/conversation': getConversationList,
   'GET /api/chat/conversation/\\d+': getConversationDetail,
   'POST /api/chat/send/\\d+': sendMessage,

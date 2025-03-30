@@ -46,7 +46,7 @@
                 :before-close="(position, done) => beforeClose(position, done, item)"
               >
                 <template #right>
-                  <div class="delete-button" @click.stop="deleteConversation(item)">
+                  <div class="delete-button" @click.stop="handleDeleteConversation(item)">
                     删除
                   </div>
                 </template>
@@ -150,7 +150,7 @@
             :before-close="(position, done) => beforeClose(position, done, item)"
           >
             <template #right>
-              <div class="delete-button" @click.stop="deleteConversation(item)">
+              <div class="delete-button" @click.stop="handleDeleteConversation(item)">
                 删除
               </div>
             </template>
@@ -272,7 +272,7 @@ import { Dialog, showLoadingToast, showToast, closeToast } from 'vant'
 import dayjs from 'dayjs'
 import { 
   getConversationList, 
-  deleteConversation, 
+  deleteConversationByType,
   setConversationSticky, 
   setConversationMuted, 
   getUserOnlineStatus 
@@ -361,7 +361,7 @@ const beforeClose = (position, done, item) => {
       message: '确定要删除这个会话吗？',
       beforeClose: (action, _, done) => {
         if (action === 'confirm') {
-          deleteConversation(item)
+          deleteConversationByType(item.type, item.targetId)
             .then(() => {
               done()
             })
@@ -388,7 +388,7 @@ const handleDeleteConversation = async (item) => {
       forbidClick: true
     })
     
-    await deleteConversation(item.type, item.targetId)
+    await deleteConversationByType(item.type, item.targetId)
     conversations.value = conversations.value.filter(conv => conv.id !== item.id)
     
     closeToast(loadingToast)

@@ -9,16 +9,19 @@
       </div>
     </div>
     
-    <!-- 导航栏 -->
-    <div class="navigation-bar">
-      <div class="back-btn" v-if="showBack" @click="goBack">
-        <i class="icon-back"></i>
-      </div>
-      <div class="nav-title">{{ title }}</div>
-      <div class="nav-right">
+    <!-- 使用Vant导航栏组件 -->
+    <van-nav-bar
+      :title="title"
+      :left-text="showBack ? '' : ''"
+      :left-arrow="showBack"
+      fixed
+      placeholder
+      @click-left="goBack"
+    >
+      <template #right>
         <slot name="right"></slot>
-      </div>
-    </div>
+      </template>
+    </van-nav-bar>
   </div>
 </template>
 

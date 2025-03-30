@@ -163,13 +163,15 @@ export function clearMessages(conversationId) {
 
 /**
  * 删除会话
- * @param {number} conversationId 会话ID
+ * @param {string} conversationType 会话类型 private|group
+ * @param {number} targetId 目标ID（用户ID或群组ID）
  * @returns {Promise<Object>} 操作结果
  */
-export function deleteConversation(conversationId) {
+export function deleteConversationByType(conversationType, targetId) {
   return request({
-    url: `/api/im/conversations/${conversationId}`,
-    method: 'delete'
+    url: '/api/im/conversations',
+    method: 'delete',
+    data: { conversationType, targetId }
   })
 }
 
@@ -465,20 +467,6 @@ export function setConversationMuted(conversationType, targetId, isMuted) {
     url: '/api/im/conversations/muted',
     method: 'put',
     data: { conversationType, targetId, isMuted }
-  })
-}
-
-/**
- * 删除会话
- * @param {string} conversationType 会话类型 private|group
- * @param {number} targetId 目标ID（用户ID或群组ID）
- * @returns {Promise<Object>} 操作结果
- */
-export function deleteConversation(conversationType, targetId) {
-  return request({
-    url: '/api/im/conversations',
-    method: 'delete',
-    data: { conversationType, targetId }
   })
 }
 

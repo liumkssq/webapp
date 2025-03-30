@@ -46,6 +46,58 @@ console.log('【Mock系统】已加载用户数据，admin用户:', admin, '总�
 // 模拟token
 const tokens = {}
 
+// 获取通知列表
+const getNotifications = () => {
+  const notifications = []
+  
+  // 生成模拟通知数据
+  for (let i = 1; i <= 10; i++) {
+    const types = ['like', 'comment', 'follow', 'system']
+    const type = types[Math.floor(Math.random() * types.length)]
+    
+    const targetTypes = ['article', 'product', 'lostFound']
+    const targetType = targetTypes[Math.floor(Math.random() * targetTypes.length)]
+    
+    notifications.push({
+      id: i,
+      type,
+      title: type === 'like' ? '收到一个赞' :
+             type === 'comment' ? '收到一条评论' :
+             type === 'follow' ? '有人关注了你' : '系统通知',
+      content: type === 'like' ? '用户小明赞了你的' + targetType :
+               type === 'comment' ? '用户小红评论了你的' + targetType :
+               type === 'follow' ? '用户小张关注了你' : '您的账号已完成实名认证',
+      time: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString(),
+      read: Math.random() > 0.3,
+      targetType: type === 'system' ? null : targetType,
+      targetId: type === 'system' ? null : Math.floor(Math.random() * 100) + 1,
+      fromUser: type === 'system' ? null : {
+        id: Math.floor(Math.random() * 100) + 1,
+        nickname: ['小明', '小红', '小张', '小李', '小王'][Math.floor(Math.random() * 5)]
+      }
+    })
+  }
+  
+  // 按时间排序
+  notifications.sort((a, b) => new Date(b.time) - new Date(a.time))
+  
+  return {
+    code: 200,
+    data: notifications,
+    message: '获取成功'
+  }
+}
+
+// 标记通知为已读
+const markNotificationAsRead = (config) => {
+  const id = parseInt(config.url.split('/').pop())
+  
+  return {
+    code: 200,
+    message: '标记成功'
+  }
+}
+
 // 用户相关mock接口
 export default {
   // 登录
@@ -489,67 +541,10 @@ export default {
   },
   
   // 获取用户通知
-  'GET /api/user/notifications': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token || !tokens[token]) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    // 生成随机通知
-    const notifications = Mock.mock({
-      'list|5-15': [{
-        'id|+1': 1,
-        'title': '@sentence(5, 10)',
-        'content': '@sentence(10, 20)',
-        'type|1': ['like', 'comment', 'follow', 'system'],
-        'targetType|1': ['article', 'product', 'lostFound', ''],
-        'targetId|1-100': 1,
-        'fromUser': () => {
-          const randomUser = users[Mock.Random.integer(0, users.length - 1)]
-          return {
-            id: randomUser.id,
-            nickname: randomUser.nickname,
-            avatar: randomUser.avatar
-          }
-        },
-        'time': '@datetime("yyyy-MM-dd HH:mm:ss")',
-        'read|1': [true, false]
-      }]
-    }).list
-    
-    // 按时间排序
-    notifications.sort((a, b) => new Date(b.time) - new Date(a.time))
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: notifications
-    }
-  },
+  'GET /api/user/notifications': getNotifications,
   
   // 标记通知为已读
-  'PUT /api/user/notification/read/:id': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token || !tokens[token]) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    return {
-      code: 200,
-      message: '标记成功',
-      data: null
-    }
-  },
+  'PUT /api/user/notifications/:id/read': markNotificationAsRead,
   
   // 重置密码
   'POST /api/user/reset-password': (options) => {

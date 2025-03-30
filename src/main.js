@@ -5,6 +5,11 @@ import 'vant/lib/index.css'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
+import './styles/transitions.css'
+import './styles/vant-override.css'
+import './styles/ios-gestures.css'
+import { setupVantConfig } from './utils/vant-config'
+import './utils/dayjs'
 
 // 导入Vant UI
 import Vant from 'vant'
@@ -31,6 +36,9 @@ app.use(router)
 
 // 使用Vant UI
 app.use(Vant)
+
+// 配置Vant全局选项
+setupVantConfig(app)
 
 // 注册全局组件
 app.component('SvgIcon', SvgIcon)

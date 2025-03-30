@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vueuse/core": "^13.0.0",
     "axios": "^1.6.7",
     "axios-mock-adapter": "^2.1.0",
+    "dayjs": "^1.11.13",
     "pinia": "^2.1.7",
     "vant": "^4.9.18",
     "vue": "^3.4.15",

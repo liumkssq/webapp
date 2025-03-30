@@ -1,7 +1,7 @@
 <template>
   <div class="message-page">
     <!-- 头部导航 -->
-    <header-navigation title="消息" />
+    <header-nav title="消息" />
     
     <!-- 消息类型切换 -->
     <div class="message-tabs">
@@ -101,8 +101,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import HeaderNavigation from '../components/common/HeaderNavigation.vue'
-import FooterNavigation from '../components/common/FooterNavigation.vue'
+import HeaderNav from '../components/HeaderNav.vue'
+import FooterNavigation from '../components/FooterNav.vue'
 import { useUserStore } from '../store/user'
 import api from '../api'
 
@@ -120,7 +120,7 @@ const notifications = ref([])
 
 // 未读消息数
 const unreadChatCount = computed(() => {
-  return chatSessions.value.reduce((total, session) => total + session.unreadCount, 0)
+  return chatSessions.value.reduce((total, session) => total + (session.unreadCount || 0), 0)
 })
 
 // 未读通知数
@@ -131,11 +131,29 @@ const unreadNotificationCount = computed(() => {
 // 获取聊天会话列表
 const fetchChatSessions = async () => {
   try {
-    if (!userStore.isLoggedIn) return
+    if (!userStore.isLoggedIn) {
+      // 如果没有登录，使用模拟数据
+      userStore.setLoggedIn(true)
+    }
     
     const res = await api.chat.getChatSessionList()
     if (res.code === 200) {
-      chatSessions.value = res.data
+      // 转换数据结构以适配模板
+      chatSessions.value = res.data.map(session => ({
+        id: session.id,
+        targetUser: {
+          id: session.userId,
+          nickname: session.user.name,
+          avatar: session.user.avatar,
+          online: Math.random() > 0.5 // 随机在线状态
+        },
+        lastMessage: {
+          type: session.lastMessage?.type || 'text',
+          content: session.lastMessage?.content || '',
+          time: session.lastMessage?.createTime || new Date().toISOString()
+        },
+        unreadCount: session.unreadCount || 0
+      }))
       
       // 更新全局未读消息数
       userStore.updateUnreadMessageCount(unreadChatCount.value)
@@ -265,5 +283,228 @@ export default {
 </script>
 
 <style scoped>
-/* 样式将在后续阶段完善 */
+.message-page {
+  padding-bottom: 50px;
+}
+
+.message-tabs {
+  display: flex;
+  background-color: #fff;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 10px;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 15px 0;
+  font-size: 15px;
+  position: relative;
+  color: #666;
+}
+
+.tab-item.active {
+  color: #1989fa;
+  font-weight: bold;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background-color: #1989fa;
+}
+
+.badge {
+  position: absolute;
+  top: 5px;
+  right: 50%;
+  margin-right: -50px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 10px;
+  text-align: center;
+  border-radius: 8px;
+  background-color: #ff4d4f;
+  color: white;
+  padding: 0 4px;
+}
+
+.chat-list, .notification-list {
+  background-color: #f7f8fa;
+}
+
+.chat-item {
+  display: flex;
+  padding: 12px 16px;
+  background-color: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+.chat-item.unread {
+  background-color: #f0f9ff;
+}
+
+.avatar {
+  position: relative;
+  width: 45px;
+  height: 45px;
+  margin-right: 12px;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.online-indicator {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #52c41a;
+  border: 2px solid #fff;
+}
+
+.chat-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.top-line, .bottom-line {
+  display: flex;
+  justify-content: space-between;
+}
+
+.nickname {
+  font-weight: bold;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.time {
+  font-size: 12px;
+  color: #999;
+}
+
+.last-message {
+  color: #666;
+  font-size: 13px;
+  max-width: 70%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unread-count {
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 9px;
+  background-color: #ff4d4f;
+  color: white;
+  padding: 0 5px;
+}
+
+.notification-item {
+  display: flex;
+  padding: 12px 16px;
+  background-color: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+.notification-item.unread {
+  background-color: #f0f9ff;
+}
+
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.notification-icon.like {
+  background-color: #ff4d4f;
+}
+
+.notification-icon.comment {
+  background-color: #1890ff;
+}
+
+.notification-icon.follow {
+  background-color: #52c41a;
+}
+
+.notification-icon.system {
+  background-color: #faad14;
+}
+
+.notification-content {
+  flex: 1;
+}
+
+.notification-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.notification-text {
+  color: #666;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.notification-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.unread-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ff4d4f;
+  margin-left: 8px;
+  align-self: center;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+  color: #999;
+}
+
+.empty-state i {
+  font-size: 60px;
+  margin-bottom: 16px;
+  color: #ccc;
+}
+
+.empty-state button {
+  margin-top: 16px;
+  padding: 8px 16px;
+  border: none;
+  background-color: #1989fa;
+  color: white;
+  border-radius: 4px;
+}
 </style>

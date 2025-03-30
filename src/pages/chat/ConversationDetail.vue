@@ -35,6 +35,8 @@
       @send-image="sendImageMessage"
       @send-voice="sendVoiceMessage"
       @send-location="sendLocationMessage"
+      @send-product="sendProductMessage"
+      @send-emoji="sendEmojiMessage"
     />
     
     <!-- 操作菜单 -->
@@ -329,8 +331,36 @@ const sendVoiceMessage = async (voiceData) => {
 }
 
 // 发送位置消息
-const sendLocationMessage = () => {
-  showToast('位置分享功能开发中')
+const sendLocationMessage = async () => {
+  try {
+    // 实现位置消息发送逻辑
+    showToast('位置发送功能即将上线')
+  } catch (error) {
+    console.error('发送位置失败:', error)
+    showToast('发送位置失败')
+  }
+}
+
+// 发送商品消息
+const sendProductMessage = async (product) => {
+  try {
+    // 实现商品消息发送逻辑
+    showToast('商品发送功能即将上线')
+  } catch (error) {
+    console.error('发送商品失败:', error)
+    showToast('发送商品失败')
+  }
+}
+
+// 发送表情消息
+const sendEmojiMessage = async (emoji) => {
+  try {
+    // 实现表情消息发送逻辑
+    showToast('表情发送功能即将上线')
+  } catch (error) {
+    console.error('发送表情失败:', error)
+    showToast('发送表情失败')
+  }
 }
 
 // 重试发送消息

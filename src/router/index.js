@@ -257,6 +257,18 @@ const router = createRouter({
   }
 })
 
+// 全局导航后置钩子，用于设置页面过渡效果
+router.afterEach((to, from) => {
+  // 获取根路径的层级深度
+  const toDepth = to.path.split('/').length
+  const fromDepth = from.path.split('/').length
+  
+  // 根据导航方向设置页面过渡名称（用于Vant组件）
+  if (to.meta.transition !== false) {
+    to.meta.transitionName = toDepth < fromDepth ? 'van-slide-right' : 'van-slide-left'
+  }
+})
+
 // 路由守卫
 router.beforeEach((to, from, next) => {
   // 从localStorage获取token

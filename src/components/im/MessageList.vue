@@ -39,7 +39,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useEventListener } from '@vueuse/core'
-import dayjs from 'dayjs'
+import dayjs from '@/utils/dayjs'
 import { showToast } from 'vant'
 import MessageItem from './MessageItem.vue'
 

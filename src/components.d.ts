@@ -34,6 +34,8 @@ declare module 'vue' {
     MessageItem: typeof import('./components/im/MessageItem.vue')['default']
     MessageList: typeof import('./components/im/MessageList.vue')['default']
     NotificationList: typeof import('./components/notification/NotificationList.vue')['default']
+    PageContainer: typeof import('./components/common/PageContainer.vue')['default']
+    PageTransition: typeof import('./components/PageTransition.vue')['default']
     ProductItem: typeof import('./components/product/ProductItem.vue')['default']
     ProductList: typeof import('./components/ProductList.vue')['default']
     ProductLocation: typeof import('./components/product/ProductLocation.vue')['default']

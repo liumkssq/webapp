@@ -79,13 +79,13 @@
           </div>
           <div class="action-name">位置</div>
         </div>
-        <div class="action-item">
+        <div class="action-item" @click="chooseProduct">
           <div class="action-icon">
             <van-icon name="gift-o" size="1.5rem" color="#2c2c2c" />
           </div>
           <div class="action-name">商品</div>
         </div>
-        <div class="action-item">
+        <div class="action-item" @click="chooseEmoji">
           <div class="action-icon">
             <van-icon name="like-o" size="1.5rem" color="#2c2c2c" />
           </div>
@@ -124,7 +124,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['send-text', 'send-image', 'send-voice', 'send-location'])
+const emit = defineEmits(['send-text', 'send-image', 'send-voice', 'send-location', 'send-product', 'send-emoji'])
 
 // 输入相关的状态
 const inputMode = ref('text') // 'text' 或 'voice'
@@ -232,6 +232,22 @@ const chooseLocation = () => {
   // 模拟选择位置
   // 实际项目中需要调用地图API
   emit('send-location')
+  showMoreActions.value = false
+}
+
+// 选择商品
+const chooseProduct = () => {
+  // 实现商品选择功能
+  emit('send-product', { id: 'demo-product', name: '示例商品' })
+  showToast('选择商品功能即将上线')
+  showMoreActions.value = false
+}
+
+// 选择表情
+const chooseEmoji = () => {
+  // 实现表情选择功能
+  emit('send-emoji', '😊')
+  showToast('表情功能即将上线')
   showMoreActions.value = false
 }
 
