@@ -69,12 +69,9 @@ export function deleteFriend(id) {
 
 // 获取群聊列表
 export function getGroupList() {
-  const mockData = generateMockData('groupList')
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取群聊列表成功',
-    data: mockData
+  return request({
+    url: '/api/im/groups',
+    method: 'get'
   })
 }
 
@@ -93,12 +90,9 @@ export function createGroup(data) {
 
 // 获取群聊详情
 export function getGroupInfo(id) {
-  const mockData = generateMockData('groupInfo', { id })
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取群聊信息成功',
-    data: mockData
+  return request({
+    url: `/api/im/group/${id}`,
+    method: 'get'
   })
 }
 
@@ -122,12 +116,9 @@ export function leaveGroup(id) {
 
 // 获取用户详情
 export function getUserDetail(id) {
-  const mockData = generateMockData('userDetail', { id })
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取用户详情成功',
-    data: mockData
+  return request({
+    url: `/api/im/user/${id}`,
+    method: 'get'
   })
 }
 
@@ -142,13 +133,10 @@ export function getConversationList() {
 
 // 获取聊天记录
 export function getChatMessages(params) {
-  const { conversationId, page = 1, limit = 20 } = params
-  const mockData = generateMockData('chatMessages', { conversationId, page, limit })
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取聊天记录成功',
-    data: mockData
+  return request({
+    url: '/api/im/messages',
+    method: 'get',
+    params
   })
 }
 
@@ -189,23 +177,35 @@ export function getUnreadCount() {
 
 // 搜索联系人
 export function searchContacts(keyword) {
-  const mockData = generateMockData('searchContacts', { keyword })
-  
-  return Promise.resolve({
-    code: 200,
-    message: '搜索联系人成功',
-    data: mockData
+  return request({
+    url: '/api/im/search-contacts',
+    method: 'get',
+    params: { keyword }
+  })
+}
+
+// 搜索用户
+export function searchUsers(keyword) {
+  return request({
+    url: '/api/im/search-users',
+    method: 'get',
+    params: { keyword }
+  })
+}
+
+// 获取好友列表
+export function getFriendList() {
+  return request({
+    url: '/api/im/friends',
+    method: 'get'
   })
 }
 
 // 获取会话详情
 export function getConversationDetail(id) {
-  const mockData = generateMockData('conversationDetail', { id })
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取会话详情成功',
-    data: mockData
+  return request({
+    url: `/api/im/conversation/${id}`,
+    method: 'get'
   })
 }
 

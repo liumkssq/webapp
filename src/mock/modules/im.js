@@ -608,12 +608,119 @@ Mock.mock(new RegExp('/api/im/search-contacts'), 'get', options => {
   }
 })
 
+// 搜索用户
+Mock.mock(new RegExp('/api/im/search-users'), 'get', options => {
+  const { url } = options
+  const params = getQueryParams(url)
+  const keyword = params.keyword || ''
+  
+  if (!keyword.trim()) {
+    return {
+      code: 200,
+      message: '搜索用户成功',
+      data: { list: [] }
+    }
+  }
+  
+  // 搜索用户池中的用户
+  const searchResults = userPool.filter(user => {
+    // 排除自己
+    if (user.id === 1) return false
+    
+    // 搜索名字或学校或院系
+    return (
+      user.name.includes(keyword) ||
+      user.school.includes(keyword) ||
+      user.department.includes(keyword)
+    )
+  })
+  
+  // 为搜索结果添加好友关系标记
+  const resultsWithFriendInfo = searchResults.map(user => {
+    const isFriend = friendRelationships.some(
+      relation => relation.userId === 1 && relation.friendId === user.id
+    )
+    
+    return {
+      ...user,
+      isFriend
+    }
+  })
+  
+  return {
+    code: 200,
+    message: '搜索用户成功',
+    data: { list: resultsWithFriendInfo.slice(0, 20) } // 最多返回20条
+  }
+})
+
+// 获取好友列表
+Mock.mock('/api/im/friends', 'get', () => {
+  // 获取当前用户的好友关系
+  const myFriendRelations = friendRelationships.filter(relation => relation.userId === 1)
+  
+  // 根据关系获取好友用户详情
+  const myFriends = myFriendRelations.map(relation => {
+    const friend = userPool.find(user => user.id === relation.friendId)
+    if (!friend) return null
+    
+    return {
+      ...friend,
+      note: relation.note,
+      addTime: relation.addTime
+    }
+  }).filter(Boolean) // 移除null值
+  
+  return {
+    code: 200,
+    message: '获取好友列表成功',
+    data: myFriends
+  }
+})
+
 // 模拟未读消息数量
 Mock.mock('/api/im/unread-count', 'get', () => {
   return {
     code: 200,
     message: '获取未读消息数成功',
     data: Math.floor(Math.random() * 10) // 随机生成0-9的未读消息数
+  }
+})
+
+// 获取群聊列表
+Mock.mock('/api/im/groups', 'get', () => {
+  // 返回当前用户参与的群聊
+  const myGroups = groupPool.filter(group => 
+    group.members.some(member => member.id === 1)
+  )
+
+  return {
+    code: 200,
+    message: '获取群聊列表成功',
+    data: {
+      list: myGroups,
+      total: myGroups.length
+    }
+  }
+})
+
+// 获取群聊详情
+Mock.mock(new RegExp('/api/im/group/\\d+'), 'get', options => {
+  const groupId = parseInt(options.url.match(/\/api\/im\/group\/(\d+)/)[1])
+  const group = groupPool.find(g => g.id === groupId)
+  
+  if (!group) {
+    return {
+      code: 404,
+      message: '群聊不存在',
+      data: null
+    }
+  }
+  
+  return {
+    code: 200,
+    message: '获取群聊详情成功',
+    data: group
   }
 })
 
