@@ -131,20 +131,24 @@ const routes = [
   // 消息与聊天相关路由
   {
     path: '/message',
-    redirect: '/im/message'
+    redirect: '/im/conversations'
   },
   {
     path: '/chat',
-    redirect: '/im/message'
+    redirect: '/im/conversations'
   },
   {
     path: '/chat/list',
-    redirect: '/im/message'
+    redirect: '/im/conversations'
+  },
+  {
+    path: '/im/message',
+    redirect: '/im/conversations'
   },
   {
     path: '/chat/conversation/:id',
     name: 'ConversationDetail',
-    component: () => import('@/pages/im/Chat.vue'),
+    component: () => import('../pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '聊天'
@@ -175,16 +179,25 @@ const routes = [
   {
     path: '/im/message',
     name: 'ImMessage',
-    component: () => import('@/pages/im/ImMessagePage.vue'),
+    component: () => import('../pages/im/ImMessagePage.vue'),
     meta: {
       requiresAuth: true,
       title: '消息'
     }
   },
   {
+    path: '/im/conversations',
+    name: 'ImConversations',
+    component: () => import('../pages/im/Conversations.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '会话列表'
+    }
+  },
+  {
     path: '/im/contacts',
     name: 'ContactList',
-    component: () => import('@/pages/im/ContactList.vue'),
+    component: () => import('../pages/im/ContactList.vue'),
     meta: {
       requiresAuth: true,
       title: '联系人'
@@ -193,7 +206,7 @@ const routes = [
   {
     path: '/im/friend-requests',
     name: 'FriendRequests',
-    component: () => import('@/pages/im/FriendRequests.vue'),
+    component: () => import('../pages/im/FriendRequests.vue'),
     meta: {
       requiresAuth: true,
       title: '新朋友'
@@ -202,7 +215,7 @@ const routes = [
   {
     path: '/im/user/:id',
     name: 'ImUserProfile',
-    component: () => import('@/pages/im/UserProfile.vue'),
+    component: () => import('../pages/im/UserProfile.vue'),
     meta: {
       requiresAuth: true,
       title: '个人资料'
@@ -212,7 +225,7 @@ const routes = [
   {
     path: '/im/groups',
     name: 'GroupList',
-    component: () => import('@/pages/im/GroupList.vue'),
+    component: () => import('../pages/im/GroupList.vue'),
     meta: {
       requiresAuth: true,
       title: '群聊列表'
@@ -221,7 +234,7 @@ const routes = [
   {
     path: '/im/group/:id',
     name: 'GroupDetail',
-    component: () => import('@/pages/im/Chat.vue'),
+    component: () => import('../pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '群聊'
@@ -234,7 +247,7 @@ const routes = [
   {
     path: '/im/chat/:id',
     name: 'ImConversationDetail',
-    component: () => import('@/pages/im/Chat.vue'),
+    component: () => import('../pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '聊天'

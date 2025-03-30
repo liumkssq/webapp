@@ -23,7 +23,7 @@
           @focus="onFocus"
           @blur="onBlur"
           @keydown.enter.prevent="onKeyEnter"
-          @input="adjustTextareaHeight"
+          @input="onTextInput"
         ></textarea>
       </div>
       
@@ -40,6 +40,17 @@
           {{ recording ? '松开发送' : '按住说话' }}
         </van-button>
       </div>
+      
+      <!-- 表情按钮 -->
+      <van-button
+        v-if="inputMode === 'text'"
+        class="emoji-button"
+        icon="smile-o"
+        :class="{ active: showEmojiPicker }"
+        size="small"
+        round
+        @click="chooseEmoji"
+      />
       
       <!-- 发送按钮 -->
       <van-button
@@ -62,6 +73,20 @@
         round
         @click="showMoreActions = !showMoreActions"
       />
+    </div>
+    
+    <!-- 表情选择器 -->
+    <div v-show="showEmojiPicker" class="emoji-picker">
+      <div class="emoji-container">
+        <div
+          v-for="emoji in commonEmojis"
+          :key="emoji"
+          class="emoji-item"
+          @click="insertEmoji(emoji)"
+        >
+          {{ emoji }}
+        </div>
+      </div>
     </div>
     
     <!-- 扩展功能面板 -->
@@ -87,7 +112,7 @@
         </div>
         <div class="action-item" @click="chooseEmoji">
           <div class="action-icon">
-            <van-icon name="like-o" size="1.5rem" color="#2c2c2c" />
+            <van-icon name="smile-o" size="1.5rem" color="#2c2c2c" />
           </div>
           <div class="action-name">表情</div>
         </div>
@@ -108,6 +133,8 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { showToast } from 'vant'
+import { sendTypingStatus } from '@/api/im'
+import { useThrottleFn } from '@vueuse/core'
 
 const props = defineProps({
   placeholder: {
@@ -121,6 +148,14 @@ const props = defineProps({
   loadingVoice: {
     type: Boolean,
     default: false
+  },
+  conversationId: {
+    type: [String, Number],
+    required: true
+  },
+  conversationType: {
+    type: String,
+    default: 'private'
   }
 })
 
@@ -132,12 +167,27 @@ const textMessage = ref('')
 const textareaRef = ref(null)
 const fileInputRef = ref(null)
 const showMoreActions = ref(false)
+const showEmojiPicker = ref(false)
+
+// 节流发送正在输入状态，3秒内最多发送一次
+const throttledSendTyping = useThrottleFn(() => {
+  if (props.conversationId) {
+    sendTypingStatus(props.conversationId)
+  }
+}, 3000)
 
 // 文本输入框的行数
 const textareaRows = computed(() => {
   const lineCount = (textMessage.value.match(/\n/g) || []).length + 1
   return Math.min(Math.max(lineCount, 1), 4) // 最小1行，最大4行
 })
+
+// 常用表情列表
+const commonEmojis = [
+  '😊', '😂', '🤣', '❤️', '👍', '🎉', 
+  '🤔', '😍', '😘', '😭', '😡', '👏',
+  '🙏', '🤝', '💪', '✨', '🌹', '🎁'
+]
 
 // 语音录制相关状态
 const recording = ref(false)
@@ -148,6 +198,7 @@ const recordingTimer = ref(null)
 const toggleInputMode = () => {
   inputMode.value = inputMode.value === 'text' ? 'voice' : 'text'
   showMoreActions.value = false
+  showEmojiPicker.value = false
 }
 
 // 发送文本消息
@@ -158,6 +209,13 @@ const sendTextMessage = () => {
   emit('send-text', message)
   textMessage.value = ''
   adjustTextareaHeight()
+  showEmojiPicker.value = false
+}
+
+// 监听输入变化，发送正在输入状态
+const onTextInput = () => {
+  adjustTextareaHeight()
+  throttledSendTyping()
 }
 
 // 开始录音
@@ -243,12 +301,39 @@ const chooseProduct = () => {
   showMoreActions.value = false
 }
 
+// 插入表情
+const insertEmoji = (emoji) => {
+  if (!textareaRef.value) return
+  
+  const textarea = textareaRef.value
+  const startPos = textarea.selectionStart
+  const endPos = textarea.selectionEnd
+  
+  // 在光标位置插入表情
+  textMessage.value = 
+    textMessage.value.substring(0, startPos) + 
+    emoji + 
+    textMessage.value.substring(endPos)
+  
+  // 恢复光标位置
+  nextTick(() => {
+    const newPos = startPos + emoji.length
+    textarea.focus()
+    textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
 // 选择表情
 const chooseEmoji = () => {
-  // 实现表情选择功能
-  emit('send-emoji', '😊')
-  showToast('表情功能即将上线')
+  showEmojiPicker.value = !showEmojiPicker.value
   showMoreActions.value = false
+  
+  // 如果打开表情选择器，聚焦文本框
+  if (showEmojiPicker.value) {
+    nextTick(() => {
+      textareaRef.value?.focus()
+    })
+  }
 }
 
 // 调整文本输入框高度
@@ -265,10 +350,22 @@ const adjustTextareaHeight = () => {
 // 焦点相关处理
 const onFocus = () => {
   showMoreActions.value = false
+  // 保持表情选择器打开状态
 }
 
 const onBlur = () => {
-  // 可以在这里处理失去焦点时的逻辑
+  // 延迟关闭表情选择器，以便能够点击表情
+  setTimeout(() => {
+    // 如果用户点击了表情，则不关闭选择器
+    if (!showEmojiPicker.value) return
+    
+    const activeElement = document.activeElement
+    if (activeElement && activeElement.classList.contains('emoji-item')) {
+      return
+    }
+    
+    showEmojiPicker.value = false
+  }, 100)
 }
 
 // 处理回车键
@@ -281,9 +378,6 @@ const onKeyEnter = (event) => {
   // 否则发送消息
   sendTextMessage()
 }
-
-// 监听文本变化，调整输入框高度
-watch(textMessage, adjustTextareaHeight)
 
 // 组件挂载时的初始化
 onMounted(() => {
@@ -305,7 +399,8 @@ onMounted(() => {
 
 .voice-button,
 .more-button,
-.send-button {
+.send-button,
+.emoji-button {
   flex-shrink: 0;
   height: 2.2rem;
   width: 2.2rem;
@@ -313,7 +408,8 @@ onMounted(() => {
   margin: 0 0.3rem;
 }
 
-.voice-button.active {
+.voice-button.active,
+.emoji-button.active {
   background-color: #e5e5e5;
   color: #1989fa;
 }
@@ -358,6 +454,36 @@ onMounted(() => {
   padding: 0 0.8rem;
 }
 
+.emoji-picker {
+  background-color: #f8f8f8;
+  padding: 0.8rem;
+  border-top: 1px solid #e5e5e5;
+}
+
+.emoji-container {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.6rem;
+}
+
+.emoji-item {
+  font-size: 1.4rem;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.emoji-item:active {
+  background-color: #f0f0f0;
+  transform: scale(0.95);
+}
+
 .more-actions {
   padding: 1rem 0;
   background-color: #f5f5f5;
@@ -386,6 +512,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   margin-bottom: 0.3rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .action-name {

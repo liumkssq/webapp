@@ -61,6 +61,21 @@ export function getUserProducts(params) {
 }
 
 /**
+ * 获取用户收藏的商品
+ * @param {Object} params - 查询参数
+ * @param {number} [params.page=1] - 页码
+ * @param {number} [params.limit=10] - 每页数量
+ * @returns {Promise<Object>} 用户收藏的商品列表数据
+ */
+export function getFavoriteProducts(params) {
+  return request({
+    url: '/api/product/favorites',
+    method: 'get',
+    params
+  })
+}
+
+/**
  * 发布商品
  * @param {Object} data - 商品数据
  * @param {string} data.title - 商品标题

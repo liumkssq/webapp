@@ -1,734 +1,879 @@
 import Mock from 'mockjs'
-import { getQueryParams } from '../utils'
+import { getUrlParams } from '../utils'
 
-const Random = Mock.Random
+// 生成随机ID
+const generateId = () => Math.floor(Math.random() * 1000000).toString()
 
-// 用户数据池
-const userPool = Array(50).fill().map((_, index) => {
-  const id = index + 1
-  const gender = Random.boolean() ? 'male' : 'female'
-  return {
-    id,
-    name: Random.cname(),
-    avatar: `https://randomuser.me/api/portraits/${gender === 'male' ? 'men' : 'women'}/${id % 99 || 1}.jpg`,
-    gender,
-    school: Random.pick(['清华大学', '北京大学', '复旦大学', '上海交通大学', '南京大学']),
-    department: Random.pick(['计算机科学与技术', '软件工程', '电子信息工程', '经济学', '工商管理']),
-    bio: Random.boolean(0.7) ? Random.csentence(5, 20) : '',
-    onlineStatus: Random.boolean(0.7) ? 'online' : 'offline',
-    lastActiveTime: Random.date('yyyy-MM-dd HH:mm:ss')
-  }
-})
+// 当前用户ID (模拟)
+const currentUserId = 1
 
-// 群聊数据池
-const groupPool = Array(20).fill().map((_, index) => {
-  const id = index + 10001
-  const memberCount = Random.integer(3, 100)
-  const name = Random.ctitle(4, 8) + Random.pick(['学习小组', '兴趣小组', '交流群', '同学群'])
-  
-  return {
-    id,
-    name,
-    avatar: `https://picsum.photos/200?random=${id}`,
-    memberCount,
-    owner: userPool[Random.integer(0, userPool.length - 1)],
-    notice: Random.boolean(0.7) ? Random.csentence(10, 50) : '',
-    createTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-    members: Array(Math.min(memberCount, 20)).fill().map(() => {
-      const user = userPool[Random.integer(0, userPool.length - 1)]
-      return {
-        ...user,
-        role: Random.boolean(0.2) ? 'admin' : 'member',
-        joinTime: Random.date('yyyy-MM-dd HH:mm:ss')
-      }
-    })
-  }
-})
+// 模拟延时
+const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms))
 
-// 好友关系数据池
-const friendRelationships = []
+// 模拟WebSocket连接
+class MockWebSocket {
+  static instance = null
 
-// 为每个用户创建随机的好友关系
-userPool.forEach(user => {
-  const friendCount = Random.integer(5, 15)
-  const friendIds = new Set()
-  
-  while (friendIds.size < friendCount) {
-    const friendId = Random.integer(1, userPool.length)
-    if (friendId !== user.id) {
-      friendIds.add(friendId)
+  constructor() {
+    // 单例模式
+    if (MockWebSocket.instance) {
+      return MockWebSocket.instance
     }
-  }
-  
-  friendIds.forEach(friendId => {
-    const friend = userPool.find(u => u.id === friendId)
-    const addTime = Random.date('yyyy-MM-dd HH:mm:ss')
     
-    friendRelationships.push({
-      userId: user.id,
-      friendId,
-      note: Random.boolean(0.3) ? `我的${Random.pick(['同学', '室友', '老乡', '朋友'])}` : '',
-      addTime,
-      addSource: Random.pick(['搜索添加', '群聊中添加', '扫码添加', '附近的人'])
-    })
-  })
-})
-
-// 会话数据池
-const conversationPool = []
-
-// 创建私聊会话
-friendRelationships.forEach(relation => {
-  if (Random.boolean(0.5)) {
-    const targetUser = userPool.find(u => u.id === relation.friendId)
-    
-    if (!targetUser) return
-    
-    // 创建一个会话
-    conversationPool.push({
-      id: Random.guid(),
-      type: 'private',
-      userId: relation.userId,
-      targetId: relation.friendId,
-      targetInfo: targetUser,
-      unreadCount: Random.integer(0, 20),
-      lastMessage: Random.boolean(0.8) ? {
-        type: Random.pick(['text', 'image', 'voice']),
-        content: Random.csentence(5, 20),
-        timestamp: Random.date('yyyy-MM-dd HH:mm:ss'),
-        senderId: Random.boolean() ? relation.userId : relation.friendId
-      } : null,
-      isPinned: Random.boolean(0.2),
-      isMuted: Random.boolean(0.2),
-      createTime: relation.addTime,
-      updateTime: Random.date('yyyy-MM-dd HH:mm:ss')
-    })
-  }
-})
-
-// 创建群聊会话
-groupPool.forEach(group => {
-  const memberIds = group.members.map(member => member.id)
-  
-  memberIds.forEach(memberId => {
-    if (Random.boolean(0.5)) {
-      conversationPool.push({
-        id: Random.guid(),
-        type: 'group',
-        userId: memberId,
-        targetId: group.id,
-        targetInfo: group,
-        unreadCount: Random.integer(0, 30),
-        lastMessage: Random.boolean(0.8) ? {
-          type: Random.pick(['text', 'image', 'voice']),
-          content: Random.csentence(5, 20),
-          timestamp: Random.date('yyyy-MM-dd HH:mm:ss'),
-          senderId: memberIds[Random.integer(0, memberIds.length - 1)]
-        } : null,
-        isPinned: Random.boolean(0.2),
-        isMuted: Random.boolean(0.3),
-        createTime: Random.date('yyyy-MM-dd HH:mm:ss'),
-        updateTime: Random.date('yyyy-MM-dd HH:mm:ss')
-      })
+    this.connected = false
+    this.listeners = new Map()
+    this.mockData = {
+      conversations: [],
+      messages: {},
+      contacts: [],
+      onlineStatus: {}
     }
-  })
-})
-
-// 好友申请数据池
-const friendRequestPool = Array(100).fill().map((_, index) => {
-  const fromId = Random.integer(1, userPool.length)
-  let toId
-  
-  do {
-    toId = Random.integer(1, userPool.length)
-  } while (toId === fromId)
-  
-  return {
-    id: index + 1,
-    fromId,
-    toId,
-    message: Random.pick([
-      '我是你的同学',
-      '请求添加您为好友',
-      '我在二手市场看到你的商品',
-      '我们是一个班的',
-      '我是新生，想多认识一些同学'
-    ]),
-    status: Random.pick(['pending', 'accepted', 'rejected']),
-    time: Random.date('yyyy-MM-dd HH:mm:ss')
-  }
-})
-
-// 消息数据池
-const messagePool = []
-
-// 为每个会话生成一些消息
-conversationPool.forEach(conversation => {
-  const messageCount = Random.integer(10, 50)
-  let currentTime = new Date(conversation.createTime)
-  
-  if (conversation.type === 'private') {
-    const userId = conversation.userId
-    const targetId = conversation.targetId
     
-    for (let i = 0; i < messageCount; i++) {
-      // 随机消息发送者
-      const senderId = Random.boolean() ? userId : targetId
-      // 消息时间递增
-      currentTime = new Date(currentTime.getTime() + Random.integer(60000, 3600000))
-      
-      // 消息类型
-      // 实现加权随机选择（替代 Random.weighted）
-      const typeOptions = ['text', 'image', 'voice']
-      const weights = [7, 2, 1]
-      // 计算权重总和
-      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
-      // 生成一个随机值
-      let random = Math.random() * totalWeight
-      let messageType = typeOptions[typeOptions.length - 1] // 默认最后一个
-      // 根据权重选择
-      for (let i = 0; i < weights.length; i++) {
-        if (random < weights[i]) {
-          messageType = typeOptions[i]
-          break
+    // 初始化一些模拟数据
+    this.initMockData()
+    
+    // 模拟接收消息
+    this.startMessageSimulation()
+    
+    MockWebSocket.instance = this
+  }
+
+  // 初始化模拟数据
+  initMockData() {
+    // 生成联系人
+    this.mockData.contacts = Array(20).fill().map((_, i) => ({
+      id: i + 10,
+      name: Mock.mock('@cname'),
+      avatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")'),
+      online: Mock.mock('@boolean(7, 3)'), // 70%概率在线
+      lastActive: Mock.mock('@datetime("yyyy-MM-dd HH:mm:ss")'),
+      remarkName: null
+    }))
+    
+    // 随机选择5个联系人创建会话
+    const selectedContacts = this.mockData.contacts
+      .slice(0, 5)
+      .map(contact => ({
+        id: `private_${currentUserId}_${contact.id}`,
+        type: 'private',
+        targetId: contact.id,
+        targetName: contact.name,
+        targetAvatar: contact.avatar,
+        unreadCount: Mock.mock('@integer(0, 5)'),
+        lastMessage: {
+          id: generateId(),
+          type: 'text',
+          content: Mock.mock('@csentence(5, 20)'),
+          timestamp: Mock.mock('@datetime("yyyy-MM-dd HH:mm:ss")'),
+          senderId: Mock.mock('@boolean') ? currentUserId : contact.id
         }
-        random -= weights[i]
-      }
-      let content, duration
-      
-      if (messageType === 'text') {
-        content = Random.csentence(5, 50)
-      } else if (messageType === 'image') {
-        content = `https://picsum.photos/300/200?random=${Random.integer(1, 1000)}`
-      } else if (messageType === 'voice') {
-        content = 'audio_url'
-        duration = Random.integer(1, 60)
-      }
-      
-      // 消息状态（只有自己发送的消息才有状态）
-      let status
-      if (senderId === userId) {
-        status = Random.pick(['sent', 'delivered', 'read'])
-      }
-      
-      messagePool.push({
-        id: Random.guid(),
-        conversationId: conversation.id,
-        senderId,
-        type: messageType,
-        content,
-        duration,
-        timestamp: currentTime.toISOString(),
-        status,
-        isRecalled: Random.boolean(0.05)
-      })
-    }
-  } else if (conversation.type === 'group') {
-    const userId = conversation.userId
-    const groupId = conversation.targetId
-    const group = groupPool.find(g => g.id === groupId)
+      }))
     
-    if (group) {
-      const members = group.members.map(m => m.id)
+    // 创建一个群聊
+    const groupChat = {
+      id: `group_${generateId()}`,
+      type: 'group',
+      targetId: generateId(),
+      targetName: '项目交流群',
+      targetAvatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "群")'),
+      unreadCount: Mock.mock('@integer(0, 10)'),
+      memberCount: Mock.mock('@integer(5, 20)'),
+      lastMessage: {
+        id: generateId(),
+        type: 'text',
+        content: Mock.mock('@csentence(5, 20)'),
+        timestamp: Mock.mock('@datetime("yyyy-MM-dd HH:mm:ss")'),
+        senderId: Mock.mock('@integer(10, 30)'),
+        senderName: Mock.mock('@cname')
+      }
+    }
+    
+    // 设置会话列表
+    this.mockData.conversations = [...selectedContacts, groupChat]
+    
+    // 为每个会话生成消息历史
+    this.mockData.conversations.forEach(conversation => {
+      const messageCount = Mock.mock('@integer(10, 30)')
+      const messages = []
       
       for (let i = 0; i < messageCount; i++) {
-        // 随机消息发送者
-        const senderId = Random.pick([...members, userId])
-        // 消息时间递增
-        currentTime = new Date(currentTime.getTime() + Random.integer(10000, 600000))
+        const isFromSelf = Mock.mock('@boolean')
+        const senderId = isFromSelf ? currentUserId : (conversation.type === 'private' ? conversation.targetId : Mock.mock('@integer(10, 30)'))
+        const senderName = isFromSelf ? '我' : (conversation.type === 'private' ? conversation.targetName : Mock.mock('@cname'))
+        const senderAvatar = isFromSelf ? '' : (conversation.type === 'private' ? conversation.targetAvatar : Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")'))
         
-        // 消息类型
-        // 实现加权随机选择（替代 Random.weighted）
-        const typeOptions = ['text', 'image', 'voice']
-        const weights = [7, 2, 1]
-        // 计算权重总和
-        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
-        // 生成一个随机值
-        let random = Math.random() * totalWeight
-        let messageType = typeOptions[typeOptions.length - 1] // 默认最后一个
-        // 根据权重选择
-        for (let i = 0; i < weights.length; i++) {
-          if (random < weights[i]) {
-            messageType = typeOptions[i]
+        // 随机选择消息类型
+        const messageTypes = ['text', 'text', 'text', 'text', 'image', 'file', 'location']
+        const type = messageTypes[Math.floor(Math.random() * messageTypes.length)]
+        
+        // 根据类型设置内容
+        let content = ''
+        let extra = null
+        
+        switch (type) {
+          case 'text':
+            content = Mock.mock('@csentence(5, 30)')
             break
-          }
-          random -= weights[i]
+          case 'image':
+            content = Mock.mock('@image("300x200", "#894FC4", "#FFF", "图片")')
+            break
+          case 'file':
+            content = JSON.stringify({
+              name: Mock.mock('@ctitle(3, 8)') + '.pdf',
+              size: Mock.mock('@integer(100, 1024)') + 'KB',
+              url: '#'
+            })
+            break
+          case 'location':
+            content = JSON.stringify({
+              name: Mock.mock('@city(true)'),
+              address: Mock.mock('@county(true)') + Mock.mock('@csentence(5, 10)'),
+              latitude: Mock.mock('@float(20, 40, 6, 6)'),
+              longitude: Mock.mock('@float(100, 120, 6, 6)')
+            })
+            break
         }
-        let content, duration
         
-        if (messageType === 'text') {
-          content = Random.csentence(5, 50)
-        } else if (messageType === 'image') {
-          content = `https://picsum.photos/300/200?random=${Random.integer(1, 1000)}`
-        } else if (messageType === 'voice') {
-          content = 'audio_url'
-          duration = Random.integer(1, 60)
-        }
-        
-        // 消息状态（只有自己发送的消息才有状态）
-        let status
-        if (senderId === userId) {
-          status = Random.pick(['sent', 'delivered', 'read'])
-        }
-        
-        messagePool.push({
-          id: Random.guid(),
+        // 生成消息对象
+        messages.push({
+          id: generateId(),
           conversationId: conversation.id,
-          senderId,
-          type: messageType,
+          type,
           content,
-          duration,
-          timestamp: currentTime.toISOString(),
-          status,
-          isRecalled: Random.boolean(0.05)
+          senderId,
+          senderName,
+          senderAvatar,
+          receiverId: isFromSelf ? conversation.targetId : currentUserId,
+          timestamp: new Date(Date.now() - (messageCount - i) * 60000 * 5).toISOString(),
+          status: 'sent',
+          isRead: true,
+          isRevoked: false,
+          extra
         })
       }
+      
+      this.mockData.messages[conversation.id] = messages
+    })
+    
+    // 设置在线状态
+    this.mockData.contacts.forEach(contact => {
+      this.mockData.onlineStatus[contact.id] = contact.online ? 'online' : 'offline'
+    })
+  }
+
+  // 模拟接收新消息
+  async startMessageSimulation() {
+    await delay(10000) // 等待10秒后开始模拟
+    
+    // 随机选择一个会话
+    setInterval(() => {
+      if (!this.connected) return
+      
+      // 30%概率收到新消息
+      if (Math.random() > 0.3) return
+      
+      const randomIndex = Math.floor(Math.random() * this.mockData.conversations.length)
+      const conversation = this.mockData.conversations[randomIndex]
+      
+      if (!conversation) return
+      
+      // 创建新消息
+      const newMessage = {
+        id: generateId(),
+        conversationId: conversation.id,
+        type: 'text',
+        content: Mock.mock('@csentence(5, 20)'),
+        senderId: conversation.targetId,
+        senderName: conversation.targetName,
+        senderAvatar: conversation.targetAvatar,
+        receiverId: currentUserId,
+        timestamp: new Date().toISOString(),
+        status: 'sent',
+        isRead: false,
+        isRevoked: false
+      }
+      
+      // 触发消息事件
+      this.triggerEvent('message', {
+        type: 'chat_message',
+        data: newMessage
+      })
+      
+      // 将消息添加到历史记录
+      if (this.mockData.messages[conversation.id]) {
+        this.mockData.messages[conversation.id].push(newMessage)
+      } else {
+        this.mockData.messages[conversation.id] = [newMessage]
+      }
+      
+      // 更新会话的最后消息
+      conversation.lastMessage = {
+        id: newMessage.id,
+        type: newMessage.type,
+        content: newMessage.content,
+        timestamp: newMessage.timestamp,
+        senderId: newMessage.senderId
+      }
+      
+      // 增加未读数
+      conversation.unreadCount = (conversation.unreadCount || 0) + 1
+    }, 30000) // 每30秒检查一次
+    
+    // 模拟用户在线状态变更
+    setInterval(() => {
+      if (!this.connected) return
+      
+      // 随机选择一个联系人
+      const randomIndex = Math.floor(Math.random() * this.mockData.contacts.length)
+      const contact = this.mockData.contacts[randomIndex]
+      
+      if (!contact) return
+      
+      // 切换在线状态
+      const newStatus = this.mockData.onlineStatus[contact.id] === 'online' ? 'offline' : 'online'
+      this.mockData.onlineStatus[contact.id] = newStatus
+      
+      // 触发状态变更事件
+      this.triggerEvent('message', {
+        type: 'user_status',
+        data: {
+          userId: contact.id,
+          status: newStatus
+        }
+      })
+    }, 60000) // 每60秒检查一次
+  }
+
+  // 连接WebSocket
+  connect() {
+    console.log('Mock WebSocket: 连接建立')
+    this.connected = true
+    
+    // 触发连接成功事件
+    setTimeout(() => {
+      this.triggerEvent('open')
+      
+      // 发送用户初始在线状态
+      Object.entries(this.mockData.onlineStatus).forEach(([userId, status]) => {
+        this.triggerEvent('message', {
+          type: 'user_status',
+          data: {
+            userId: parseInt(userId),
+            status
+          }
+        })
+      })
+    }, 100)
+    
+    return Promise.resolve()
+  }
+
+  // 关闭WebSocket
+  close() {
+    console.log('Mock WebSocket: 连接关闭')
+    this.connected = false
+    this.triggerEvent('close')
+  }
+
+  // 发送消息
+  send(data) {
+    if (!this.connected) {
+      console.error('Mock WebSocket: 未连接，无法发送消息')
+      return false
+    }
+    
+    console.log('Mock WebSocket: 发送消息', data)
+    
+    // 模拟处理不同类型的消息
+    const message = typeof data === 'string' ? JSON.parse(data) : data
+    
+    switch (message.type) {
+      case 'ping':
+        // 响应ping
+        setTimeout(() => {
+          this.triggerEvent('message', {
+            type: 'pong',
+            data: { timestamp: Date.now() }
+          })
+        }, 10)
+        break
+      
+      case 'chat_message':
+        // 处理聊天消息
+        this.handleChatMessage(message.data)
+        break
+      
+      case 'read_ack':
+        // 处理已读回执
+        this.handleReadAck(message.data)
+        break
+      
+      case 'recall_message':
+        // 处理消息撤回
+        this.handleRecallMessage(message.data)
+        break
+      
+      case 'user_status':
+        // 处理用户状态变更
+        break
+      
+      case 'typing':
+        // 处理正在输入
+        this.handleTyping(message.data)
+        break
+    }
+    
+    return true
+  }
+
+  // 处理聊天消息
+  handleChatMessage(message) {
+    if (!message || !message.conversationId) return
+    
+    // 保存消息到历史记录
+    if (!this.mockData.messages[message.conversationId]) {
+      this.mockData.messages[message.conversationId] = []
+    }
+    this.mockData.messages[message.conversationId].push(message)
+    
+    // 查找或创建会话
+    let conversation = this.mockData.conversations.find(item => item.id === message.conversationId)
+    
+    if (!conversation) {
+      // 如果是新会话，需要创建
+      const isGroup = message.conversationId.startsWith('group_')
+      
+      conversation = {
+        id: message.conversationId,
+        type: isGroup ? 'group' : 'private',
+        targetId: message.receiverId,
+        targetName: message.receiverName || '未知用户',
+        targetAvatar: message.receiverAvatar || '',
+        unreadCount: 0
+      }
+      
+      this.mockData.conversations.push(conversation)
+    }
+    
+    // 更新会话的最后消息
+    conversation.lastMessage = {
+      id: message.id,
+      type: message.type,
+      content: message.content,
+      timestamp: message.timestamp,
+      senderId: message.senderId
+    }
+    
+    // 模拟服务器响应，返回消息已送达
+    setTimeout(() => {
+      this.triggerEvent('message', {
+        type: 'message_ack',
+        data: {
+          messageId: message.id,
+          conversationId: message.conversationId,
+          status: 'delivered'
+        }
+      })
+    }, 500)
+    
+    // 模拟对方已读回执
+    setTimeout(() => {
+      this.triggerEvent('message', {
+        type: 'read_ack',
+        data: {
+          conversationId: message.conversationId,
+          readerId: message.receiverId,
+          timestamp: new Date().toISOString()
+        }
+      })
+    }, 2000)
+  }
+
+  // 处理已读回执
+  handleReadAck(data) {
+    if (!data || !data.conversationId) return
+    
+    // 查找会话
+    const conversation = this.mockData.conversations.find(item => item.id === data.conversationId)
+    if (!conversation) return
+    
+    // 重置未读计数
+    conversation.unreadCount = 0
+  }
+
+  // 处理消息撤回
+  handleRecallMessage(data) {
+    if (!data || !data.messageId || !data.conversationId) return
+    
+    // 查找消息
+    const messages = this.mockData.messages[data.conversationId] || []
+    const message = messages.find(msg => msg.id === data.messageId)
+    
+    if (!message) return
+    
+    // 标记为已撤回
+    message.isRevoked = true
+    
+    // 通知所有客户端
+    setTimeout(() => {
+      this.triggerEvent('message', {
+        type: 'recall_message',
+        data: {
+          messageId: data.messageId,
+          conversationId: data.conversationId,
+          recallerId: currentUserId,
+          timestamp: new Date().toISOString()
+        }
+      })
+    }, 300)
+  }
+
+  // 处理正在输入
+  handleTyping(data) {
+    if (!data || !data.conversationId) return
+    
+    // 通知其他客户端
+    setTimeout(() => {
+      this.triggerEvent('message', {
+        type: 'typing',
+        data: {
+          conversationId: data.conversationId,
+          userId: currentUserId,
+          timestamp: Date.now()
+        }
+      })
+    }, 100)
+  }
+
+  // 添加事件监听器
+  addEventListener(event, callback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, [])
+    }
+    
+    this.listeners.get(event).push(callback)
+  }
+
+  // 移除事件监听器
+  removeEventListener(event, callback) {
+    if (!this.listeners.has(event)) return
+    
+    const callbacks = this.listeners.get(event)
+    const index = callbacks.indexOf(callback)
+    
+    if (index !== -1) {
+      callbacks.splice(index, 1)
+    }
+    
+    if (callbacks.length === 0) {
+      this.listeners.delete(event)
     }
   }
-})
 
-// 格式化联系人列表，按首字母分组
-const formatContactList = () => {
-  // 用户ID为1的好友列表
-  const myFriends = friendRelationships
-    .filter(relation => relation.userId === 1)
-    .map(relation => {
-      const friend = userPool.find(user => user.id === relation.friendId)
-      return {
-        ...friend,
-        note: relation.note,
-        pinyin: Random.pick(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'W', 'X', 'Y', 'Z']),
-        addTime: relation.addTime
+  // 触发事件
+  triggerEvent(event, data) {
+    if (!this.listeners.has(event)) return
+    
+    const callbacks = this.listeners.get(event)
+    for (const callback of callbacks) {
+      try {
+        if (event === 'message') {
+          callback({ data: JSON.stringify(data) })
+        } else {
+          callback(data)
+        }
+      } catch (error) {
+        console.error(`Mock WebSocket: 执行事件"${event}"的回调函数时出错`, error)
       }
-    })
-  
-  // 按拼音首字母分组
-  const groupedFriends = {}
-  
-  myFriends.forEach(friend => {
-    const initial = friend.pinyin.charAt(0).toUpperCase()
-    if (!groupedFriends[initial]) {
-      groupedFriends[initial] = []
     }
-    groupedFriends[initial].push(friend)
-  })
-  
-  // 转换为按字母排序的数组
-  const sortedKeys = Object.keys(groupedFriends).sort()
-  const result = sortedKeys.map(key => ({
-    initial: key,
-    friends: groupedFriends[key].sort((a, b) => a.pinyin.localeCompare(b.pinyin))
-  }))
-  
-  return result
+  }
+
+  // 获取会话列表数据
+  getConversations() {
+    return this.mockData.conversations
+  }
+
+  // 获取消息历史数据
+  getMessages(conversationId, page = 1, limit = 20) {
+    const messages = this.mockData.messages[conversationId] || []
+    
+    // 按时间倒序排序
+    messages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    
+    // 分页
+    const startIndex = (page - 1) * limit
+    const endIndex = startIndex + Number(limit)
+    const pageMessages = messages.slice(startIndex, endIndex)
+    
+    return {
+      list: pageMessages,
+      total: messages.length,
+      hasMore: endIndex < messages.length
+    }
+  }
 }
 
-// 模拟接口响应
-Mock.mock(new RegExp('/api/im/contacts'), 'get', options => {
-  const { url } = options
-  const params = getQueryParams(url)
-  
-  return {
-    code: 200,
-    message: '获取联系人列表成功',
-    data: formatContactList()
-  }
-})
+// 创建Mock WebSocket实例
+const mockWebSocket = new MockWebSocket()
 
-// 好友申请列表
-Mock.mock(new RegExp('/api/im/friend-requests'), 'get', options => {
-  const { url } = options
-  const params = getQueryParams(url)
-  const status = params.status || 'all'
-  
-  // 过滤我收到的好友申请
-  let requests = friendRequestPool.filter(req => req.toId === 1)
-  
-  if (status !== 'all') {
-    requests = requests.filter(req => req.status === status)
-  }
-  
-  // 为每个请求添加用户信息
-  requests = requests.map(req => ({
-    ...req,
-    fromUser: userPool.find(user => user.id === req.fromId)
-  }))
-  
-  return {
-    code: 200,
-    message: '获取好友申请列表成功',
-    data: {
-      total: requests.length,
-      list: requests
-    }
-  }
-})
-
-// 用户详情
-Mock.mock(new RegExp('/api/im/user/\\d+'), 'get', options => {
-  const userId = parseInt(options.url.match(/\/api\/im\/user\/(\d+)/)[1])
-  const user = userPool.find(u => u.id === userId)
-  
-  if (!user) {
-    return {
-      code: 404,
-      message: '用户不存在',
-      data: null
-    }
-  }
-  
-  // 查找是否已经是好友
-  const isFriend = friendRelationships.some(
-    relation => relation.userId === 1 && relation.friendId === userId
-  )
-  
-  // 查找好友备注
-  const friendRelation = friendRelationships.find(
-    relation => relation.userId === 1 && relation.friendId === userId
-  )
-  
-  return {
-    code: 200,
-    message: '获取用户详情成功',
-    data: {
-      ...user,
-      isFriend,
-      note: friendRelation?.note || '',
-      addTime: friendRelation?.addTime || null
-    }
-  }
-})
-
-// 获取群聊列表
-Mock.mock('/api/im/groups', 'get', () => {
-  // 我参与的群聊
-  const myGroups = conversationPool
-    .filter(conv => conv.userId === 1 && conv.type === 'group')
-    .map(conv => ({
-      ...groupPool.find(g => g.id === conv.targetId),
-      conversationId: conv.id
-    }))
-  
-  return {
-    code: 200,
-    message: '获取群聊列表成功',
-    data: myGroups
-  }
-})
-
-// 会话列表
-Mock.mock('/api/im/conversations', 'get', () => {
-  // 我的所有会话
-  const myConversations = conversationPool.filter(conv => conv.userId === 1)
-  
-  // 处理会话列表，添加目标信息
-  const formattedConversations = myConversations.map(conv => {
-    if (conv.type === 'private') {
-      const targetUser = userPool.find(u => u.id === conv.targetId)
-      // 查找好友备注
-      const friendRelation = friendRelationships.find(
-        relation => relation.userId === 1 && relation.friendId === conv.targetId
-      )
-      
-      return {
-        ...conv,
-        targetInfo: {
-          id: targetUser.id,
-          name: friendRelation?.note || targetUser.name,
-          avatar: targetUser.avatar,
-          onlineStatus: targetUser.onlineStatus
-        }
-      }
-    } else if (conv.type === 'group') {
-      const group = groupPool.find(g => g.id === conv.targetId)
-      return {
-        ...conv,
-        targetInfo: {
-          id: group.id,
-          name: group.name,
-          avatar: group.avatar,
-          memberCount: group.memberCount
-        }
-      }
-    }
-    return conv
-  })
-  
-  // 按照更新时间排序
-  return {
-    code: 200,
-    message: '获取会话列表成功',
-    data: formattedConversations.sort((a, b) => {
-      return new Date(b.updateTime) - new Date(a.updateTime)
+// 重写浏览器WebSocket类，拦截WebSocket请求
+class WebSocketMock {
+  constructor(url) {
+    console.log('创建Mock WebSocket:', url)
+    
+    this.url = url
+    this.readyState = 0 // CONNECTING
+    
+    // 属性设置
+    this.onopen = null
+    this.onclose = null
+    this.onmessage = null
+    this.onerror = null
+    
+    // 连接到Mock服务
+    setTimeout(() => {
+      mockWebSocket.connect()
+        .then(() => {
+          this.readyState = 1 // OPEN
+          if (this.onopen) this.onopen({ target: this })
+        })
+        .catch(error => {
+          this.readyState = 3 // CLOSED
+          if (this.onerror) this.onerror({ target: this, error })
+          if (this.onclose) this.onclose({ target: this, code: 1006, reason: 'Connection failed' })
+        })
+    }, 200)
+    
+    // 监听消息
+    mockWebSocket.addEventListener('message', (event) => {
+      if (this.onmessage) this.onmessage(event)
+    })
+    
+    // 监听关闭
+    mockWebSocket.addEventListener('close', () => {
+      this.readyState = 3 // CLOSED
+      if (this.onclose) this.onclose({ target: this, code: 1000, reason: 'Normal closure' })
     })
   }
-})
 
-// 会话详情
-Mock.mock(new RegExp('/api/im/conversation/\\w+'), 'get', options => {
-  const conversationId = options.url.match(/\/api\/im\/conversation\/(\w+)/)[1]
-  const conversation = conversationPool.find(c => c.id === conversationId)
-  
-  if (!conversation) {
-    return {
-      code: 404,
-      message: '会话不存在',
-      data: null
+  send(data) {
+    if (this.readyState !== 1) {
+      throw new Error('WebSocket is not open')
     }
-  }
-  
-  let targetInfo
-  
-  if (conversation.type === 'private') {
-    const targetUser = userPool.find(u => u.id === conversation.targetId)
-    // 查找好友备注
-    const friendRelation = friendRelationships.find(
-      relation => relation.userId === 1 && relation.friendId === conversation.targetId
-    )
     
-    targetInfo = {
-      ...targetUser,
-      name: friendRelation?.note || targetUser.name
-    }
-  } else if (conversation.type === 'group') {
-    const group = groupPool.find(g => g.id === conversation.targetId)
-    targetInfo = group
+    mockWebSocket.send(typeof data === 'string' ? JSON.parse(data) : data)
   }
-  
+
+  close(code = 1000, reason = '') {
+    mockWebSocket.close()
+    this.readyState = 3 // CLOSED
+    if (this.onclose) this.onclose({ target: this, code, reason })
+  }
+
+  addEventListener(type, listener) {
+    switch (type) {
+      case 'open':
+        this.onopen = listener
+        break
+      case 'message':
+        this.onmessage = listener
+        break
+      case 'close':
+        this.onclose = listener
+        break
+      case 'error':
+        this.onerror = listener
+        break
+    }
+  }
+
+  removeEventListener(type, listener) {
+    switch (type) {
+      case 'open':
+        if (this.onopen === listener) this.onopen = null
+        break
+      case 'message':
+        if (this.onmessage === listener) this.onmessage = null
+        break
+      case 'close':
+        if (this.onclose === listener) this.onclose = null
+        break
+      case 'error':
+        if (this.onerror === listener) this.onerror = null
+        break
+    }
+  }
+}
+
+// 只在开发环境中启用Mock WebSocket
+if (process.env.NODE_ENV === 'development') {
+  try {
+    // 保存原始WebSocket
+    const OriginalWebSocket = window.WebSocket
+    
+    // 替换为Mock版本
+    window.WebSocket = WebSocketMock
+    
+    // 提供恢复方法
+    window.__restoreWebSocket = () => {
+      window.WebSocket = OriginalWebSocket
+      console.log('Restored original WebSocket')
+    }
+    
+    console.log('WebSocket已被Mock版本替代')
+  } catch (error) {
+    console.error('无法替换WebSocket:', error)
+  }
+}
+
+// 模拟获取会话列表接口
+Mock.mock(/\/api\/im\/conversations/, 'get', () => {
   return {
     code: 200,
-    message: '获取会话详情成功',
-    data: {
-      ...conversation,
-      targetInfo: targetInfo
-    }
+    message: '获取成功',
+    data: mockWebSocket.getConversations()
   }
 })
 
-// 消息历史
-Mock.mock(new RegExp('/api/im/messages'), 'get', options => {
-  const { url } = options
-  const params = getQueryParams(url)
-  const conversationId = params.conversationId
-  const page = parseInt(params.page) || 1
-  const limit = parseInt(params.limit) || 20
+// 模拟获取消息接口
+Mock.mock(/\/api\/im\/messages/, 'get', (config) => {
+  const params = getUrlParams(config.url)
+  const { conversationId, page = 1, limit = 20 } = params
   
   if (!conversationId) {
     return {
       code: 400,
-      message: '缺少会话ID',
-      data: null
+      message: '缺少conversationId参数'
     }
   }
   
-  // 查找会话的所有消息
-  const messages = messagePool
-    .filter(msg => msg.conversationId === conversationId)
-    // 按时间排序，最新的在后面
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+  return {
+    code: 200,
+    message: '获取成功',
+    data: mockWebSocket.getMessages(conversationId, page, limit)
+  }
+})
+
+// 模拟发送消息接口
+Mock.mock(/\/api\/im\/message/, 'post', (config) => {
+  const message = JSON.parse(config.body)
   
-  const total = messages.length
-  const hasMore = page * limit < total
+  if (!message.conversationId) {
+    return {
+      code: 400,
+      message: '缺少conversationId参数'
+    }
+  }
   
-  // 分页获取消息
-  const startIndex = Math.max(0, total - page * limit)
-  const endIndex = Math.max(0, total - (page - 1) * limit)
-  const pageMessages = messages.slice(startIndex, endIndex).reverse()
+  // 生成消息ID
+  message.id = message.id || generateId()
+  message.timestamp = message.timestamp || new Date().toISOString()
+  message.status = 'sent'
+  
+  // 保存消息
+  mockWebSocket.handleChatMessage(message)
   
   return {
     code: 200,
-    message: '获取聊天记录成功',
+    message: '发送成功',
+    data: {
+      messageId: message.id,
+      conversationId: message.conversationId,
+      timestamp: message.timestamp,
+      status: 'sent'
+    }
+  }
+})
+
+// 模拟未读消息数接口
+Mock.mock(/\/api\/im\/unread-count/, 'get', () => {
+  const conversations = mockWebSocket.getConversations()
+  let total = 0
+  
+  const conversionsWithUnread = conversations.map(conv => {
+    total += conv.unreadCount || 0
+    return {
+      conversationId: conv.id,
+      count: conv.unreadCount || 0
+    }
+  })
+  
+  return {
+    code: 200,
+    message: '获取成功',
     data: {
       total,
-      hasMore,
-      list: pageMessages.map(msg => {
-        // 添加发送者信息
-        const sender = userPool.find(u => u.id === msg.senderId)
-        return {
-          ...msg,
-          sender: sender ? {
-            id: sender.id,
-            name: sender.name,
-            avatar: sender.avatar
-          } : null
-        }
-      })
+      conversations: conversionsWithUnread
     }
   }
 })
 
-// 搜索联系人
-Mock.mock(new RegExp('/api/im/search-contacts'), 'get', options => {
-  const { url } = options
-  const params = getQueryParams(url)
-  const keyword = params.keyword || ''
+// 模拟设置已读接口
+Mock.mock(/\/api\/im\/conversation\/.*\/read/, 'put', (config) => {
+  const conversationId = config.url.match(/\/conversation\/(.+?)\/read/)[1]
   
-  if (!keyword.trim()) {
+  if (!conversationId) {
     return {
-      code: 200,
-      message: '搜索联系人成功',
-      data: []
+      code: 400,
+      message: '缺少conversationId参数'
     }
   }
   
-  // 搜索用户池中的用户
-  const searchResults = userPool.filter(user => {
-    // 排除自己
-    if (user.id === 1) return false
-    
-    // 搜索名字或学校或院系
-    return (
-      user.name.includes(keyword) ||
-      user.school.includes(keyword) ||
-      user.department.includes(keyword)
-    )
-  })
-  
-  // 为搜索结果添加好友关系标记
-  const resultsWithFriendInfo = searchResults.map(user => {
-    const isFriend = friendRelationships.some(
-      relation => relation.userId === 1 && relation.friendId === user.id
-    )
-    
-    const friendRelation = friendRelationships.find(
-      relation => relation.userId === 1 && relation.friendId === user.id
-    )
-    
-    return {
-      ...user,
-      isFriend,
-      note: friendRelation?.note || ''
-    }
-  })
+  mockWebSocket.handleReadAck({ conversationId })
   
   return {
     code: 200,
-    message: '搜索联系人成功',
-    data: resultsWithFriendInfo.slice(0, 20) // 最多返回20条
+    message: '标记已读成功',
+    data: { success: true }
   }
 })
 
-// 搜索用户
-Mock.mock(new RegExp('/api/im/search-users'), 'get', options => {
-  const { url } = options
-  const params = getQueryParams(url)
-  const keyword = params.keyword || ''
+// 模拟消息撤回接口
+Mock.mock(/\/api\/im\/message\/.*\/recall/, 'put', (config) => {
+  const messageId = config.url.match(/\/message\/(.+?)\/recall/)[1]
+  const { conversationId } = JSON.parse(config.body)
   
-  if (!keyword.trim()) {
+  if (!messageId || !conversationId) {
     return {
-      code: 200,
-      message: '搜索用户成功',
-      data: { list: [] }
+      code: 400,
+      message: '参数错误'
     }
   }
   
-  // 搜索用户池中的用户
-  const searchResults = userPool.filter(user => {
-    // 排除自己
-    if (user.id === 1) return false
-    
-    // 搜索名字或学校或院系
-    return (
-      user.name.includes(keyword) ||
-      user.school.includes(keyword) ||
-      user.department.includes(keyword)
-    )
-  })
-  
-  // 为搜索结果添加好友关系标记
-  const resultsWithFriendInfo = searchResults.map(user => {
-    const isFriend = friendRelationships.some(
-      relation => relation.userId === 1 && relation.friendId === user.id
-    )
-    
-    return {
-      ...user,
-      isFriend
-    }
-  })
+  mockWebSocket.handleRecallMessage({ messageId, conversationId })
   
   return {
     code: 200,
-    message: '搜索用户成功',
-    data: { list: resultsWithFriendInfo.slice(0, 20) } // 最多返回20条
+    message: '消息撤回成功',
+    data: { success: true }
   }
 })
 
-// 获取好友列表
-Mock.mock('/api/im/friends', 'get', () => {
-  // 获取当前用户的好友关系
-  const myFriendRelations = friendRelationships.filter(relation => relation.userId === 1)
-  
-  // 根据关系获取好友用户详情
-  const myFriends = myFriendRelations.map(relation => {
-    const friend = userPool.find(user => user.id === relation.friendId)
-    if (!friend) return null
-    
-    return {
-      ...friend,
-      note: relation.note,
-      addTime: relation.addTime
-    }
-  }).filter(Boolean) // 移除null值
-  
+// 模拟上传图片接口
+Mock.mock(/\/api\/im\/upload\/image/, 'post', () => {
   return {
     code: 200,
-    message: '获取好友列表成功',
-    data: myFriends
-  }
-})
-
-// 模拟未读消息数量
-Mock.mock('/api/im/unread-count', 'get', () => {
-  return {
-    code: 200,
-    message: '获取未读消息数成功',
-    data: Math.floor(Math.random() * 10) // 随机生成0-9的未读消息数
-  }
-})
-
-// 获取群聊列表
-Mock.mock('/api/im/groups', 'get', () => {
-  // 返回当前用户参与的群聊
-  const myGroups = groupPool.filter(group => 
-    group.members.some(member => member.id === 1)
-  )
-
-  return {
-    code: 200,
-    message: '获取群聊列表成功',
+    message: '上传成功',
     data: {
-      list: myGroups,
-      total: myGroups.length
+      url: Mock.mock('@image("300x200", "#894FC4", "#FFF", "图片")')
     }
   }
 })
 
-// 获取群聊详情
-Mock.mock(new RegExp('/api/im/group/\\d+'), 'get', options => {
-  const groupId = parseInt(options.url.match(/\/api\/im\/group\/(\d+)/)[1])
-  const group = groupPool.find(g => g.id === groupId)
+// 模拟上传文件接口
+Mock.mock(/\/api\/im\/upload\/file/, 'post', () => {
+  return {
+    code: 200,
+    message: '上传成功',
+    data: {
+      name: Mock.mock('@ctitle(3, 8)') + '.pdf',
+      size: Mock.mock('@integer(100, 1024)') + 'KB',
+      url: '#'
+    }
+  }
+})
+
+// 模拟获取联系人列表接口
+Mock.mock(/\/api\/im\/contacts/, 'get', () => {
+  return {
+    code: 200,
+    message: '获取成功',
+    data: mockWebSocket.mockData.contacts
+  }
+})
+
+// 模拟查询联系人接口
+Mock.mock(/\/api\/im\/search-contacts/, 'get', (config) => {
+  const params = getUrlParams(config.url)
+  const { keyword } = params
   
-  if (!group) {
+  if (!keyword) {
     return {
-      code: 404,
-      message: '群聊不存在',
+      code: 400,
+      message: '缺少keyword参数'
+    }
+  }
+  
+  // 模糊搜索
+  const results = mockWebSocket.mockData.contacts.filter(contact => 
+    contact.name.includes(keyword) || (contact.remarkName && contact.remarkName.includes(keyword))
+  )
+  
+  return {
+    code: 200,
+    message: '获取成功',
+    data: results
+  }
+})
+
+// 模拟删除会话接口
+Mock.mock(/\/api\/im\/conversation\/.*/, 'delete', (config) => {
+  const idMatch = config.url.match(/\/conversation\/([^/]+)/);
+  const id = idMatch ? idMatch[1] : null;
+  
+  if (!id) {
+    return {
+      code: 400,
+      message: '缺少会话 ID',
       data: null
     }
   }
   
+  // 删除会话逻辑
+  const conversations = mockWebSocket.getConversations();
+  const index = conversations.findIndex(c => c.id === id);
+  
+  if (index > -1) {
+    conversations.splice(index, 1);
+  }
+  
   return {
     code: 200,
-    message: '获取群聊详情成功',
-    data: group
+    message: '删除成功',
+    data: { success: true }
   }
 })
 
+// 模拟获取好友申请列表接口
+Mock.mock(/\/api\/im\/friend-requests/, 'get', (config) => {
+  const params = getUrlParams(config.url)
+  const { status } = params
+  
+  // 生成模拟的好友申请数据
+  const generateRequests = () => {
+    const count = Mock.Random.integer(0, 5)
+    const requests = []
+    
+    for (let i = 0; i < count; i++) {
+      requests.push({
+        id: Mock.Random.id(),
+        userId: Mock.Random.integer(100, 999),
+        userName: Mock.Random.cname(),
+        userAvatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")'),
+        requestMessage: Mock.Random.csentence(5, 20),
+        status: status || Mock.Random.pick(['pending', 'accepted', 'rejected']),
+        createTime: Mock.Random.datetime('yyyy-MM-dd HH:mm:ss')
+      })
+    }
+    
+    return { requests, count }
+  }
+  
+  const { requests, count } = generateRequests()
+  
+  return {
+    code: 200,
+    message: '获取成功',
+    data: {
+      list: requests,
+      total: count,
+      page: params.page || 1,
+      limit: params.limit || 20
+    }
+  }
+})
+
+// 导出mock模块
 export default {
-  userPool,
-  groupPool,
-  friendRelationships,
-  conversationPool,
-  friendRequestPool,
-  messagePool
+  mockWebSocket
 }

@@ -1,7 +1,7 @@
 <template>
-  <div class="message-page ios-style">
+  <div class="conversations-page ios-style">
     <!-- 头部导航 -->
-    <header-nav title="消息">
+    <header-nav title="会话列表">
       <template #right>
         <div class="header-actions">
           <van-icon name="search" size="1.5rem" @click="router.push('/search')" />
@@ -22,14 +22,14 @@
           <span>选择群聊</span>
         </div>
         <div class="option-item" @click="navigateToFriendRequests">
-          <van-badge :content="newRequestsCount || ''" :show-zero="false">
+          <van-badge :content="newFriendRequestsCount || ''" :show-zero="false">
             <van-icon name="add-o" size="24" />
           </van-badge>
           <span>添加好友</span>
         </div>
       </div>
     </van-popup>
-    
+
     <!-- 消息类型切换 -->
     <div class="message-tabs">
       <div 
@@ -49,119 +49,112 @@
         <div v-if="unreadNotificationCount > 0" class="badge">{{ formatBadge(unreadNotificationCount) }}</div>
       </div>
     </div>
-    
-    <!-- 聊天消息列表 -->
-    <div v-if="activeTab === 'chat'" class="chat-list">
-      <!-- 集成联系人和会话 -->
-      <div class="contact-shortcuts">
-        <div class="shortcut" @click="router.push('/im/contacts')">
-          <van-icon name="friends-o" size="24" />
-          <span>联系人</span>
-        </div>
-        <div class="shortcut" @click="router.push('/im/groups')">
-          <van-icon name="wechat" size="24" />
-          <span>群聊</span>
-        </div>
-        <div class="shortcut" @click="router.push('/im/friend-requests')">
-          <van-badge :content="newRequestsCount || ''" :show-zero="false">
-            <van-icon name="add-o" size="24" />
-          </van-badge>
-          <span>新朋友</span>
-        </div>
-      </div>
-      
+
+    <!-- 加载状态 -->
+    <div v-if="activeTab === 'chat'">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-        <van-empty 
-          v-if="chatSessions.length === 0 && !loading"
-          description="暂无聊天消息"
-          image="chat"
+        <van-list
+          v-model:loading="loading"
+          :finished="finished"
+          finished-text="- 没有更多会话 -"
+          @load="loadMore"
         >
-          <template #bottom>
-            <van-button round type="primary" size="small" @click="router.push('/im/contacts')">添加好友</van-button>
-          </template>
-        </van-empty>
-        
-        <div v-else class="chat-list-container">
-          <div 
-            v-for="(session, index) in chatSessions" 
-            :key="session.id" 
-            class="chat-item"
-            :class="{ unread: session.unreadCount > 0 }"
-            @click="navigateToChat(session)"
-            @touchstart="touchStart($event, index)"
-            @touchmove="touchMove($event, index)"
-            @touchend="touchEnd(index)"
+          <!-- 空状态 -->
+          <van-empty 
+            v-if="conversations.length === 0 && !loading"
+            description="暂无会话记录"
+            image="chat"
           >
-            <!-- 侧滑操作区域 -->
-            <div class="swipe-actions" :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }">
-              <div 
-                class="action mark-read" 
-                @click.stop="markAsRead(session)"
-                v-if="session.unreadCount > 0"
-              >
-                标为已读
-              </div>
-              <div 
-                class="action delete" 
-                @click.stop="deleteConversation(session)"
-              >
-                删除
-              </div>
-            </div>
-            
-            <!-- 会话内容 -->
-            <div class="chat-content" :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }">
-              <van-image
-                round
-                width="3rem"
-                height="3rem"
-                :src="session.targetInfo?.avatar"
-                fit="cover"
-              >
-                <template #error>
-                  <div class="avatar-fallback">{{ getInitials(session.targetInfo?.name) }}</div>
-                </template>
-              </van-image>
-              
-              <div class="chat-info">
-                <div class="top-line">
-                  <div class="nickname">{{ session.targetInfo?.name }}</div>
-                  <div class="time">{{ formatTime(session.lastMessage?.timestamp) }}</div>
+            <template #bottom>
+              <van-button round type="primary" size="small" @click="navigateToContactList">开始聊天</van-button>
+            </template>
+          </van-empty>
+          
+          <!-- 会话列表 -->
+          <div v-else class="conversation-list-container">
+            <div 
+              v-for="(conversation, index) in conversations" 
+              :key="conversation.id"
+              class="conversation-item"
+              :class="{ unread: conversation.unreadCount > 0 }"
+              @click="navigateToChat(conversation)"
+              @touchstart="touchStart($event, index)"
+              @touchmove="touchMove($event, index)"
+              @touchend="touchEnd(index)"
+            >
+              <!-- 侧滑操作区域 -->
+              <div class="swipe-actions" :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }">
+                <div 
+                  class="action mark-read" 
+                  @click.stop="markAsRead(conversation)"
+                  v-if="conversation.unreadCount > 0"
+                >
+                  标为已读
                 </div>
+                <div 
+                  class="action delete" 
+                  @click.stop="deleteConversation(conversation)"
+                >
+                  删除
+                </div>
+              </div>
+              
+              <!-- 会话内容 -->
+              <div class="chat-content" :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }">
+                <!-- 头像 -->
+                <van-image
+                  round
+                  width="3rem"
+                  height="3rem"
+                  :src="conversation.targetInfo?.avatar"
+                  fit="cover"
+                >
+                  <template #error>
+                    <div class="avatar-fallback">{{ getInitials(conversation.targetInfo?.name) }}</div>
+                  </template>
+                </van-image>
                 
-                <div class="bottom-line">
-                  <div class="last-message">
-                    <span v-if="session.lastMessage">
-                      <span v-if="session.lastMessage.type === 'text'">
-                        {{ truncateText(session.lastMessage.content) }}
-                      </span>
-                      <span v-else-if="session.lastMessage.type === 'image'">
-                        [图片]
-                      </span>
-                      <span v-else-if="session.lastMessage.type === 'voice'">
-                        [语音消息 {{ session.lastMessage.duration }}″]
-                      </span>
-                      <span v-else-if="session.lastMessage.type === 'location'">
-                        [位置共享]
-                      </span>
-                      <span v-else>
-                        [未知类型消息]
-                      </span>
-                    </span>
-                    <span v-else class="no-message">暂无消息</span>
+                <!-- 会话信息 -->
+                <div class="chat-info">
+                  <div class="top-line">
+                    <div class="nickname">{{ conversation.targetInfo?.name }}</div>
+                    <div class="time">{{ formatTime(conversation.lastMessage?.timestamp) }}</div>
                   </div>
                   
-                  <div v-if="session.unreadCount > 0" class="unread-count">
-                    {{ formatBadge(session.unreadCount) }}
+                  <div class="bottom-line">
+                    <div class="last-message">
+                      <span v-if="conversation.lastMessage">
+                        <span v-if="conversation.lastMessage.type === 'text'">
+                          {{ truncateText(conversation.lastMessage.content) }}
+                        </span>
+                        <span v-else-if="conversation.lastMessage.type === 'image'">
+                          [图片]
+                        </span>
+                        <span v-else-if="conversation.lastMessage.type === 'voice'">
+                          [语音消息 {{ conversation.lastMessage.duration }}″]
+                        </span>
+                        <span v-else-if="conversation.lastMessage.type === 'location'">
+                          [位置共享]
+                        </span>
+                        <span v-else>
+                          [未知类型消息]
+                        </span>
+                      </span>
+                      <span v-else class="no-message">暂无消息</span>
+                    </div>
+                    
+                    <div v-if="conversation.unreadCount > 0" class="unread-count">
+                      {{ formatBadge(conversation.unreadCount) }}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </van-list>
       </van-pull-refresh>
     </div>
-    
+
     <!-- 通知列表 -->
     <div v-if="activeTab === 'notification'" class="notification-list">
       <van-empty 
@@ -203,9 +196,10 @@ import { useRouter } from 'vue-router'
 import { showDialog, showToast } from 'vant'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
+// 不再需要 EmptyState 组件，改用 van-empty
 import { useUserStore } from '@/store/user'
 import { useIMStore } from '@/store/im'
-import { getConversationList, getFriendRequests, markMessageRead, deleteConversation } from '@/api/im'
+import { getConversationList, markMessageRead, deleteSession, getFriendRequests } from '@/api/im'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -215,17 +209,20 @@ const imStore = useIMStore()
 // 激活的标签页
 const activeTab = ref('chat')
 
-// 聊天会话列表
-const chatSessions = ref([])
+// 会话列表相关状态
+const conversations = ref([])
+const loading = ref(false)
+const finished = ref(false)
+const refreshing = ref(false)
+const page = ref(1)
+const pageSize = ref(20)
+
+// 新建聊天相关状态
+const showNewChatOptions = ref(false)
+const newFriendRequestsCount = ref(0)
 
 // 通知列表
 const notifications = ref([])
-
-// 状态变量
-const loading = ref(false)
-const refreshing = ref(false)
-const showNewChatOptions = ref(false)
-const newRequestsCount = ref(0)
 
 // 侧滑相关状态
 const swipeOffset = ref({})
@@ -234,9 +231,9 @@ const currentSwipeIndex = ref(null)
 const swipeThreshold = 80 // 触发操作的阈值
 const maxSwipeOffset = 150 // 最大侧滑距离
 
-// 未读消息数
+// 获取未读消息总数
 const unreadChatCount = computed(() => {
-  return chatSessions.value.reduce((total, session) => total + (session.unreadCount || 0), 0)
+  return conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0)
 })
 
 // 未读通知数
@@ -246,7 +243,7 @@ const unreadNotificationCount = computed(() => {
 
 // 监听未读消息总数变化，更新标题栏
 watch(unreadChatCount, (count) => {
-  imStore.setUnreadMessageCount(count)
+  document.title = count > 0 ? `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : (import.meta.env.VITE_APP_TITLE || 'IM App')
 })
 
 // 切换新建聊天选项面板
@@ -272,22 +269,55 @@ const navigateToFriendRequests = () => {
   router.push('/im/friend-requests')
 }
 
-// 获取聊天会话列表
-const fetchChatSessions = async () => {
+// 导航到聊天界面
+const navigateToChat = (conversation) => {
+  const route = {
+    path: conversation.type === 'group' 
+      ? `/im/group/${conversation.targetId}` 
+      : `/im/chat/${conversation.targetId}`,
+    query: { name: conversation.targetInfo?.name }
+  }
+  router.push(route)
+}
+
+// 加载会话列表
+const fetchConversations = async (isRefresh = false) => {
+  if (isRefresh) {
+    page.value = 1
+    finished.value = false
+  }
+  
+  if (finished.value) return
+  
   try {
     loading.value = true
     
-    if (!userStore.isLoggedIn) {
-      // 开发阶段可以设置为已登录状态
-      userStore.setLoggedIn(true)
+    const params = {
+      page: page.value,
+      pageSize: pageSize.value
     }
     
-    const res = await getConversationList()
-    if (res.code === 200) {
-      chatSessions.value = res.data
+    const response = await getConversationList(params)
+    
+    if (response.code === 200) {
+      const newConversations = response.data
+      
+      if (isRefresh) {
+        conversations.value = newConversations
+      } else {
+        conversations.value = [...conversations.value, ...newConversations]
+      }
+      
+      if (newConversations.length < pageSize.value) {
+        finished.value = true
+      } else {
+        page.value++
+      }
+    } else {
+      showToast('获取会话列表失败')
     }
   } catch (error) {
-    console.error('获取聊天会话列表失败:', error)
+    console.error('获取会话列表失败:', error)
     showToast('网络错误，请重试')
   } finally {
     loading.value = false
@@ -295,10 +325,14 @@ const fetchChatSessions = async () => {
   }
 }
 
+// 加载更多会话
+const loadMore = () => {
+  fetchConversations()
+}
+
 // 下拉刷新
 const onRefresh = () => {
-  refreshing.value = true
-  fetchChatSessions()
+  fetchConversations(true)
 }
 
 // 获取好友申请数量
@@ -306,7 +340,7 @@ const fetchFriendRequests = async () => {
   try {
     const response = await getFriendRequests({ status: 'pending' })
     if (response.code === 200) {
-      newRequestsCount.value = response.data.list.length
+      newFriendRequestsCount.value = response.data.list.length
     }
   } catch (error) {
     console.error('获取好友申请数量失败:', error)
@@ -388,6 +422,73 @@ const handleNotification = (notification) => {
   }
 }
 
+// 获取通知图标
+const getNotificationIcon = (type) => {
+  switch (type) {
+    case 'like':
+      return 'like-o'
+    case 'comment':
+      return 'comment-o'
+    case 'follow':
+      return 'friends-o'
+    case 'system':
+      return 'info-o'
+    default:
+      return 'bell'
+  }
+}
+
+// 标记会话为已读
+const markAsRead = async (conversation) => {
+  try {
+    await markMessageRead({
+      conversationId: conversation.id,
+      messageId: conversation.lastMessage?.id
+    })
+    
+    // 更新本地数据
+    const index = conversations.value.findIndex(c => c.id === conversation.id)
+    if (index !== -1) {
+      conversations.value[index].unreadCount = 0
+    }
+    
+    resetSwipe()
+    // 更新未读数
+    const count = conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0)
+    document.title = count > 0 ? `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : (import.meta.env.VITE_APP_TITLE || 'IM App')
+  } catch (error) {
+    console.error('标记已读失败:', error)
+    showToast('操作失败，请重试')
+  }
+}
+
+// 删除会话
+const deleteConversation = (conversation) => {
+  showDialog({
+    title: '删除会话',
+    message: '确定要删除此会话吗？聊天记录将不会被删除',
+    showCancelButton: true,
+  }).then(async () => {
+    try {
+      await deleteSession({ conversationId: conversation.id })
+      
+      // 更新本地数据
+      conversations.value = conversations.value.filter(c => c.id !== conversation.id)
+      
+      resetSwipe()
+      // 更新未读数
+      const count = conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0)
+      document.title = count > 0 ? `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : (import.meta.env.VITE_APP_TITLE || 'IM App')
+    } catch (error) {
+      console.error('删除会话失败:', error)
+      showToast('操作失败，请重试')
+    }
+  }).catch(() => {
+    // 取消删除，重置侧滑状态
+    resetSwipe()
+  })
+}
+
 // 侧滑相关方法
 const touchStart = (event, index) => {
   touchStartX.value = event.touches[0].clientX
@@ -441,88 +542,12 @@ const resetSwipe = () => {
   })
 }
 
-// 标记会话为已读
-const markAsRead = async (session) => {
-  try {
-    await markMessageRead({
-      conversationId: session.id,
-      messageId: session.lastMessage?.id
-    })
-    
-    // 更新本地数据
-    const index = chatSessions.value.findIndex(c => c.id === session.id)
-    if (index !== -1) {
-      chatSessions.value[index].unreadCount = 0
-    }
-    
-    resetSwipe()
-    imStore.updateUnreadMessageCount()
-  } catch (error) {
-    console.error('标记已读失败:', error)
-    showToast('操作失败，请重试')
-  }
-}
-
-// 删除会话
-const deleteConversation = (session) => {
-  showDialog({
-    title: '删除会话',
-    message: '确定要删除此会话吗？聊天记录将不会被删除',
-    showCancelButton: true,
-  }).then(async () => {
-    try {
-      await deleteConversation({ conversationId: session.id })
-      
-      // 更新本地数据
-      chatSessions.value = chatSessions.value.filter(c => c.id !== session.id)
-      
-      resetSwipe()
-      imStore.updateUnreadMessageCount()
-    } catch (error) {
-      console.error('删除会话失败:', error)
-      showToast('操作失败，请重试')
-    }
-  }).catch(() => {
-    // 取消删除，重置侧滑状态
-    resetSwipe()
-  })
-}
-
-// 跳转到聊天页面
-const navigateToChat = (session) => {
-  const route = {
-    path: session.type === 'group' 
-      ? `/im/group/${session.targetId}` 
-      : `/im/chat/${session.targetId}`,
-    query: {
-      name: session.targetInfo?.name
-    }
-  }
-  router.push(route)
-}
-
 // 获取姓名首字母作为头像占位
 const getInitials = (name) => {
   if (!name) return '?'
   // 处理中文字符，取第一个字
   const firstChar = name.charAt(0)
   return firstChar.toUpperCase()
-}
-
-// 获取通知图标
-const getNotificationIcon = (type) => {
-  switch (type) {
-    case 'like':
-      return 'like-o'
-    case 'comment':
-      return 'comment-o'
-    case 'follow':
-      return 'friends-o'
-    case 'system':
-      return 'info-o'
-    default:
-      return 'bell'
-  }
 }
 
 // 格式化时间
@@ -560,15 +585,14 @@ const formatBadge = (count) => {
 }
 
 onMounted(() => {
-  fetchChatSessions()
-  fetchNotifications()
+  fetchConversations()
   fetchFriendRequests()
+  fetchNotifications()
 })
-
 </script>
 
 <style scoped>
-.message-page {
+.conversations-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -636,37 +660,26 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-.contact-shortcuts {
-  display: flex;
-  justify-content: space-around;
-  padding: 15px 0;
-  margin-bottom: 10px;
-  background-color: #fff;
+.new-chat-options {
+  padding: 20px 16px;
 }
 
-.shortcut {
+.option-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  padding: 12px 0;
+  font-size: 16px;
 }
 
-.shortcut span {
-  font-size: 12px;
-  color: var(--van-gray-7);
+.option-item span {
+  margin-left: 12px;
 }
 
-.chat-list {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: 50px;
-}
-
-.chat-list-container {
+.conversation-list-container {
   padding: 0 16px;
 }
 
-.chat-item {
+.conversation-item {
   position: relative;
   overflow: hidden;
 }
@@ -773,6 +786,11 @@ onMounted(() => {
   border-radius: 9px;
 }
 
+.unread {
+  background-color: var(--item-active-color);
+}
+
+/* 通知样式 */
 .notification-list {
   flex: 1;
   padding: 0 16px;
@@ -847,24 +865,5 @@ onMounted(() => {
   margin-left: 8px;
   align-self: flex-start;
   margin-top: 8px;
-}
-
-.unread {
-  background-color: var(--item-active-color);
-}
-
-.new-chat-options {
-  padding: 20px 16px;
-}
-
-.option-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 0;
-  font-size: 16px;
-}
-
-.option-item span {
-  margin-left: 12px;
 }
 </style>
