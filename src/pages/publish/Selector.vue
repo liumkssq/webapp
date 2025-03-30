@@ -54,17 +54,17 @@ const router = useRouter()
 const selectPublishType = (type) => {
   switch (type) {
     case 'article':
-      router.push('/publish-article')
+      router.push('/publish/article')
       break
     case 'product':
-      router.push('/publish-product')
+      router.push('/publish/product')
       break
     case 'lost-found':
-      router.push('/publish-lost-found')
+      router.push('/publish/lost-found')
       break
     default:
       // 默认发布商品
-      router.push('/publish-product')
+      router.push('/publish/product')
   }
 }
 

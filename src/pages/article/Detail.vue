@@ -71,23 +71,25 @@
         </div>
       </div>
       
-      <!-- 互动按钮 -->
-      <div class="action-bar">
-        <div class="action-item" @click="toggleLike">
-          <i :class="[article.isLiked ? 'icon-like-filled' : 'icon-like']"></i>
-          <span>点赞</span>
-        </div>
-        <div class="action-item" @click="toggleCollect">
-          <i :class="[article.isCollected ? 'icon-collect-filled' : 'icon-collect']"></i>
-          <span>收藏</span>
-        </div>
-        <div class="action-item" @click="scrollToComments">
-          <i class="icon-comment"></i>
-          <span>评论</span>
-        </div>
-        <div class="action-item" @click="shareArticle">
-          <i class="icon-share"></i>
-          <span>分享</span>
+      <!-- 底部操作栏 -->
+      <div class="article-actions">
+        <div class="action-icons">
+          <div class="action-icon" @click="toggleLike" style="position: relative; z-index: 10;">
+            <i :class="['icon-like', {'active': article.isLiked}]"></i>
+            <div class="icon-count">{{ formatNumber(article.likeCount) }}</div>
+          </div>
+          <div class="action-icon" @click="showComments" style="position: relative; z-index: 10;">
+            <i class="icon-comment"></i>
+            <div class="icon-count">{{ formatNumber(article.commentCount) }}</div>
+          </div>
+          <div class="action-icon" @click="toggleCollect" style="position: relative; z-index: 10;">
+            <i :class="['icon-star', {'active': article.isCollected}]"></i>
+            <div class="icon-count">{{ article.isCollected ? '已收藏' : '收藏' }}</div>
+          </div>
+          <div class="action-icon" @click="shareArticle" style="position: relative; z-index: 10;">
+            <i class="icon-share"></i>
+            <div class="icon-count">分享</div>
+          </div>
         </div>
       </div>
       
@@ -343,6 +345,8 @@ const fetchArticleDetail = async () => {
 
 // 切换点赞状态
 const toggleLike = async () => {
+  console.log('toggleLike clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -371,6 +375,8 @@ const toggleLike = async () => {
 
 // 切换收藏状态
 const toggleCollect = async () => {
+  console.log('toggleCollect clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -398,6 +404,8 @@ const toggleCollect = async () => {
 
 // 切换关注状态
 const toggleFollow = async () => {
+  console.log('toggleFollow clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -517,6 +525,7 @@ const scrollToComments = () => {
 
 // 分享文章
 const shareArticle = () => {
+  console.log('shareArticle clicked!') // 调试日志
   showSharePopup.value = true
 }
 
@@ -561,3 +570,62 @@ onMounted(async () => {
   await fetchArticleDetail()
 })
 </script>
+
+<style scoped>
+.article-actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 15px;
+  background-color: #fff;
+  box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 101;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.action-icons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.action-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  border-radius: 50%;
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
+  pointer-events: auto !important;
+}
+
+/* 添加明显的点击反馈 */
+.action-icon:active {
+  opacity: 0.7;
+  transform: scale(0.95);
+}
+
+.icon-like, .icon-comment, .icon-star, .icon-share {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.icon-count {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #666;
+  pointer-events: none;
+}
+</style>

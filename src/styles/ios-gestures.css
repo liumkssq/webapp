@@ -59,7 +59,7 @@
   transition: opacity var(--page-transition-duration) cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* 边缘手势区域 */
+/* 边缘手势区域 - 修改为不影响下面元素的点击事件 */
 .edge-gesture-area {
   position: fixed;
   left: 0;
@@ -69,6 +69,26 @@
   z-index: 9999;
   pointer-events: auto;
   background: transparent;
+}
+
+/* 确保手势区域不会影响底层元素的交互 */
+.edge-gesture-area:not(.active) {
+  pointer-events: none;
+}
+
+/* 当页面有特定交互元素时，禁用边缘手势 */
+.has-edge-elements .edge-gesture-area {
+  pointer-events: none !important;
+}
+
+/* 底部操作栏等元素的更高层级 */
+.bottom-action-bar,
+.article-actions,
+.action-buttons,
+.action-icons {
+  position: relative;
+  z-index: 10000;
+  pointer-events: auto !important;
 }
 
 /* 禁用iOS默认滑动返回手势 */

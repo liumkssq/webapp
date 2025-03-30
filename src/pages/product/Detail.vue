@@ -199,18 +199,18 @@
     <!-- 底部操作栏 -->
     <div class="bottom-action-bar">
       <div class="action-icons">
-        <div class="action-icon" @click="toggleFavorite">
+        <div class="action-icon" @click="toggleFavorite" style="position: relative; z-index: 10;">
           <i :class="[product.isLiked ? 'icon-favorite-filled' : 'icon-favorite']"></i>
           <div class="icon-text">{{ product.isLiked ? '已收藏' : '收藏' }}</div>
         </div>
-        <div class="action-icon" @click="shareProduct">
+        <div class="action-icon" @click="shareProduct" style="position: relative; z-index: 10;">
           <i class="icon-share"></i>
           <div class="icon-text">分享</div>
         </div>
       </div>
       <div class="action-buttons">
-        <button class="action-btn contact" @click="contactSeller">联系卖家</button>
-        <button class="action-btn buy" @click="buyProduct">立即购买</button>
+        <button class="action-btn contact" @click="contactSeller" style="position: relative; z-index: 10;">联系卖家</button>
+        <button class="action-btn buy" @click="buyProduct" style="position: relative; z-index: 10;">立即购买</button>
       </div>
     </div>
     
@@ -439,6 +439,8 @@ const fetchProductDetail = async () => {
 
 // 切换收藏状态
 const toggleFavorite = async () => {
+  console.log('toggleFavorite clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -455,8 +457,7 @@ const toggleFavorite = async () => {
     }
     
     if (res.code === 200) {
-      product.value.isLiked = res.data.isLiked
-      product.value.likeCount = res.data.likeCount
+      product.value.isLiked = !product.value.isLiked
       showToast(product.value.isLiked ? '收藏成功' : '已取消收藏')
     }
   } catch (error) {
@@ -467,6 +468,8 @@ const toggleFavorite = async () => {
 
 // 联系卖家
 const contactSeller = () => {
+  console.log('contactSeller clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -615,6 +618,7 @@ const closePreview = () => {
 
 // 分享商品
 const shareProduct = () => {
+  console.log('shareProduct clicked!') // 调试日志
   showSharePopup.value = true
 }
 

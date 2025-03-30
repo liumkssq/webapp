@@ -136,7 +136,7 @@ const openMapSelector = () => {
   
   // 跳转到地图选择页面
   router.push({
-    path: '/map-picker',
+    path: '/map/picker',
     query
   })
 }

@@ -24,13 +24,13 @@
     
     <!-- 请求列表 -->
     <div class="request-list">
-      <!-- 空状态 -->
-      <div v-if="requests.length === 0" class="empty-state">
-        <van-empty description="暂无好友申请" />
-        <van-button type="primary" size="small" @click="showAddFriend = true">添加好友</van-button>
-      </div>
+      <empty-state
+        v-if="requests.length === 0" 
+        icon="person_add"
+        text="暂无好友请求"
+        sub-text="可以通过搜索添加好友"
+      />
       
-      <!-- 列表内容 -->
       <van-list
         v-else
         :finished="finished"
@@ -184,6 +184,8 @@ import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getFriendRequests, handleFriendRequest, searchUsers as apiSearchUsers, sendFriendRequest as apiSendFriendRequest } from '@/api/im'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import HeaderNav from '@/components/HeaderNav.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 配置dayjs
 dayjs.extend(relativeTime)

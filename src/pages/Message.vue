@@ -136,6 +136,10 @@ const fetchChatSessions = async () => {
       userStore.setLoggedIn(true)
     }
     
+    // 重定向到新的IM消息系统
+    router.replace('/im/message')
+    return
+    
     const res = await api.chat.getChatSessionList()
     if (res.code === 200) {
       // 转换数据结构以适配模板

@@ -62,15 +62,13 @@
     </div>
     
     <!-- 空状态 -->
-    <div class="empty-state" v-if="!loading && !products.length">
-      <div class="empty-icon">
-        <i class="icon-empty-box"></i>
-      </div>
-      <div class="empty-text">{{ emptyText }}</div>
-      <div class="empty-action" v-if="showEmptyAction" @click="handleEmptyAction">
-        {{ emptyActionText }}
-      </div>
-    </div>
+    <empty-state
+      v-if="!loading && !products.length"
+      icon="shopping_bag"
+      :text="emptyText"
+      :action-text="showEmptyAction ? emptyActionText : ''"
+      @action="handleEmptyAction"
+    />
     
     <!-- 上拉加载更多 -->
     <div class="load-more" v-if="products.length > 0 && hasMore">
@@ -89,6 +87,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getProductList } from '@/api/product'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 组件props
 const props = defineProps({

@@ -446,10 +446,10 @@ const navigateToLocationPicker = () => {
   
   // 导航到地图选择页面，并设置回调
   router.push({
-    path: '/location-picker',
+    path: '/map/picker',
     query: {
       ...query,
-      callback: '/publish-product'
+      callback: '/publish/product'
     }
   });
 }

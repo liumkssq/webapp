@@ -2,14 +2,14 @@
   <page-container>
     <div class="home-page">
       <!-- 顶部搜索栏 -->
-      <div class="search-bar">
+      <div class="search-bar" @click="navigateToSearch">
         <input
             type="text"
             v-model="searchKeyword"
             placeholder="搜索商品、文章、失物招领..."
-            @keyup.enter="handleSearch"
+            readonly
         />
-        <button @click="handleSearch">搜索</button>
+        <button @click.stop="navigateToSearch">搜索</button>
       </div>
 
       <!-- 轮播图 -->
@@ -199,9 +199,21 @@ const hotProducts = ref([])
 const latestLostFound = ref([])
 const hotArticles = ref([])
 
+// 跳转到搜索页面
+const navigateToSearch = () => {
+  router.push('/search')
+}
+
+// 处理搜索
 const handleSearch = () => {
-  if (!searchKeyword.value.trim()) return
-  router.push({ path: '/search', query: { keyword: searchKeyword.value } })
+  if (searchKeyword.value.trim()) {
+    router.push({
+      path: '/search/results',
+      query: { keyword: searchKeyword.value }
+    })
+  } else {
+    router.push('/search')
+  }
 }
 
 const handleBannerClick = (banner) => router.push(banner.link)

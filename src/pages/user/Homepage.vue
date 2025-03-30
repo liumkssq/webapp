@@ -123,15 +123,13 @@
       </div>
       
       <!-- 空状态 -->
-      <div class="empty-state" v-else>
-        <div class="empty-icon">
-          <i class="icon-article-empty"></i>
-        </div>
-        <div class="empty-text">暂无文章</div>
-        <div class="empty-action" v-if="isCurrentUser" @click="goToPublishArticle">
-          去发布文章
-        </div>
-      </div>
+      <empty-state
+        v-else
+        icon="article"
+        text="暂无文章"
+        :action-text="isCurrentUser ? '去发布文章' : ''"
+        @action="goToPublishArticle"
+      />
     </div>
     
     <!-- 商品列表 -->
@@ -165,15 +163,13 @@
       </div>
       
       <!-- 空状态 -->
-      <div class="empty-state" v-else>
-        <div class="empty-icon">
-          <i class="icon-product-empty"></i>
-        </div>
-        <div class="empty-text">暂无商品</div>
-        <div class="empty-action" v-if="isCurrentUser" @click="goToPublishProduct">
-          去发布商品
-        </div>
-      </div>
+      <empty-state
+        v-else
+        icon="shopping_bag"
+        text="暂无商品"
+        :action-text="isCurrentUser ? '去发布商品' : ''"
+        @action="goToPublishProduct"
+      />
     </div>
     
     <!-- 失物招领列表 -->
@@ -227,15 +223,13 @@
       </div>
       
       <!-- 空状态 -->
-      <div class="empty-state" v-else>
-        <div class="empty-icon">
-          <i class="icon-lostfound-empty"></i>
-        </div>
-        <div class="empty-text">暂无失物招领信息</div>
-        <div class="empty-action" v-if="isCurrentUser" @click="goToPublishLostFound">
-          去发布失物招领
-        </div>
-      </div>
+      <empty-state
+        v-else
+        icon="search"
+        text="暂无失物招领"
+        :action-text="isCurrentUser ? '去发布启事' : ''"
+        @action="goToPublishLostFound"
+      />
     </div>
     
     <!-- 收藏列表 -->
@@ -290,12 +284,13 @@
         </div>
         
         <!-- 空状态 -->
-        <div class="empty-state" v-else>
-          <div class="empty-icon">
-            <i class="icon-favorite-empty"></i>
-          </div>
-          <div class="empty-text">暂无收藏的文章</div>
-        </div>
+        <empty-state
+          v-else
+          icon="favorite_border"
+          text="暂无收藏的文章"
+          :action-text="isCurrentUser ? '去浏览内容' : ''"
+          @action="router.push('/product/list')"
+        />
       </div>
       
       <!-- 收藏的商品 -->
@@ -331,12 +326,13 @@
         </div>
         
         <!-- 空状态 -->
-        <div class="empty-state" v-else>
-          <div class="empty-icon">
-            <i class="icon-favorite-empty"></i>
-          </div>
-          <div class="empty-text">暂无收藏的商品</div>
-        </div>
+        <empty-state
+          v-else
+          icon="favorite_border"
+          text="暂无收藏的商品"
+          :action-text="isCurrentUser ? '去浏览内容' : ''"
+          @action="router.push('/product/list')"
+        />
       </div>
     </div>
     
@@ -383,6 +379,7 @@ import { getUserProducts, getFavoriteProducts } from '@/api/product'
 import { getUserLostFound } from '@/api/lostFound'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()

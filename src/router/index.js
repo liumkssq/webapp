@@ -7,6 +7,7 @@ const routes = [
     name: 'Home',
     component: () => import('../pages/Home.vue')
   },
+  // 认证相关路由
   {
     path: '/login',
     name: 'Login',
@@ -31,6 +32,8 @@ const routes = [
       requiresGuest: true
     }
   },
+  
+  // 产品相关路由
   {
     path: '/product/list',
     name: 'ProductList',
@@ -42,6 +45,8 @@ const routes = [
     component: () => import('../pages/product/Detail.vue'),
     props: true
   },
+  
+  // 失物招领相关路由
   {
     path: '/lost-found/list',
     name: 'LostFoundList',
@@ -53,6 +58,15 @@ const routes = [
     component: () => import('../pages/lostFound/Detail.vue'),
     props: true
   },
+  // 支持查询参数方式的详情页
+  {
+    path: '/lost-found/detail',
+    name: 'LostFoundDetailQuery',
+    component: () => import('../pages/lostFound/Detail.vue'),
+    props: route => ({ id: Number(route.query.id) })
+  },
+  
+  // 文章相关路由
   {
     path: '/article/list',
     name: 'ArticleList',
@@ -64,6 +78,8 @@ const routes = [
     component: () => import('../pages/article/Detail.vue'),
     props: true
   },
+  
+  // 发布相关路由 - 统一格式为 /publish/xxx
   {
     path: '/publish',
     name: 'Publish',
@@ -80,12 +96,10 @@ const routes = [
       requiresAuth: true
     }
   },
+  // 兼容性重定向
   {
     path: '/publish-product',
-    component: () => import('../pages/publish/Product.vue'),
-    meta: {
-      requiresAuth: true
-    }
+    redirect: '/publish/product'
   },
   {
     path: '/publish/lost-found',
@@ -95,12 +109,10 @@ const routes = [
       requiresAuth: true
     }
   },
+  // 兼容性重定向
   {
     path: '/publish-lost-found',
-    component: () => import('../pages/publish/LostFound.vue'),
-    meta: {
-      requiresAuth: true
-    }
+    redirect: '/publish/lost-found'
   },
   {
     path: '/publish/article',
@@ -110,47 +122,56 @@ const routes = [
       requiresAuth: true
     }
   },
+  // 兼容性重定向
   {
     path: '/publish-article',
-    component: () => import('../pages/publish/Article.vue'),
-    meta: {
-      requiresAuth: true
-    }
+    redirect: '/publish/article'
   },
+  
+  // 消息与聊天相关路由
   {
     path: '/message',
-    redirect: '/im/message',
-    meta: {
-      requiresAuth: true
-    }
+    redirect: '/im/message'
   },
   {
     path: '/chat',
-    name: 'Chat',
-    component: () => import('@/pages/chat/ConversationList.vue'),
-    meta: {
-      requiresAuth: true,
-      title: '消息'
-    }
+    redirect: '/im/message'
   },
   {
     path: '/chat/list',
-    name: 'ChatList',
-    component: () => import('../pages/chat/List.vue'),
-    meta: {
-      requiresAuth: true
-    }
+    redirect: '/im/message'
   },
   {
     path: '/chat/conversation/:id',
     name: 'ConversationDetail',
-    component: () => import('@/pages/chat/ConversationDetail.vue'),
+    component: () => import('@/pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '聊天'
-    }
+    },
+    props: route => ({
+      conversationType: 'private',
+      targetId: parseInt(route.params.id)
+    })
   },
-  // 新增IM相关路由
+  
+  // 搜索相关路由
+  {
+    path: '/search',
+    name: 'Search',
+    component: () => import('../pages/search/Index.vue')
+  },
+  {
+    path: '/search/results',
+    name: 'SearchResults',
+    component: () => import('../pages/search/Results.vue')
+  },
+  {
+    path: '/search-results',
+    redirect: '/search/results'
+  },
+  
+  // IM相关路由
   {
     path: '/im/message',
     name: 'ImMessage',
@@ -200,23 +221,31 @@ const routes = [
   {
     path: '/im/group/:id',
     name: 'GroupDetail',
-    component: () => import('@/pages/chat/ConversationDetail.vue'),
+    component: () => import('@/pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '群聊'
     },
-    props: true
+    props: route => ({
+      conversationType: 'group',
+      targetId: parseInt(route.params.id)
+    })
   },
   {
     path: '/im/chat/:id',
     name: 'ImConversationDetail',
-    component: () => import('@/pages/chat/ConversationDetail.vue'),
+    component: () => import('@/pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '聊天'
     },
-    props: true
+    props: route => ({
+      conversationType: 'private',
+      targetId: parseInt(route.params.id)
+    })
   },
+  
+  // 用户相关路由
   {
     path: '/user/:id',
     name: 'UserHomepage',
@@ -239,6 +268,8 @@ const routes = [
       requiresAuth: true
     }
   },
+  
+  // 设置相关路由
   {
     path: '/settings',
     name: 'Settings',
@@ -263,65 +294,56 @@ const routes = [
       requiresAuth: true
     }
   },
+  
+  // 地图相关路由 - 统一格式为 /map/xxx
   {
-    path: '/search',
-    name: 'Search',
-    component: () => import('../pages/search/Index.vue')
-  },
-  {
-    path: '/search/results',
-    name: 'SearchResults',
-    component: () => import('../pages/search/Results.vue')
-  },
-  {
-    path: '/search-results',
-    component: () => import('../pages/search/Results.vue')
-  },
-  {
-    path: '/location-picker',
-    name: 'LocationPicker',
-    component: () => import('../pages/map/MapPickerPage.vue')
-  },
-  {
-    path: '/map-picker',
+    path: '/map/picker',
     name: 'MapPicker',
     component: () => import('../pages/map/MapPickerPage.vue')
   },
+  // 兼容性重定向
   {
-    path: '/lost-found/detail',
-    component: () => import('../pages/lostFound/Detail.vue'),
-    props: route => ({ id: Number(route.query.id) })
+    path: '/location-picker',
+    redirect: '/map/picker'
   },
   {
-    path: '/ai-assist',
-    name: 'AIAssist',
-    component: () => import('../pages/common/AIAssist.vue'),
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: '/ai/assist',
-    component: () => import('../pages/common/AIAssist.vue'),
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: '/map-example',
-    name: 'MapExample',
-    component: () => import('../components/examples/MapExample.vue')
+    path: '/map-picker',
+    redirect: '/map/picker'
   },
   {
     path: '/map/demo',
     name: 'MapDemo',
     component: () => import('../pages/map/MapDemo.vue')
   },
+  
+  // AI辅助相关路由
   {
-    path: '/product-publish-example',
+    path: '/ai/assist',
+    name: 'AIAssist',
+    component: () => import('../pages/common/AIAssist.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  // 兼容性重定向
+  {
+    path: '/ai-assist',
+    redirect: '/ai/assist'
+  },
+  
+  // 示例页面路由
+  {
+    path: '/examples/map',
+    name: 'MapExample',
+    component: () => import('../components/examples/MapExample.vue')
+  },
+  {
+    path: '/examples/product-publish',
     name: 'ProductPublishExample',
     component: () => import('../components/examples/ProductPublishExample.vue')
   },
+  
+  // 404页面
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',

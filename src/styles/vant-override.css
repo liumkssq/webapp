@@ -29,3 +29,128 @@
   background: transparent;
   touch-action: pan-x;
 }
+
+/* Vant组件库iOS风格覆盖样式 */
+
+/* iOS风格应用 */
+.ios-style-app {
+  -webkit-tap-highlight-color: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+
+/* 禁用过渡期间的滚动 */
+body.transition-active {
+  overflow: hidden;
+}
+
+/* 导航栏iOS风格 */
+.van-nav-bar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  height: 44px;
+}
+
+.van-nav-bar__title {
+  font-weight: 600;
+  font-size: 17px;
+}
+
+.van-nav-bar__left .van-icon, 
+.van-nav-bar__right .van-icon {
+  color: var(--van-primary-color);
+  font-size: 18px;
+}
+
+/* 按钮iOS风格 */
+.van-button {
+  border-radius: 10px;
+  transition: background-color 0.2s, opacity 0.2s, transform 0.1s;
+}
+
+.van-button--primary {
+  background-color: var(--van-primary-color);
+  border-color: var(--van-primary-color);
+}
+
+.van-button:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 列表项iOS风格 */
+.van-cell {
+  padding: 15px 16px;
+  line-height: 24px;
+  font-size: 15px;
+  transition: background-color 0.2s;
+}
+
+.van-cell:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.van-cell__title {
+  font-weight: 450;
+}
+
+/* 底部操作栏/标签栏iOS风格 */
+.van-tabbar {
+  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.05);
+  height: 50px;
+}
+
+.van-tabbar-item {
+  font-size: 10px;
+  color: #8e8e93;
+}
+
+.van-tabbar-item__icon {
+  margin-bottom: 4px;
+  font-size: 22px;
+}
+
+.van-tabbar-item--active {
+  color: var(--van-primary-color);
+}
+
+/* 弹出层iOS风格 */
+.van-popup {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.van-popup--bottom {
+  border-radius: 12px 12px 0 0;
+}
+
+/* 加载状态iOS风格 */
+.van-loading {
+  color: #8e8e93;
+}
+
+/* 动作表单iOS风格 */
+.van-action-sheet {
+  border-radius: 10px 10px 0 0;
+}
+
+.van-action-sheet__item {
+  font-size: 16px;
+  height: 56px;
+  line-height: 56px;
+}
+
+/* 开关iOS风格 */
+.van-switch {
+  background: #e5e5ea;
+}
+
+.van-switch--on {
+  background: var(--van-success-color);
+}
+
+/* 底部安全区域 */
+.van-safe-area-bottom {
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}

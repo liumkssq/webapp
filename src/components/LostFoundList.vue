@@ -112,15 +112,13 @@
     </div>
     
     <!-- 空状态 -->
-    <div class="empty-state" v-if="!loading && !items.length">
-      <div class="empty-icon">
-        <i :class="activeTab === 'lost' ? 'icon-empty-lost' : 'icon-empty-found'"></i>
-      </div>
-      <div class="empty-text">{{ getEmptyText() }}</div>
-      <div class="empty-action" v-if="showEmptyAction" @click="handleEmptyAction">
-        {{ activeTab === 'lost' ? '发布寻物启事' : activeTab === 'found' ? '发布招领启事' : '发布启事' }}
-      </div>
-    </div>
+    <empty-state
+      v-if="!loading && !items.length"
+      icon="search"
+      :text="emptyText"
+      :action-text="showEmptyAction ? emptyActionText : ''"
+      @action="handleEmptyAction"
+    />
     
     <!-- 上拉加载更多 -->
     <div class="load-more" v-if="items.length > 0 && hasMore">
@@ -170,6 +168,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getLostFoundList } from '@/api/lostFound'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 组件props
 const props = defineProps({

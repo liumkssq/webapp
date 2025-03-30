@@ -43,12 +43,16 @@
         </div>
       </div>
       
-      <div v-if="chatSessions.length === 0" class="empty-state">
-        <van-empty description="暂无聊天消息" />
-        <van-button type="primary" size="small" @click="router.push('/im/contacts')">添加好友</van-button>
-      </div>
+      <empty-state
+        v-if="chatSessions.length === 0"
+        icon="chat_bubble_outline"
+        text="暂无聊天消息"
+        action-text="添加好友"
+        @action="router.push('/im/contacts')"
+      />
       
       <div 
+        v-else
         v-for="session in chatSessions" 
         :key="session.id" 
         class="chat-item"
@@ -102,11 +106,14 @@
     
     <!-- 通知列表 -->
     <div v-if="activeTab === 'notification'" class="notification-list">
-      <div v-if="notifications.length === 0" class="empty-state">
-        <van-empty description="暂无通知" />
-      </div>
+      <empty-state
+        v-if="notifications.length === 0"
+        icon="notifications_none"
+        text="暂无通知"
+      />
       
       <div 
+        v-else
         v-for="notification in notifications" 
         :key="notification.id" 
         class="notification-item"
@@ -137,6 +144,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { useUserStore } from '@/store/user'
 import { getConversationList } from '@/api/im'
 import { getFriendRequests } from '@/api/im'
@@ -273,17 +281,12 @@ const handleNotification = (notification) => {
 
 // 跳转到聊天页面
 const navigateToChat = (session) => {
-  if (!session.targetInfo) {
-    console.error('会话缺少目标信息', session)
-    return
-  }
-  
-  // 根据路由配置，使用im目录下的聊天路由
-  if (session.type === 'group') {
-    router.push(`/im/group/${session.targetId}?name=${encodeURIComponent(session.targetInfo.name)}`)
-  } else {
-    router.push(`/im/chat/${session.targetId}?name=${encodeURIComponent(session.targetInfo.name)}`)
-  }
+  router.push({
+    path: `/im/chat/${session.targetId}`,
+    query: {
+      name: session.targetInfo?.name
+    }
+  })
 }
 
 // 获取姓名首字母作为头像占位

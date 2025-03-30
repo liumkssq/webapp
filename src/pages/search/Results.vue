@@ -1,21 +1,7 @@
 <template>
   <div class="search-results-page">
-    <!-- iOS风格顶部状态栏 -->
-    <div class="status-bar">
-      <span class="time">9:41</span>
-      <div class="status-icons">
-        <span>5G</span>
-        <span>100%</span>
-      </div>
-    </div>
-    
-    <!-- 导航栏 -->
-    <div class="navigation-bar">
-      <div class="back-btn" @click="goBack">
-        <i class="icon-back"></i>
-      </div>
-      <div class="nav-title">搜索结果</div>
-    </div>
+    <!-- 使用HeaderNav组件 -->
+    <header-nav title="搜索结果" />
     
     <!-- 搜索框 -->
     <div class="search-container">
@@ -70,22 +56,14 @@
       </div>
       
       <!-- 无搜索结果 -->
-      <div class="no-results" v-else-if="results.length === 0">
-        <div class="no-results-icon">
-          <i class="icon-no-result"></i>
-        </div>
-        <div class="no-results-text">
-          没有找到与"{{ searchKeyword }}"相关的{{ getTabLabel(currentTab) }}
-        </div>
-        <div class="no-results-tips">
-          建议：
-          <ul>
-            <li>请检查输入的关键词是否有误</li>
-            <li>尝试使用更简短、更常见的关键词</li>
-            <li>尝试切换到其他分类查看</li>
-          </ul>
-        </div>
-      </div>
+      <empty-state
+        v-else-if="results.length === 0"
+        icon="search_off"
+        :text="`没有找到与'${searchKeyword}'相关的${getTabLabel(currentTab)}`"
+        sub-text="请尝试其他关键词或切换到其他分类"
+        action-text="返回搜索"
+        @action="router.push('/search')"
+      />
       
       <!-- 商品列表 -->
       <div class="product-list" v-else-if="currentTab === 'product'">
@@ -184,12 +162,18 @@
         </button>
       </div>
     </div>
+    
+    <!-- 底部导航 -->
+    <footer-nav />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import HeaderNav from '@/components/HeaderNav.vue'
+import FooterNav from '@/components/FooterNav.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -497,10 +481,5 @@ const goToDetail = (type, id) => {
   if (path) {
     router.push(path)
   }
-}
-
-// 返回上一页
-const goBack = () => {
-  router.back()
 }
 </script>

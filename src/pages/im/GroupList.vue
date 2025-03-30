@@ -14,10 +14,14 @@
     <div class="group-content">
       <!-- 群聊列表 -->
       <div class="group-list">
-        <div v-if="groups.length === 0" class="empty-state">
-          <van-empty description="暂无群聊" />
-          <van-button type="primary" size="small" @click="showCreateGroup = true">创建群聊</van-button>
-        </div>
+        <empty-state
+          v-if="groups.length === 0"
+          icon="group"
+          text="暂无群聊"
+          sub-text="创建或加入群聊开始交流"
+          action-text="创建群聊"
+          @action="showCreateGroup = true"
+        />
         
         <van-cell-group v-else inset>
           <van-cell
@@ -199,6 +203,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getGroupList, createGroup, getFriendList } from '@/api/im'
+import HeaderNav from '@/components/HeaderNav.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const router = useRouter()
 
@@ -360,12 +366,8 @@ onMounted(() => {
   position: relative;
 }
 
-.empty-state {
-  height: 60vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.group-list {
+  padding: 1rem;
 }
 
 .avatar-image {

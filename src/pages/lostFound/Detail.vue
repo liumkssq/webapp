@@ -204,29 +204,32 @@
       <div class="loading-text">加载中...</div>
     </div>
     
+    <!-- 添加一个容器元素来增加底部间距，防止内容被底部操作栏遮挡 -->
+    <div class="bottom-spacer" style="height: 72px;"></div>
+    
     <!-- 底部操作栏 -->
     <div class="bottom-action-bar">
       <div class="action-icons">
-        <div class="action-icon" @click="toggleFollow">
-          <i :class="['icon-star', {'active': item.isFollowed}]"></i>
-          <div class="icon-text">{{ item.isFollowed ? '已关注' : '关注' }}</div>
+        <div class="action-icon" @click="handleLike">
+          <i class="icon-like"></i>
+          <div class="icon-count">{{ item.likes || 0 }}</div>
         </div>
-        <div class="action-icon" @click="shareItem">
-          <i class="icon-share"></i>
-          <div class="icon-text">分享</div>
+        <div class="action-icon" @click="handleComment">
+          <i class="icon-comment"></i>
+          <div class="icon-count">{{ item.comments || 0 }}</div>
         </div>
       </div>
       <div class="action-buttons">
-        <button 
-          class="action-btn contact" 
-          v-if="!isCurrentUser" 
-          @click="contactPublisher"
-        >联系发布者</button>
-        <button 
-          class="action-btn update-status" 
-          v-if="isCurrentUser && item.status !== 'closed'"
-          @click="showStatusUpdatePopup = true"
-        >{{ item.type === 'lost' ? '标记为已找到' : '标记为已归还' }}</button>
+        <div v-if="item.status !== 'completed'" 
+             class="action-btn action-contact" 
+             @click="contactOwner">
+          联系发布者
+        </div>
+        <div v-if="item.userId === userStore.userId && item.status !== 'completed'" 
+             class="action-btn action-primary" 
+             @click="markAsCompleted">
+          {{ item.type === 'lost' ? '标记为已找到' : '标记为已归还' }}
+        </div>
       </div>
     </div>
     
@@ -342,7 +345,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { getLostFoundDetail, updateLostFoundStatus, commentLostFound } from '@/api/lostFound'
@@ -492,6 +495,8 @@ const fetchLostFoundDetail = async () => {
 
 // 切换关注状态
 const toggleFollow = async () => {
+  console.log('toggleFollow clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -505,6 +510,8 @@ const toggleFollow = async () => {
 
 // 联系发布者
 const contactPublisher = () => {
+  console.log('contactPublisher clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -672,6 +679,7 @@ const closePreview = () => {
 
 // 分享物品
 const shareItem = () => {
+  console.log('shareItem clicked!') // 调试日志
   showSharePopup.value = true
 }
 
@@ -720,5 +728,108 @@ const showToast = (message) => {
 // 页面加载时获取失物招领详情
 onMounted(async () => {
   await fetchLostFoundDetail()
+  
+  // 调试附加：检查是否存在遮挡点击的元素
+  console.log('页面加载完成，添加点击事件监听')
+  document.addEventListener('click', (e) => {
+    console.log('点击事件触发点:', e.target)
+    console.log('点击事件坐标:', e.clientX, e.clientY)
+  }, true)
+  
+  // 确保底部操作栏正常工作
+  nextTick(() => {
+    const actionBar = document.querySelector('.bottom-action-bar')
+    if (actionBar) {
+      console.log('底部操作栏已加载')
+      
+      // 为底部操作栏的每个按钮添加调试点击事件
+      const buttons = actionBar.querySelectorAll('.action-icon, .action-btn')
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          console.log('操作按钮被点击:', e.target)
+        })
+      })
+    }
+    
+    // 添加全局点击事件来调试点击位置
+    document.addEventListener('click', (e) => {
+      console.log('点击坐标:', {x: e.clientX, y: e.clientY}, '目标元素:', e.target)
+    })
+  })
 })
 </script>
+
+<style scoped>
+.bottom-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 15px;
+  background-color: #fff;
+  box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 101;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.action-icons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.action-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  border-radius: 50%;
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
+  pointer-events: auto !important;
+}
+
+/* 添加明显的点击反馈 */
+.action-icon:active {
+  opacity: 0.7;
+  transform: scale(0.95);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
+  padding: 10px 15px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  pointer-events: auto !important;
+}
+
+.action-contact {
+  background-color: #f2f2f2;
+  color: #333;
+}
+
+.action-primary {
+  background-color: var(--primary-color, #3498db);
+  color: white;
+}
+
+/* 添加明显的点击反馈 */
+.action-btn:active {
+  transform: scale(0.97);
+}
+
+/* 其他样式保持不变 */
+</style>

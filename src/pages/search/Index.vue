@@ -1,21 +1,7 @@
 <template>
   <div class="search-page">
-    <!-- iOS风格顶部状态栏 -->
-    <div class="status-bar">
-      <span class="time">9:41</span>
-      <div class="status-icons">
-        <span>5G</span>
-        <span>100%</span>
-      </div>
-    </div>
-    
-    <!-- 导航栏 -->
-    <div class="navigation-bar">
-      <div class="back-btn" @click="goBack">
-        <i class="icon-back"></i>
-      </div>
-      <div class="nav-title">搜索</div>
-    </div>
+    <!-- 使用HeaderNav组件 -->
+    <header-nav title="搜索" />
     
     <!-- 搜索框 -->
     <div class="search-container">
@@ -74,12 +60,17 @@
         </div>
       </div>
     </div>
+    
+    <!-- 底部导航 -->
+    <footer-nav />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import HeaderNav from '@/components/HeaderNav.vue'
+import FooterNav from '@/components/FooterNav.vue'
 
 const router = useRouter()
 
@@ -109,7 +100,7 @@ const handleSearch = () => {
   
   // 跳转到搜索结果页
   router.push({
-    path: '/search-results',
+    path: '/search/results',
     query: { keyword: searchKeyword.value }
   })
 }
@@ -161,10 +152,5 @@ const removeHistory = (index) => {
 const clearHistory = () => {
   searchHistory.value = []
   localStorage.removeItem('searchHistory')
-}
-
-// 返回上一页
-const goBack = () => {
-  router.back()
 }
 </script>

@@ -140,6 +140,9 @@ export function getChatMessages(params) {
   })
 }
 
+// 为向后兼容提供别名
+export const getMessages = getChatMessages
+
 // 发送消息
 export function sendMessage(data) {
   const { conversationId, content, type } = data
@@ -248,6 +251,9 @@ export function deleteMessage(messageId) {
     data: { success: true }
   })
 }
+
+// 为向后兼容提供别名
+export const recallMessage = deleteMessage
 
 // 获取消息历史
 export function getMessageHistory(conversationId, params = {}) {

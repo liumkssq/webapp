@@ -13,7 +13,7 @@
       <div class="nav-name">{{ item.name }}</div>
       
       <!-- 未读消息提示 -->
-      <div v-if="item.path === '/message' && unreadCount > 0" class="badge">
+      <div v-if="item.path === '/im/message' && unreadCount > 0" class="badge">
         {{ unreadCount > 99 ? '99+' : unreadCount }}
       </div>
     </div>
@@ -37,7 +37,7 @@ const navItems = [
   { name: '首页', path: '/', icon: 'icon-home' },
   { name: '市场', path: '/product/list', icon: 'icon-shop' },
   { name: '发布', path: '/publish', icon: 'icon-publish' },
-  { name: '消息', path: '/message', icon: 'icon-message' },
+  { name: '消息', path: '/im/message', icon: 'icon-message' },
   { name: '我的', path: '/user/profile', icon: 'icon-user' }
 ]
 
@@ -56,7 +56,7 @@ const isActive = (path) => {
   ].some(p => route.path.startsWith(p))) {
     return true
   }
-  if (path === '/message' && [
+  if (path === '/im/message' && [
     '/message', 
     '/chat',
     '/im'
@@ -66,6 +66,16 @@ const isActive = (path) => {
   if (path === '/user/profile' && [
     '/user', 
     '/settings'
+  ].some(p => route.path.startsWith(p))) {
+    return true
+  }
+  if (path === '/publish' && [
+    '/publish'
+  ].some(p => route.path.startsWith(p))) {
+    return true
+  }
+  if (path === '/search' && [
+    '/search'
   ].some(p => route.path.startsWith(p))) {
     return true
   }
@@ -84,14 +94,8 @@ const navigateTo = (path) => {
     return
   }
   
-  if (path === '/message' && !userStore.isLoggedIn) {
-    router.push('/login?redirect=/message')
-    return
-  }
-  
-  // 消息页面替换为新的联系人列表页面
-  if (path === '/message') {
-    router.push('/im/message')
+  if (path === '/im/message' && !userStore.isLoggedIn) {
+    router.push('/login?redirect=/im/message')
     return
   }
   

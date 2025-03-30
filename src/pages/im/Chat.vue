@@ -15,7 +15,7 @@
     </van-nav-bar>
     
     <!-- 消息列表 -->
-    <div class="message-list" ref="messageListRef">
+    <div class="message-list" ref="messageListRef" @click="handleMessageListClick">
       <template v-if="loading">
         <div class="loading-container">
           <van-loading type="spinner" color="#1989fa" />
@@ -23,9 +23,11 @@
       </template>
       
       <template v-else-if="messages.length === 0">
-        <div class="empty-container">
-          <van-empty description="暂无消息" />
-        </div>
+        <empty-state
+          icon="chat_bubble_outline"
+          text="暂无消息"
+          :small="false"
+        />
       </template>
       
       <template v-else>
@@ -85,8 +87,8 @@
                 class="text-message"
                 :class="{ 'self-message': message.senderId === currentUserId }"
                 @contextmenu.prevent="showMessageActions(message, $event)"
+                v-html="renderTextMessage(message.content)"
               >
-                {{ message.content }}
               </div>
               
               <!-- 图片消息 -->
@@ -141,10 +143,16 @@
                 v-else-if="message.type === 'location'"
                 class="location-message"
                 :class="{ 'self-message': message.senderId === currentUserId }"
+                @click="viewLocation(message.content)"
                 @contextmenu.prevent="showMessageActions(message, $event)"
               >
-                <van-icon name="location-o" size="16" :color="message.senderId === currentUserId ? '#fff' : '#1989fa'" />
-                <span>位置信息</span>
+                <div class="location-icon">
+                  <van-icon name="location-o" size="20" :color="message.senderId === currentUserId ? '#fff' : '#1989fa'" />
+                </div>
+                <div class="location-address">
+                  {{ getLocationAddress(message.content) }}
+                </div>
+                <div class="view-location">查看位置 ></div>
               </div>
               
               <!-- 视频消息 -->
@@ -220,15 +228,17 @@
       </div>
       
       <!-- 表情面板 -->
-      <div v-show="showEmojiPanel" class="emoji-panel">
-        <div class="emoji-grid">
-          <div
-            v-for="emoji in emojis"
-            :key="emoji"
-            class="emoji-item"
-            @click="insertEmoji(emoji)"
-          >
-            {{ emoji }}
+      <div class="emoji-panel" v-if="showEmojiPanel">
+        <div class="emoji-container">
+          <div class="emoji-group">
+            <div 
+              v-for="emoji in emojiList" 
+              :key="emoji" 
+              class="emoji-item" 
+              @click="insertEmoji(emoji)"
+            >
+              {{ emoji }}
+            </div>
           </div>
         </div>
       </div>
@@ -290,13 +300,15 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showLoadingToast, closeToast } from 'vant'
+import { showToast, showLoadingToast, closeToast, showConfirmDialog, showNotify } from 'vant'
 import dayjs from 'dayjs'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { 
   getMessages, 
   sendMessage, 
   recallMessage, 
-  getConversationDetail 
+  getConversationDetail,
+  markMessageRead
 } from '@/api/im'
 
 const route = useRoute()
@@ -390,12 +402,17 @@ const chatActions = computed(() => {
 })
 
 // 表情列表
-const emojis = [
-  '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
-  '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙',
-  '😋', '😛', '😜', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐',
-  '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌',
-  '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧'
+const emojiList = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+  '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+  '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖',
+  '😫', '😩', '🥺', '😢', '😭', '😮', '😱', '😳', '🥵', '🥶',
+  '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶',
+  '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱',
+  '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷',
+  '🤒', '🤕', '🤑', '🤠', '👻', '💩', '🤡', '👽', '👾', '🤖',
+  '👋', '🖐️', '👌', '✌️', '🤞', '🤟', '🤙', '👎', '❤️'
 ]
 
 // 获取会话详情
@@ -408,6 +425,18 @@ const fetchConversationDetail = async () => {
     showToast('获取会话详情失败')
   }
 }
+
+// 标记消息为已读
+const markMessagesAsRead = async () => {
+  if (!conversationType || !targetId) return;
+  
+  try {
+    await markMessageRead(conversationType === 'group' ? `group_${targetId}` : `private_${targetId}`);
+    console.log('标记消息为已读成功');
+  } catch (error) {
+    console.error('标记消息为已读失败:', error);
+  }
+};
 
 // 获取消息列表
 const fetchMessages = async (lastMessageId = null) => {
@@ -428,10 +457,17 @@ const fetchMessages = async (lastMessageId = null) => {
     if (!lastMessageId) {
       messages.value = data.list || []
     } else {
-      messages.value = [...data.list, ...messages.value]
+      // 添加加载的消息，避免重复
+      const newMessages = (data.list || []).filter(newMsg => 
+        !messages.value.some(existingMsg => existingMsg.id === newMsg.id)
+      );
+      messages.value = [...newMessages, ...messages.value]
     }
     
     hasMore.value = data.hasMore
+    
+    // 标记为已读
+    markMessagesAsRead();
   } catch (error) {
     console.error('获取消息失败:', error)
     showToast('获取消息失败')
@@ -456,17 +492,52 @@ const scrollToBottom = (smooth = true) => {
   nextTick(() => {
     if (messageListRef.value) {
       const scrollOptions = smooth ? { behavior: 'smooth' } : {}
-      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
+      const listElement = messageListRef.value
+      
+      // 检查当前是否已经在底部附近（差距小于100px）
+      const isNearBottom = listElement.scrollHeight - listElement.scrollTop - listElement.clientHeight < 100
+      
+      // 如果已经接近底部或强制滚动（例如发送新消息时），则滚动到底部
+      if (isNearBottom || !smooth) {
+        listElement.scrollTop = listElement.scrollHeight
+      }
     }
   })
 }
+
+// 防抖函数：延迟执行函数，如果在延迟时间内再次调用则重新计时
+const debounce = (fn, delay) => {
+  let timer = null
+  return function(...args) {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      fn.apply(this, args)
+      timer = null
+    }, delay)
+  }
+}
+
+// 防抖处理的滚动事件处理函数
+const handleScroll = debounce(() => {
+  if (!messageListRef.value || loadingMore.value || !hasMore.value) return
+  
+  // 检查是否滚动到顶部附近（距离小于50px）
+  if (messageListRef.value.scrollTop < 50) {
+    loadMoreMessages()
+  }
+}, 200)
 
 // 发送文本消息
 const sendTextMessage = async () => {
   if (!inputText.value.trim()) return
   
+  // 隐藏任何可能打开的面板
+  showEmojiPanel.value = false
+  showMorePanel.value = false
+  
   // 创建临时消息
   const tempId = `temp_${Date.now()}`
+  const messageText = inputText.value.trim()
   const tempMessage = {
     id: tempId,
     conversationType,
@@ -475,7 +546,7 @@ const sendTextMessage = async () => {
     senderName: '我',
     senderAvatar: '', // 使用当前用户头像
     type: 'text',
-    content: inputText.value,
+    content: messageText,
     timestamp: new Date().toISOString(),
     status: 'sending',
     isRecalled: false
@@ -485,8 +556,7 @@ const sendTextMessage = async () => {
   messages.value.push(tempMessage)
   scrollToBottom()
   
-  // 清空输入框
-  const messageText = inputText.value
+  // 清空输入框（在确认添加到列表后再清空）
   inputText.value = ''
   
   try {
@@ -500,7 +570,11 @@ const sendTextMessage = async () => {
     // 更新消息状态
     const index = messages.value.findIndex(msg => msg.id === tempId)
     if (index !== -1) {
-      messages.value[index] = data
+      messages.value[index] = {
+        ...messages.value[index],
+        ...data,
+        status: 'sent'
+      }
     }
   } catch (error) {
     console.error('发送消息失败:', error)
@@ -510,6 +584,8 @@ const sendTextMessage = async () => {
     if (index !== -1) {
       messages.value[index].status = 'failed'
     }
+    
+    showToast('发送失败，请重试')
   }
 }
 
@@ -602,7 +678,27 @@ const chooseFile = () => {
 
 // 分享位置
 const shareLocation = () => {
-  showToast('该功能开发中...')
+  try {
+    // 关闭表情面板和更多选项面板
+    showEmojiPanel.value = false
+    showMorePanel.value = false
+    
+    // 跳转到地图选择页面
+    console.log('分享位置，跳转到地图选择器')
+    router.push({
+      path: '/map/picker', 
+      query: {
+        callback: route.fullPath,
+        type: 'location'
+      }
+    }).catch(err => {
+      console.error('导航到地图选择器失败:', err)
+      showToast('无法打开地图选择器')
+    })
+  } catch (e) {
+    console.error('分享位置时发生错误:', e)
+    showToast('分享位置功能暂时不可用')
+  }
 }
 
 // 播放语音
@@ -741,18 +837,266 @@ const goBack = () => {
   router.back()
 }
 
-// 监听消息变化，滚动到底部
-watch(() => messages.value.length, (newVal, oldVal) => {
-  if (newVal > oldVal && !loadingMore.value) {
-    scrollToBottom()
+// 渲染文本消息，识别链接
+const renderTextMessage = (text) => {
+  if (!text) return '';
+  
+  // 链接正则表达式 - 匹配http/https链接和www开头的链接
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/g;
+  
+  // 替换链接为可点击的形式
+  return text.replace(urlRegex, (match) => {
+    let url = match;
+    if (match.startsWith('www.')) {
+      url = 'http://' + match;
+    }
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="message-link">${match}</a>`;
+  });
+};
+
+// 处理链接点击
+const handleLinkClick = (event) => {
+  // 检查是否点击了链接
+  if (event.target.tagName === 'A' && event.target.classList.contains('message-link')) {
+    event.preventDefault();
+    
+    const url = event.target.getAttribute('href');
+    if (url) {
+      // 询问用户是否打开链接
+      showConfirmDialog({
+        title: '打开链接',
+        message: `是否打开外部链接？\n${url}`,
+        confirmButtonText: '打开',
+        cancelButtonText: '取消'
+      }).then(() => {
+        // 用户确认，在新窗口打开链接
+        window.open(url, '_blank');
+      }).catch(() => {
+        // 用户取消，不执行操作
+      });
+    }
   }
-})
+};
+
+// 检测新消息并通知
+const notifyNewMessage = (newMessages) => {
+  if (!newMessages || newMessages.length === 0) return;
+  
+  // 过滤出非自己发送的新消息
+  const otherMessages = newMessages.filter(msg => msg.senderId !== currentUserId);
+  
+  if (otherMessages.length === 0) return;
+  
+  // 获取发送者信息
+  const senderName = otherMessages[0].senderName || '对方';
+  
+  // 根据消息类型生成预览文本
+  let previewText = '';
+  const latestMessage = otherMessages[otherMessages.length - 1];
+  
+  switch (latestMessage.type) {
+    case 'text':
+      previewText = latestMessage.content;
+      if (previewText.length > 20) {
+        previewText = previewText.substring(0, 20) + '...';
+      }
+      break;
+    case 'image':
+      previewText = '[图片]';
+      break;
+    case 'voice':
+      previewText = '[语音]';
+      break;
+    case 'file':
+      previewText = '[文件]';
+      break;
+    case 'location':
+      previewText = '[位置]';
+      break;
+    case 'video':
+      previewText = '[视频]';
+      break;
+    default:
+      previewText = '[消息]';
+  }
+  
+  // 显示通知
+  showNotify({
+    type: 'primary',
+    message: `${senderName}: ${previewText}`,
+    duration: 3000
+  });
+  
+  // 播放消息提示音(可选实现)
+  playMessageSound();
+};
+
+// 播放消息提示音
+const playMessageSound = () => {
+  try {
+    const audio = new Audio('/assets/sounds/message.mp3');
+    audio.volume = 0.5; // 设置音量为50%
+    audio.play();
+  } catch (error) {
+    console.error('播放提示音失败:', error);
+  }
+};
+
+// 添加自动更新消息列表功能
+let messageUpdateInterval = null;
+
+const startMessagePolling = () => {
+  if (messageUpdateInterval) return;
+  
+  // 每15秒检查一次新消息
+  messageUpdateInterval = setInterval(async () => {
+    if (messages.value.length === 0) return;
+    
+    try {
+      const latestMessage = messages.value[messages.value.length - 1];
+      
+      const { data } = await getMessages({
+        conversationType,
+        targetId,
+        afterMessageId: latestMessage.id,
+        pageSize: 10
+      });
+      
+      if (data.list && data.list.length > 0) {
+        // 添加新消息，避免重复
+        const newMessages = data.list.filter(newMsg => 
+          !messages.value.some(existingMsg => existingMsg.id === newMsg.id)
+        );
+        
+        if (newMessages.length > 0) {
+          // 根据是否为当前窗口和是否在底部决定通知行为
+          const shouldNotify = document.visibilityState === 'hidden' || !document.hasFocus();
+          
+          // 添加新消息到列表
+          messages.value = [...messages.value, ...newMessages];
+          
+          // 如果用户当前在查看聊天，自动标记为已读
+          markMessagesAsRead();
+          
+          // 当前在底部区域才自动滚动
+          const listElement = messageListRef.value;
+          if (listElement) {
+            const isNearBottom = listElement.scrollHeight - listElement.scrollTop - listElement.clientHeight < 200;
+            if (isNearBottom) {
+              scrollToBottom();
+            } else if (shouldNotify) {
+              // 如果不在底部且需要通知，则显示新消息通知
+              notifyNewMessage(newMessages);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('轮询新消息失败:', error);
+    }
+  }, 15000); // 15秒
+};
 
 // 生命周期钩子
 onMounted(async () => {
-  await fetchConversationDetail()
-  await fetchMessages()
-  scrollToBottom(false)
+  try {
+    await fetchConversationDetail()
+    await fetchMessages()
+    scrollToBottom(false)
+    
+    // 添加滚动监听
+    if (messageListRef.value) {
+      messageListRef.value.addEventListener('scroll', handleScroll)
+    }
+    
+    // 开始消息轮询
+    startMessagePolling();
+
+    // 处理地图位置分享返回
+    const locationData = route.query.location
+    const locationType = route.query.type
+    if (locationData && locationType === 'location') {
+      try {
+        // 解析位置数据
+        let parsedLocation
+        if (typeof locationData === 'string') {
+          try {
+            parsedLocation = JSON.parse(decodeURIComponent(locationData))
+          } catch (err) {
+            console.error('JSON解析位置数据失败，尝试直接解码', err)
+            parsedLocation = JSON.parse(locationData)
+          }
+        } else {
+          parsedLocation = locationData
+        }
+
+        console.log('解析的位置数据:', parsedLocation)
+
+        // 发送位置消息
+        if (parsedLocation && parsedLocation.lng && parsedLocation.lat) {
+          const tempId = `temp_${Date.now()}`
+          const tempMessage = {
+            id: tempId,
+            conversationType,
+            targetId,
+            senderId: currentUserId,
+            senderName: '我',
+            senderAvatar: '', // 使用当前用户头像
+            type: 'location',
+            content: JSON.stringify(parsedLocation),
+            timestamp: new Date().toISOString(),
+            status: 'sending',
+            isRecalled: false
+          }
+          
+          // 先添加到列表
+          messages.value.push(tempMessage)
+          scrollToBottom()
+          
+          try {
+            const { data } = await sendMessage({
+              conversationType,
+              targetId,
+              messageType: 'location',
+              content: JSON.stringify(parsedLocation)
+            })
+            
+            // 更新消息状态
+            const index = messages.value.findIndex(msg => msg.id === tempId)
+            if (index !== -1) {
+              messages.value[index] = data
+            }
+            
+            // 清除URL参数
+            router.replace({ 
+              path: route.path,
+              params: route.params
+            })
+
+            showToast('位置已发送')
+          } catch (error) {
+            console.error('发送位置消息失败:', error)
+            
+            // 更新为发送失败状态
+            const index = messages.value.findIndex(msg => msg.id === tempId)
+            if (index !== -1) {
+              messages.value[index].status = 'failed'
+            }
+            showToast('发送位置失败')
+          }
+        } else {
+          console.error('位置数据不完整', parsedLocation)
+          showToast('位置数据不完整')
+        }
+      } catch (e) {
+        console.error('处理位置数据失败', e)
+        showToast('处理位置数据失败')
+      }
+    }
+  } catch (error) {
+    console.error('初始化聊天页面失败:', error)
+    showToast('加载聊天记录失败，请重试')
+  }
 })
 
 onBeforeUnmount(() => {
@@ -761,7 +1105,104 @@ onBeforeUnmount(() => {
     audioPlayer.value.pause()
     audioPlayer.value = null
   }
+  
+  // 移除滚动监听
+  if (messageListRef.value) {
+    messageListRef.value.removeEventListener('scroll', handleScroll)
+  }
+  
+  // 停止消息轮询
+  stopMessagePolling();
 })
+
+// 获取位置地址
+const getLocationAddress = (content) => {
+  try {
+    if (!content) {
+      return '未知位置'
+    }
+    
+    let locationData
+    
+    if (typeof content === 'string') {
+      try {
+        locationData = JSON.parse(content)
+      } catch (err) {
+        console.error('无法解析位置JSON:', err)
+        return '解析位置失败'
+      }
+    } else {
+      locationData = content
+    }
+    
+    if (!locationData || !locationData.address) {
+      // 如果没有地址但有经纬度，显示坐标
+      if (locationData && locationData.lng && locationData.lat) {
+        return `坐标 (${locationData.lat.toFixed(6)}, ${locationData.lng.toFixed(6)})`
+      }
+      return '未知位置'
+    }
+    
+    return locationData.address
+  } catch (e) {
+    console.error('获取地址信息失败:', e)
+    return '位置显示错误'
+  }
+}
+
+// 查看位置
+const viewLocation = (content) => {
+  try {
+    // 尝试解析位置数据，首先尝试直接解析
+    let locationData
+    
+    try {
+      // 先尝试把字符串转为JSON对象
+      if (typeof content === 'string') {
+        locationData = JSON.parse(content)
+      } else {
+        locationData = content
+      }
+    } catch (e) {
+      console.error('解析位置数据失败，可能是无效的JSON:', e)
+      showToast('位置数据格式错误')
+      return
+    }
+    
+    // 确保数据包含必需的字段
+    if (!locationData || !locationData.lng || !locationData.lat) {
+      console.error('位置数据不完整:', locationData)
+      showToast('位置数据不完整')
+      return
+    }
+    
+    // 跳转到地图页面
+    console.log('查看位置:', locationData)
+    router.push({
+      path: '/map/picker',
+      query: {
+        location: JSON.stringify(locationData),
+        readonly: 'true'
+      }
+    })
+  } catch (e) {
+    console.error('处理位置数据失败:', e)
+    showToast('无法查看位置')
+  }
+}
+
+const stopMessagePolling = () => {
+  if (messageUpdateInterval) {
+    clearInterval(messageUpdateInterval);
+    messageUpdateInterval = null;
+  }
+};
+
+// 处理消息列表点击
+const handleMessageListClick = (event) => {
+  // 处理链接点击
+  handleLinkClick(event);
+};
 </script>
 
 <style scoped>
@@ -965,12 +1406,41 @@ onBeforeUnmount(() => {
   margin-top: 0.25rem;
 }
 
-.location-message,
-.video-message,
-.unknown-message {
-  padding: 0.5rem 0.75rem;
-  background-color: #fff;
-  border-radius: 0.25rem;
+.location-message {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background-color: var(--message-bg-color, #fff);
+  border-radius: var(--message-border-radius, 8px);
+  align-items: flex-start;
+  width: 220px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.self-message.location-message {
+  background-color: var(--self-message-bg-color, #007AFF);
+  color: var(--self-message-color, #fff);
+}
+
+.location-icon {
+  margin-bottom: 8px;
+}
+
+.location-address {
+  font-size: 14px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.view-location {
+  font-size: 12px;
+  color: #1989fa;
+  align-self: flex-end;
+}
+
+.self-message .view-location {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .message-status {
@@ -1009,25 +1479,50 @@ onBeforeUnmount(() => {
   border-radius: 1.25rem;
 }
 
-.emoji-panel,
+.emoji-panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background-color: #f5f5f5;
+  padding: 0.5rem;
+  overflow-y: auto;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -1px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.emoji-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  padding: 8px;
+}
+
+.emoji-group {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.emoji-item {
+  font-size: 24px;
+  padding: 8px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.emoji-item:active {
+  transform: scale(0.9);
+}
+
 .more-panel {
   background-color: #fff;
   height: 14rem;
   padding: 1rem;
   border-top: 1px solid #ebedf0;
   overflow-y: auto;
-}
-
-.emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 0.5rem;
-}
-
-.emoji-item {
-  font-size: 1.5rem;
-  text-align: center;
-  cursor: pointer;
 }
 
 .action-grid {

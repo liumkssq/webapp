@@ -5,10 +5,11 @@
       <div class="left-button" @click="handleBack">
         <van-icon name="arrow-left" size="18" />
       </div>
-      <div class="page-title">选择位置</div>
-      <div class="right-button" @click="handleConfirmLocation" :class="{ disabled: !selectedLocation.address }">
+      <div class="page-title">{{ isReadOnly ? '查看位置' : '选择位置' }}</div>
+      <div v-if="!isReadOnly" class="right-button" @click="handleConfirmLocation" :class="{ disabled: !selectedLocation.address }">
         确定
       </div>
+      <div v-else class="right-button-placeholder"></div>
     </div>
     
     <!-- 地图容器 -->
@@ -18,10 +19,11 @@
           ref="mapRef"
           :center="initialCenter"
           :zoom="15"
-          :show-search="true"
-          :show-confirm-button="true"
-          :auto-locate="!hasInitialLocation"
+          :show-search="!isReadOnly"
+          :show-confirm-button="!isReadOnly"
+          :auto-locate="!hasInitialLocation && !isReadOnly"
           :api-key="'W4T3NdSnqPJRPBaVoUhBLS6em9dbpeEr'"
+          :disable-default-ui="isReadOnly"
           @select-location="handleSelectLocation"
           @confirm-location="handleConfirmLocation"
           @locate-success="handleLocateSuccess"
@@ -60,6 +62,9 @@ const selectedLocation = reactive({
   lng: null
 })
 
+// 是否为只读模式
+const isReadOnly = ref(false)
+
 // 处理百度地图位置选择事件
 const handleSelectLocation = (location) => {
   console.log('选择位置:', location)
@@ -85,8 +90,17 @@ const handleConfirmLocation = () => {
   // 正确格式化location数据
   const encodedLocation = encodeURIComponent(JSON.stringify(locationData));
   
-  // 获取回调路径
-  const callbackPath = route.query.callback || '/';
+  // 获取回调路径并确保使用新的路由格式
+  let callbackPath = route.query.callback || '/';
+  
+  // 如果回调路径是旧格式，转换为新格式
+  if (callbackPath === '/publish-product') {
+    callbackPath = '/publish/product';
+  } else if (callbackPath === '/publish-lost-found') {
+    callbackPath = '/publish/lost-found';
+  } else if (callbackPath === '/publish-article') {
+    callbackPath = '/publish/article';
+  }
   
   // 确保生成的URL使用单个问号
   const queryChar = callbackPath.includes('?') ? '&' : '?';
@@ -109,6 +123,7 @@ const handleLocateSuccess = (location) => {
     lng: location.point.lng,
     lat: location.point.lat
   }
+  hasInitialLocation.value = true
 }
 
 // 定位失败处理
@@ -142,14 +157,24 @@ onMounted(() => {
   // 添加消息监听
   window.addEventListener('message', handleMessage)
   
+  // 检查是否为只读模式
+  isReadOnly.value = route.query.readonly === 'true'
+  
   // 检查是否有初始位置
   const initialLocation = route.query.location
   if (initialLocation) {
     try {
-      const location = JSON.parse(initialLocation)
+      const location = JSON.parse(decodeURIComponent(initialLocation))
       selectedLocation.address = location.address || ''
       selectedLocation.lat = location.lat
       selectedLocation.lng = location.lng
+      
+      // 更新初始中心点和状态
+      initialCenter.value = {
+        lng: location.lng,
+        lat: location.lat
+      }
+      hasInitialLocation.value = true
     } catch (e) {
       console.error('解析初始位置失败', e)
     }
