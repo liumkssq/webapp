@@ -3,235 +3,201 @@
     <!-- 导航栏 -->
     <van-nav-bar
       title="个人资料"
+      left-text="返回"
       left-arrow
+      @click-left="router.back()"
       fixed
       placeholder
-      @click-left="onClickLeft"
     />
     
-    <div class="profile-content" v-if="user">
-      <!-- 用户信息 -->
-      <div class="user-card">
-        <div class="avatar-section">
-          <van-image
-            round
-            width="80"
-            height="80"
-            :src="user.avatar"
-            fit="cover"
-          >
-            <template #error>
-              <div class="avatar-fallback">{{ getInitials(user.name) }}</div>
-            </template>
-          </van-image>
-        </div>
-        
-        <div class="info-section">
-          <div class="user-name">{{ user.name }}</div>
-          <div class="user-id">ID: {{ user.id }}</div>
-          <div class="user-status" :class="user.status">
-            {{ statusText }}
+    <!-- 用户信息 -->
+    <div class="user-profile">
+      <!-- 基本信息卡片 -->
+      <div class="profile-card">
+        <van-skeleton title avatar :row="3" :loading="loading">
+          <div class="profile-header">
+            <van-image
+              round
+              width="80"
+              height="80"
+              :src="userInfo.avatar"
+              fit="cover"
+            >
+              <template #error>
+                <div class="avatar-fallback">{{ getInitials(userInfo.name) }}</div>
+              </template>
+            </van-image>
+            
+            <div class="user-status" :class="{ online: userInfo.onlineStatus === 'online' }">
+              {{ userInfo.onlineStatus === 'online' ? '在线' : '离线' }}
+            </div>
           </div>
-        </div>
-      </div>
-      
-      <!-- 个人信息 -->
-      <van-cell-group inset class="info-group">
-        <van-cell title="学校" :value="user.school || '未设置'" />
-        <van-cell title="专业" :value="user.major || '未设置'" />
-        <van-cell title="年级" :value="user.grade || '未设置'" />
-        <van-cell title="个性签名" :label="user.bio || '这个人很懒，什么都没留下'" />
-      </van-cell-group>
-      
-      <!-- 操作按钮 -->
-      <div class="action-buttons">
-        <!-- 陌生人操作 -->
-        <template v-if="!isFriend && !isCurrentUser">
-          <van-button 
-            type="primary" 
-            block 
-            class="action-btn"
-            @click="showAddFriendPopup = true"
-          >
-            添加好友
-          </van-button>
-        </template>
-        
-        <!-- 好友操作 -->
-        <template v-if="isFriend && !isCurrentUser">
-          <van-button 
-            type="primary" 
-            block 
-            class="action-btn"
-            @click="startChat"
-          >
-            发送消息
-          </van-button>
           
-          <van-button 
-            plain 
-            block 
-            class="action-btn"
-            @click="showSettings = true"
-          >
-            好友设置
-          </van-button>
-        </template>
-        
-        <!-- 自己的资料 -->
-        <template v-if="isCurrentUser">
-          <van-button 
-            type="primary" 
-            block 
-            class="action-btn"
-            @click="editProfile"
-          >
-            编辑资料
-          </van-button>
-        </template>
+          <div class="profile-info">
+            <div class="user-name">{{ userInfo.name }}</div>
+            <div class="user-id">ID: {{ userInfo.id }}</div>
+            
+            <div v-if="userInfo.note" class="user-note">备注: {{ userInfo.note }}</div>
+            
+            <div class="user-details">
+              <div class="detail-item">
+                <van-icon name="location-o" />
+                <span>{{ userInfo.school }}</span>
+              </div>
+              <div class="detail-item">
+                <van-icon name="bookmark-o" />
+                <span>{{ userInfo.department }}</span>
+              </div>
+              <div v-if="userInfo.addTime" class="detail-item">
+                <van-icon name="clock-o" />
+                <span>添加于 {{ formatDate(userInfo.addTime) }}</span>
+              </div>
+            </div>
+            
+            <div v-if="userInfo.bio" class="user-bio">
+              <div class="bio-title">个人简介</div>
+              <div class="bio-content">{{ userInfo.bio }}</div>
+            </div>
+          </div>
+        </van-skeleton>
+      </div>
+      
+      <!-- 好友关系 -->
+      <div class="friend-actions">
+        <van-skeleton :row="1" :loading="loading">
+          <!-- 不是好友 -->
+          <template v-if="userInfo.friendStatus === 'none'">
+            <van-button 
+              type="primary" 
+              block 
+              icon="plus" 
+              @click="handleAddFriend"
+            >
+              添加为好友
+            </van-button>
+          </template>
+          
+          <!-- 等待验证 -->
+          <template v-else-if="userInfo.friendStatus === 'pending'">
+            <van-button 
+              type="default" 
+              block 
+              disabled
+            >
+              好友申请已发送
+            </van-button>
+          </template>
+          
+          <!-- 已是好友 -->
+          <template v-else-if="userInfo.friendStatus === 'friend'">
+            <div class="friend-buttons">
+              <van-button 
+                type="primary" 
+                icon="chat-o"
+                @click="startChat"
+              >
+                发消息
+              </van-button>
+              
+              <van-button 
+                plain 
+                type="primary"
+                icon="setting-o"
+                @click="showActionSheet = true"
+              >
+                设置
+              </van-button>
+            </div>
+          </template>
+        </van-skeleton>
       </div>
     </div>
     
-    <!-- 加载中状态 -->
-    <div v-else-if="loading" class="loading-container">
-      <van-loading type="spinner" size="24px" vertical>加载中...</van-loading>
-    </div>
+    <!-- 操作菜单 -->
+    <van-action-sheet
+      v-model:show="showActionSheet"
+      :actions="friendActions"
+      cancel-text="取消"
+      @select="onActionSelect"
+    />
     
-    <!-- 错误状态 -->
-    <van-empty v-else description="用户不存在或已被删除" />
+    <!-- 设置备注弹窗 -->
+    <van-dialog
+      v-model:show="showSetNoteDialog"
+      title="设置备注"
+      show-cancel-button
+      @confirm="confirmSetNote"
+    >
+      <van-field
+        v-model="noteText"
+        placeholder="请输入备注名"
+        clearable
+      />
+    </van-dialog>
     
     <!-- 添加好友弹窗 -->
     <van-dialog
-      v-model:show="showAddFriendPopup"
+      v-model:show="showAddFriendDialog"
       title="添加好友"
       show-cancel-button
-      @confirm="sendFriendRequest"
+      @confirm="confirmAddFriend"
     >
-      <div class="friend-request-form">
-        <van-field
-          v-model="friendRequestMessage"
-          rows="3"
-          autosize
-          label="验证消息"
-          type="textarea"
-          maxlength="50"
-          placeholder="请输入验证消息"
-          show-word-limit
-        />
-      </div>
+      <van-field
+        v-model="requestMessage"
+        type="textarea"
+        placeholder="请输入验证信息"
+        rows="3"
+        autosize
+      />
     </van-dialog>
     
-    <!-- 好友设置弹窗 -->
-    <van-action-sheet
-      v-model:show="showSettings"
-      title="好友设置"
-      cancel-text="取消"
-    >
-      <div class="setting-options">
-        <div class="setting-item">
-          <van-field
-            v-model="friendRemark"
-            label="备注名"
-            placeholder="设置备注名"
-            input-align="right"
-            @blur="updateFriendRemark"
-          />
-        </div>
-        
-        <van-cell title="设为星标好友" center>
-          <template #right-icon>
-            <van-switch v-model="isStarred" size="24" @change="toggleStar" />
-          </template>
-        </van-cell>
-        
-        <van-cell 
-          title="删除好友" 
-          class="delete-friend" 
-          @click="showDeleteConfirm = true"
-        />
-      </div>
-    </van-action-sheet>
-    
-    <!-- 删除好友确认 -->
+    <!-- 删除好友确认弹窗 -->
     <van-dialog
-      v-model:show="showDeleteConfirm"
+      v-model:show="showDeleteFriendDialog"
       title="删除好友"
-      message="删除好友后，将同时删除与该好友的聊天记录，是否确认删除？"
+      message="删除后对方将从你的好友列表消失，同时你也将从对方的好友列表消失"
       show-cancel-button
-      @confirm="deleteFriendAction"
+      @confirm="confirmDeleteFriend"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
-import { 
-  getFriendDetail, 
-  deleteFriend, 
-  setFriendRemark,
-  sendFriendRequest as apiSendFriendRequest 
-} from '@/api/im'
+import { getUserDetail, setFriendNote, deleteFriend, sendFriendRequest } from '@/api/im'
+import dayjs from 'dayjs'
 
-const route = useRoute()
 const router = useRouter()
-const userId = computed(() => Number(route.params.id))
-const user = ref(null)
+const route = useRoute()
+const userId = route.params.id
+
+// 状态
 const loading = ref(true)
-const isFriend = ref(false)
-const isCurrentUser = computed(() => userId.value === 1) // 假设当前用户ID为1
-const friendRemark = ref('')
-const isStarred = ref(false)
-const showSettings = ref(false)
-const showDeleteConfirm = ref(false)
-const showAddFriendPopup = ref(false)
-const friendRequestMessage = ref('我是xxx，请求添加您为好友')
+const userInfo = ref({})
+const showActionSheet = ref(false)
+const showSetNoteDialog = ref(false)
+const showAddFriendDialog = ref(false)
+const showDeleteFriendDialog = ref(false)
+const noteText = ref('')
+const requestMessage = ref('')
 
-// 状态文本
-const statusText = computed(() => {
-  if (!user.value) return ''
-  
-  switch (user.value.status) {
-    case 'online':
-      return '在线'
-    case 'offline':
-      return '离线'
-    case 'busy':
-      return '忙碌中'
-    default:
-      return '离线'
-  }
-})
+// 好友操作菜单
+const friendActions = [
+  { name: '设置备注', color: '#1989fa' },
+  { name: '删除好友', color: '#ee0a24' }
+]
 
-// 导航返回
-const onClickLeft = () => {
-  router.back()
-}
-
-// 获取姓名首字母作为头像占位
-const getInitials = (name) => {
-  if (!name) return '?'
-  return name.charAt(0).toUpperCase()
-}
-
-// 加载用户信息
-const loadUserInfo = async () => {
+// 获取用户详情
+const fetchUserDetail = async () => {
   loading.value = true
   
   try {
-    // 根据是否为好友调用不同接口
-    const response = await getFriendDetail(userId.value)
-    
+    const response = await getUserDetail(userId)
     if (response.code === 200) {
-      user.value = response.data
-      isFriend.value = !!response.data.friendInfo
-      
-      // 如果是好友，加载备注信息等
-      if (isFriend.value && response.data.friendInfo) {
-        friendRemark.value = response.data.friendInfo.remark || ''
-        isStarred.value = response.data.friendInfo.isStarred || false
-      }
+      userInfo.value = response.data
+      noteText.value = userInfo.value.note || ''
     } else {
       showToast(response.message || '获取用户信息失败')
     }
@@ -243,31 +209,28 @@ const loadUserInfo = async () => {
   }
 }
 
-// 发起聊天
-const startChat = () => {
-  router.push(`/im/chat/${userId.value}?name=${encodeURIComponent(user.value.name)}`)
+// 添加好友
+const handleAddFriend = () => {
+  requestMessage.value = `我是${localStorage.getItem('userName') || '新用户'}，请求添加您为好友`
+  showAddFriendDialog.value = true
 }
 
-// 编辑资料
-const editProfile = () => {
-  router.push('/user/profile')
-}
-
-// 发送好友申请
-const sendFriendRequest = async () => {
+// 确认添加好友
+const confirmAddFriend = async () => {
   const loading = showLoadingToast({
     message: '发送申请中...',
     forbidClick: true
   })
   
   try {
-    const response = await apiSendFriendRequest({
-      userId: userId.value,
-      message: friendRequestMessage.value
+    const response = await sendFriendRequest({
+      userId: userInfo.value.id,
+      message: requestMessage.value
     })
     
     if (response.code === 200) {
       showSuccessToast('好友申请已发送')
+      userInfo.value.friendStatus = 'pending'
     } else {
       showToast(response.message || '发送申请失败')
     }
@@ -279,49 +242,62 @@ const sendFriendRequest = async () => {
   }
 }
 
-// 更新好友备注
-const updateFriendRemark = async () => {
-  if (!friendRemark.value.trim()) {
-    return
-  }
-  
-  try {
-    const response = await setFriendRemark(userId.value, friendRemark.value)
-    
-    if (response.code === 200) {
-      showSuccessToast('备注已更新')
-    } else {
-      showToast(response.message || '更新备注失败')
-    }
-  } catch (error) {
-    console.error('更新好友备注失败:', error)
-    showToast('网络错误，请稍后重试')
+// 开始聊天
+const startChat = () => {
+  router.push(`/im/chat/${userInfo.value.id}?name=${encodeURIComponent(userInfo.value.name)}`)
+}
+
+// 选择操作菜单项
+const onActionSelect = (action) => {
+  if (action.name === '设置备注') {
+    showSetNoteDialog.value = true
+  } else if (action.name === '删除好友') {
+    showDeleteFriendDialog.value = true
   }
 }
 
-// 设置星标好友
-const toggleStar = async () => {
-  // 此处需要添加设置星标好友的API调用
-  showSuccessToast(isStarred.value ? '已设为星标好友' : '已取消星标')
-}
-
-// 删除好友
-const deleteFriendAction = async () => {
+// 确认设置备注
+const confirmSetNote = async () => {
   const loading = showLoadingToast({
-    message: '处理中...',
+    message: '设置中...',
     forbidClick: true
   })
   
   try {
-    const response = await deleteFriend(userId.value)
+    const response = await setFriendNote({
+      userId: userInfo.value.id,
+      note: noteText.value
+    })
     
     if (response.code === 200) {
-      showSuccessToast('已删除好友')
-      showSettings.value = false
-      // 删除后更新状态
-      isFriend.value = false
+      showSuccessToast('设置成功')
+      userInfo.value.note = noteText.value
     } else {
-      showToast(response.message || '删除好友失败')
+      showToast(response.message || '设置失败')
+    }
+  } catch (error) {
+    console.error('设置备注失败:', error)
+    showToast('网络错误，请稍后重试')
+  } finally {
+    closeToast(loading)
+  }
+}
+
+// 确认删除好友
+const confirmDeleteFriend = async () => {
+  const loading = showLoadingToast({
+    message: '删除中...',
+    forbidClick: true
+  })
+  
+  try {
+    const response = await deleteFriend(userInfo.value.id)
+    
+    if (response.code === 200) {
+      showSuccessToast('删除成功')
+      userInfo.value.friendStatus = 'none'
+    } else {
+      showToast(response.message || '删除失败')
     }
   } catch (error) {
     console.error('删除好友失败:', error)
@@ -331,38 +307,49 @@ const deleteFriendAction = async () => {
   }
 }
 
-// 组件挂载时加载数据
+// 获取姓名首字母作为头像占位
+const getInitials = (name) => {
+  if (!name) return '?'
+  return name.charAt(0).toUpperCase()
+}
+
+// 格式化日期
+const formatDate = (date) => {
+  if (!date) return ''
+  return dayjs(date).format('YYYY年MM月DD日')
+}
+
+// 组件挂载时获取数据
 onMounted(() => {
-  loadUserInfo()
+  fetchUserDetail()
 })
 </script>
 
 <style scoped>
 .page-container {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+  min-height: 100vh;
   background-color: #f5f5f5;
+  padding-bottom: 2rem;
 }
 
-.profile-content {
-  flex: 1;
-  overflow: auto;
+.user-profile {
   padding: 1rem;
 }
 
-.user-card {
-  background-color: white;
+.profile-card {
+  background-color: #ffffff;
   border-radius: 12px;
   padding: 1.5rem;
-  display: flex;
-  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.avatar-section {
-  margin-right: 1.5rem;
+.profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .avatar-fallback {
@@ -374,75 +361,99 @@ onMounted(() => {
   background-color: #e1e1e1;
   color: #666;
   font-weight: bold;
-  font-size: 1.8rem;
+  font-size: 2rem;
 }
 
-.info-section {
-  flex: 1;
+.user-status {
+  position: absolute;
+  bottom: 0;
+  right: calc(50% - 40px);
+  background-color: #cccccc;
+  color: white;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+  transform: translateX(-50%);
+}
+
+.user-status.online {
+  background-color: #4cd964;
+}
+
+.profile-info {
+  text-align: center;
 }
 
 .user-name {
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: bold;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .user-id {
   font-size: 0.9rem;
-  color: #666;
+  color: #999;
   margin-bottom: 0.5rem;
 }
 
-.user-status {
+.user-note {
   font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+  padding: 0.2rem 0.8rem;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.user-details {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.detail-item .van-icon {
+  margin-right: 0.5rem;
   color: #999;
 }
 
-.user-status.online {
-  color: #4cd964;
-}
-
-.user-status.busy {
-  color: #ff9500;
-}
-
-.info-group {
-  margin-bottom: 1.5rem;
-}
-
-.action-buttons {
-  margin-top: 2rem;
-}
-
-.action-btn {
-  margin-bottom: 1rem;
-}
-
-.loading-container {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.friend-request-form {
-  padding: 1rem;
-}
-
-.setting-options {
-  padding: 1rem 0;
-}
-
-.setting-item {
-  margin-bottom: 1rem;
-}
-
-.delete-friend {
-  color: #ff3b30;
+.user-bio {
+  text-align: left;
   margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f5f5f5;
 }
 
-:deep(.van-switch--on) {
-  background-color: #4cd964;
+.bio-title {
+  font-size: 0.9rem;
+  color: #999;
+  margin-bottom: 0.5rem;
+}
+
+.bio-content {
+  font-size: 0.9rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.friend-actions {
+  margin-bottom: 1rem;
+}
+
+.friend-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.friend-buttons .van-button {
+  flex: 1;
 }
 </style>

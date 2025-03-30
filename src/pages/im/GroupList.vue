@@ -2,54 +2,66 @@
   <div class="page-container">
     <!-- 导航栏 -->
     <van-nav-bar
-      title="群聊列表"
+      title="我的群聊"
+      left-text="返回"
       left-arrow
+      @click-left="router.back()"
       fixed
       placeholder
-      right-text="创建"
-      @click-left="onClickLeft"
-      @click-right="showCreateGroup = true"
     />
     
-    <!-- 群聊列表 -->
-    <div class="group-list-container">
-      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-        <van-empty v-if="groups.length === 0 && !loading" description="暂无群聊" />
+    <!-- 主要内容 -->
+    <div class="group-content">
+      <!-- 群聊列表 -->
+      <div class="group-list">
+        <div v-if="groups.length === 0" class="empty-state">
+          <van-empty description="暂无群聊" />
+          <van-button type="primary" size="small" @click="showCreateGroup = true">创建群聊</van-button>
+        </div>
         
-        <div v-else class="group-list">
-          <div
+        <van-cell-group v-else inset>
+          <van-cell
             v-for="group in groups"
             :key="group.id"
-            class="group-item"
-            @click="enterGroup(group)"
+            center
+            @click="handleGroupClick(group)"
           >
-            <van-image
-              round
-              width="50"
-              height="50"
-              :src="group.avatar || defaultGroupAvatar"
-              fit="cover"
-            >
-              <template #error>
-                <div class="avatar-fallback">{{ getInitials(group.name) }}</div>
-              </template>
-            </van-image>
-            
-            <div class="group-info">
-              <div class="group-name">{{ group.name }}</div>
-              <div class="group-data">{{ group.memberCount }}人</div>
-            </div>
-          </div>
-        </div>
-      </van-pull-refresh>
-      
-      <!-- 加载中状态 -->
-      <van-overlay :show="loading" z-index="1000">
-        <div class="loading-container">
-          <van-loading type="spinner" color="#1989fa" />
-        </div>
-      </van-overlay>
+            <template #icon>
+              <van-image
+                round
+                width="40"
+                height="40"
+                :src="group.avatar"
+                fit="cover"
+                class="avatar-image"
+              >
+                <template #error>
+                  <div class="avatar-fallback">群</div>
+                </template>
+              </van-image>
+            </template>
+            <template #title>
+              <span class="group-name">{{ group.name }}</span>
+            </template>
+            <template #label>
+              <span class="group-members">{{ group.memberCount }}人</span>
+              <span v-if="group.notice" class="group-notice">{{ truncateText(group.notice, 20) }}</span>
+            </template>
+            <template #right-icon>
+              <van-icon v-if="group.isOwner" name="manager-o" color="#ff9d00" size="18" />
+            </template>
+          </van-cell>
+        </van-cell-group>
+      </div>
     </div>
+    
+    <!-- 创建群聊按钮 -->
+    <van-fab
+      class="create-group-btn"
+      icon="plus"
+      color="#007aff"
+      @click="showCreateGroup = true"
+    />
     
     <!-- 创建群聊弹窗 -->
     <van-popup
@@ -64,89 +76,119 @@
       </div>
       
       <div class="popup-content">
-        <div class="form-section">
-          <van-field
-            v-model="groupName"
-            label="群名称"
-            placeholder="请输入群聊名称"
-            maxlength="20"
-            show-word-limit
-          />
-          
-          <van-field
-            v-model="groupDescription"
-            label="群介绍"
-            type="textarea"
-            placeholder="请输入群介绍"
-            rows="3"
-            maxlength="100"
-            show-word-limit
-          />
-          
-          <div class="avatar-upload">
-            <div class="avatar-label">群头像</div>
-            <van-uploader
-              v-model="groupAvatar"
-              :max-count="1"
-              :after-read="afterAvatarRead"
+        <van-form @submit="onCreateGroup">
+          <van-cell-group inset>
+            <van-field
+              v-model="groupForm.name"
+              name="name"
+              label="群名称"
+              placeholder="请输入群名称"
+              :rules="[{ required: true, message: '请填写群名称' }]"
             />
-          </div>
-        </div>
-        
-        <div class="select-members">
-          <div class="section-title">选择好友</div>
+            
+            <van-field
+              v-model="groupForm.notice"
+              name="notice"
+              label="群公告"
+              type="textarea"
+              placeholder="请输入群公告"
+              rows="2"
+              autosize
+            />
+          </van-cell-group>
           
-          <van-search
-            v-model="searchText"
-            placeholder="搜索好友"
-            shape="round"
-            clearable
-          />
-          
-          <div class="friend-selection">
-            <van-checkbox-group v-model="selectedMembers">
-              <div
-                v-for="friend in filteredFriends"
-                :key="friend.id"
-                class="friend-item"
-              >
-                <van-checkbox 
-                  :name="friend.id"
-                  shape="square"
-                  icon-size="18px"
+          <div class="select-members">
+            <div class="section-title">选择成员</div>
+            
+            <van-search
+              v-model="memberSearchText"
+              placeholder="搜索好友"
+              shape="round"
+              clearable
+            />
+            
+            <div class="selected-members" v-if="selectedMembers.length > 0">
+              <div class="section-subtitle">已选择 ({{ selectedMembers.length }})</div>
+              <div class="member-avatars">
+                <div
+                  v-for="member in selectedMembers"
+                  :key="member.id"
+                  class="selected-member"
                 >
-                  <div class="friend-item-content">
-                    <van-image
-                      round
-                      width="40"
-                      height="40"
-                      :src="friend.avatar"
-                      fit="cover"
-                    >
-                      <template #error>
-                        <div class="avatar-fallback-sm">{{ getInitials(friend.name) }}</div>
-                      </template>
-                    </van-image>
-                    
-                    <div class="friend-name-sm">{{ friend.name }}</div>
-                  </div>
-                </van-checkbox>
+                  <van-image
+                    round
+                    width="40"
+                    height="40"
+                    :src="member.avatar"
+                    fit="cover"
+                  >
+                    <template #error>
+                      <div class="avatar-fallback">{{ getInitials(member.name) }}</div>
+                    </template>
+                  </van-image>
+                  <div class="member-name">{{ member.name }}</div>
+                  <van-icon
+                    name="cross"
+                    class="remove-member"
+                    @click.stop="removeMember(member)"
+                  />
+                </div>
               </div>
-            </van-checkbox-group>
+            </div>
+            
+            <div class="friend-list">
+              <div class="section-subtitle">好友列表</div>
+              <van-checkbox-group v-model="selectedMemberIds">
+                <van-cell-group inset>
+                  <van-cell
+                    v-for="friend in filteredFriends"
+                    :key="friend.id"
+                    clickable
+                    @click="toggleMember(friend)"
+                  >
+                    <template #icon>
+                      <van-image
+                        round
+                        width="40"
+                        height="40"
+                        :src="friend.avatar"
+                        fit="cover"
+                        class="avatar-image"
+                      >
+                        <template #error>
+                          <div class="avatar-fallback">{{ getInitials(friend.name) }}</div>
+                        </template>
+                      </van-image>
+                    </template>
+                    <template #title>
+                      <span class="friend-name">{{ friend.name }}</span>
+                    </template>
+                    <template #right-icon>
+                      <van-checkbox
+                        :name="friend.id"
+                        shape="square"
+                        @click.stop
+                      />
+                    </template>
+                  </van-cell>
+                </van-cell-group>
+              </van-checkbox-group>
+            </div>
           </div>
-        </div>
-        
-        <div class="btn-section">
-          <van-button 
-            type="primary" 
-            block 
-            :disabled="!isFormValid"
-            :loading="creating"
-            @click="createGroupChat"
-          >
-            创建群聊
-          </van-button>
-        </div>
+          
+          <div style="margin: 16px;">
+            <van-button
+              round
+              block
+              type="primary"
+              :disabled="selectedMembers.length === 0 || !groupForm.name"
+              native-type="submit"
+              :loading="creating"
+            >
+              创建群聊
+            </van-button>
+          </div>
+        </van-form>
       </div>
     </van-popup>
   </div>
@@ -159,72 +201,52 @@ import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getGroupList, createGroup, getFriendList } from '@/api/im'
 
 const router = useRouter()
+
+// 状态
 const groups = ref([])
-const loading = ref(false)
-const refreshing = ref(false)
 const showCreateGroup = ref(false)
-const groupName = ref('')
-const groupDescription = ref('')
-const groupAvatar = ref([])
-const searchText = ref('')
-const selectedMembers = ref([])
+const groupForm = ref({
+  name: '',
+  notice: ''
+})
 const creating = ref(false)
 const friends = ref([])
+const selectedMemberIds = ref([])
+const memberSearchText = ref('')
 
-// 默认群头像
-const defaultGroupAvatar = 'https://api.dicebear.com/6.x/identicon/svg?seed=group'
+// 计算属性：选中的成员
+const selectedMembers = computed(() => {
+  return friends.value.filter(friend => selectedMemberIds.value.includes(friend.id))
+})
 
-// 导航返回
-const onClickLeft = () => {
-  router.back()
-}
-
-// 过滤好友列表
+// 计算属性：过滤后的好友列表（搜索用）
 const filteredFriends = computed(() => {
-  if (!searchText.value) return friends.value
+  if (!memberSearchText.value) return friends.value
   
   return friends.value.filter(friend => 
-    friend.name.toLowerCase().includes(searchText.value.toLowerCase())
+    friend.name.toLowerCase().includes(memberSearchText.value.toLowerCase())
   )
 })
 
-// 表单验证
-const isFormValid = computed(() => {
-  return groupName.value.trim() !== '' && selectedMembers.value.length > 0
-})
-
-// 获取姓名首字母作为头像占位
-const getInitials = (name) => {
-  if (!name) return '?'
-  return name.charAt(0).toUpperCase()
-}
-
-// 加载群聊列表
-const loadGroups = async () => {
-  loading.value = true
-  
+// 获取群聊列表
+const fetchGroups = async () => {
   try {
     const response = await getGroupList()
-    
     if (response.code === 200) {
-      groups.value = response.data
+      groups.value = response.data.list
     } else {
       showToast(response.message || '获取群聊列表失败')
     }
   } catch (error) {
     console.error('获取群聊列表失败:', error)
     showToast('网络错误，请稍后重试')
-  } finally {
-    loading.value = false
-    refreshing.value = false
   }
 }
 
-// 加载好友列表
-const loadFriends = async () => {
+// 获取好友列表（创建群聊时选择）
+const fetchFriends = async () => {
   try {
     const response = await getFriendList()
-    
     if (response.code === 200) {
       friends.value = response.data
     } else {
@@ -236,32 +258,35 @@ const loadFriends = async () => {
   }
 }
 
-// 刷新数据
-const onRefresh = () => {
-  loadGroups()
-}
-
-// 进入群聊
-const enterGroup = (group) => {
+// 点击群聊
+const handleGroupClick = (group) => {
   router.push(`/im/group/${group.id}?name=${encodeURIComponent(group.name)}`)
 }
 
-// 头像上传后处理
-const afterAvatarRead = (file) => {
-  // 图片大小限制（2MB）
-  if (file.file.size > 2 * 1024 * 1024) {
-    showToast('图片大小不能超过2MB')
-    groupAvatar.value = []
-    return
+// 切换成员选择
+const toggleMember = (friend) => {
+  const index = selectedMemberIds.value.indexOf(friend.id)
+  if (index === -1) {
+    selectedMemberIds.value.push(friend.id)
+  } else {
+    selectedMemberIds.value.splice(index, 1)
   }
-  
-  // 本地预览处理
-  // 实际项目中可能需要调用上传API并处理响应
+}
+
+// 移除已选成员
+const removeMember = (member) => {
+  const index = selectedMemberIds.value.indexOf(member.id)
+  if (index !== -1) {
+    selectedMemberIds.value.splice(index, 1)
+  }
 }
 
 // 创建群聊
-const createGroupChat = async () => {
-  if (!isFormValid.value) return
+const onCreateGroup = async () => {
+  if (selectedMembers.value.length === 0) {
+    showToast('请至少选择一个成员')
+    return
+  }
   
   creating.value = true
   const loadingToast = showLoadingToast({
@@ -270,33 +295,25 @@ const createGroupChat = async () => {
   })
   
   try {
-    // 构建请求数据
-    const data = {
-      name: groupName.value,
-      description: groupDescription.value,
-      memberIds: selectedMembers.value
-    }
-    
-    // 如果有上传头像，这里需要处理头像上传
-    // 此处简化处理，实际项目中可能需要先上传图片获取URL
-    
-    const response = await createGroup(data)
+    const response = await createGroup({
+      name: groupForm.value.name,
+      notice: groupForm.value.notice,
+      memberIds: selectedMemberIds.value
+    })
     
     if (response.code === 200) {
-      showSuccessToast('群聊创建成功')
+      showSuccessToast('创建成功')
       
       // 重置表单
-      groupName.value = ''
-      groupDescription.value = ''
-      groupAvatar.value = []
-      selectedMembers.value = []
-      
-      // 关闭弹窗并刷新列表
+      groupForm.value = { name: '', notice: '' }
+      selectedMemberIds.value = []
       showCreateGroup.value = false
-      loadGroups()
       
-      // 进入新建的群聊
-      router.push(`/im/group/${response.data.id}?name=${encodeURIComponent(response.data.name)}`)
+      // 刷新群聊列表
+      fetchGroups()
+      
+      // 跳转到新创建的群聊
+      router.push(`/im/group/${response.data.groupId}?name=${encodeURIComponent(response.data.groupName)}`)
     } else {
       showToast(response.message || '创建群聊失败')
     }
@@ -309,10 +326,22 @@ const createGroupChat = async () => {
   }
 }
 
-// 组件挂载时加载数据
+// 获取姓名首字母作为头像占位
+const getInitials = (name) => {
+  if (!name) return '?'
+  return name.charAt(0).toUpperCase()
+}
+
+// 截断文本
+const truncateText = (text, maxLength) => {
+  if (!text) return ''
+  return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
+}
+
+// 组件挂载时获取数据
 onMounted(() => {
-  loadGroups()
-  loadFriends()
+  fetchGroups()
+  fetchFriends()
 })
 </script>
 
@@ -324,23 +353,23 @@ onMounted(() => {
   background-color: #f5f5f5;
 }
 
-.group-list-container {
+.group-content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  padding: 1rem 0;
+  position: relative;
 }
 
-.group-list {
-  padding: 1rem;
-}
-
-.group-item {
+.empty-state {
+  height: 60vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 1rem;
-  background-color: white;
-  margin-bottom: 0.75rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  justify-content: center;
+}
+
+.avatar-image {
+  margin-right: 0.75rem;
 }
 
 .avatar-fallback {
@@ -355,39 +384,26 @@ onMounted(() => {
   font-size: 1.2rem;
 }
 
-.avatar-fallback-sm {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  background-color: #e1e1e1;
-  color: #666;
-  font-weight: bold;
-  font-size: 1rem;
-}
-
-.group-info {
-  margin-left: 1rem;
-  flex: 1;
-}
-
 .group-name {
   font-weight: 500;
-  font-size: 1rem;
-  margin-bottom: 0.25rem;
 }
 
-.group-data {
+.group-members {
+  font-size: 0.8rem;
+  color: #999;
+  margin-right: 0.5rem;
+}
+
+.group-notice {
   font-size: 0.8rem;
   color: #999;
 }
 
-.loading-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+.create-group-btn {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 99;
 }
 
 .popup-header {
@@ -414,57 +430,61 @@ onMounted(() => {
 .popup-content {
   height: calc(100% - 3.5rem);
   overflow-y: auto;
-  padding: 1rem;
-}
-
-.form-section {
-  margin-bottom: 1.5rem;
-}
-
-.avatar-upload {
-  display: flex;
-  align-items: center;
-  padding: 1rem 0;
-}
-
-.avatar-label {
-  margin-right: 1rem;
-  width: 6.2em;
-  color: #646566;
-}
-
-.select-members {
-  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
 }
 
 .section-title {
   font-weight: 500;
-  margin-bottom: 0.75rem;
-  color: #323233;
+  margin: 1rem 1rem 0.5rem;
 }
 
-.friend-selection {
-  max-height: 250px;
-  overflow-y: auto;
-  background-color: #f7f8fa;
-  border-radius: 8px;
-  padding: 0.5rem;
+.section-subtitle {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0.8rem 1rem 0.5rem;
 }
 
-.friend-item {
-  padding: 0.5rem;
+.selected-members {
+  margin-top: 1rem;
 }
 
-.friend-item-content {
+.member-avatars {
   display: flex;
+  flex-wrap: wrap;
+  padding: 0 0.5rem;
+}
+
+.selected-member {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  width: 20%;
+  margin-bottom: 1rem;
+  position: relative;
 }
 
-.friend-name-sm {
-  margin-left: 0.75rem;
+.member-name {
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.btn-section {
-  margin-top: 2rem;
+.remove-member {
+  position: absolute;
+  top: -5px;
+  right: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  padding: 2px;
+}
+
+.friend-list {
+  margin-top: 1rem;
 }
 </style>
