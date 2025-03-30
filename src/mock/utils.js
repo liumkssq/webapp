@@ -32,6 +32,8 @@ export function getUrlParams(url) {
 
 // 添加别名以兼容现有代码
 export const getQueryParams = getUrlParams
+// 添加param2Obj作为别名导出，以解决im.js导入错误
+export const param2Obj = getUrlParams
 
 /**
  * 延迟函数

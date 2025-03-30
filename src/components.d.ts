@@ -10,6 +10,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AppLoading: typeof import('./components/AppLoading.vue')['default']
     AppMessage: typeof import('./components/AppMessage.vue')['default']
+    AppNav: typeof import('./components/common/AppNav.vue')['default']
     ArticleItem: typeof import('./components/article/ArticleItem.vue')['default']
     BackToTop: typeof import('./components/common/BackToTop.vue')['default']
     BaiduMap: typeof import('./components/map/BaiduMap.vue')['default']
@@ -21,6 +22,9 @@ declare module 'vue' {
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
     FooterNav: typeof import('./components/FooterNav.vue')['default']
     FooterNavigation: typeof import('./components/common/FooterNavigation.vue')['default']
+    FriendItem: typeof import('./components/im/FriendItem.vue')['default']
+    GroupDetail: typeof import('./components/im/GroupDetail.vue')['default']
+    GroupItem: typeof import('./components/im/GroupItem.vue')['default']
     HeaderNav: typeof import('./components/HeaderNav.vue')['default']
     HeaderNavigation: typeof import('./components/common/HeaderNavigation.vue')['default']
     LocationDisplay: typeof import('./components/common/LocationDisplay.vue')['default']
