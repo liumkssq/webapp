@@ -3,12 +3,14 @@ import * as user from './user'
 import * as chat from './chat'
 import * as map from './map'
 import * as lostFound from './lostFound'
+import * as im from './im'
 
 // 创建API对象，便于统一管理
 const api = {
   user,
   chat,
   map,
+  im,
   
   // 占位API，后续实现
   product: {

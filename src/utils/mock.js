@@ -1,8 +1,6 @@
 // 生成模拟数据
 export function generateMockData(type, params = {}) {
   switch (type) {
-    // ... existing case statements ...
-    
     // IM功能的模拟数据
     case 'contactList':
       return generateContactList()
@@ -518,4 +516,4 @@ function getRandomMessage() {
   ]
   
   return messages[Math.floor(Math.random() * messages.length)]
-} 
+}
