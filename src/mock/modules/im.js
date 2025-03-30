@@ -432,19 +432,22 @@ Mock.mock('/api/im/conversations', 'get', () => {
       
       return {
         ...conv,
-        targetUser: {
-          ...targetUser,
-          name: friendRelation?.note || targetUser.name
+        targetInfo: {
+          id: targetUser.id,
+          name: friendRelation?.note || targetUser.name,
+          avatar: targetUser.avatar,
+          onlineStatus: targetUser.onlineStatus
         }
       }
     } else if (conv.type === 'group') {
       const group = groupPool.find(g => g.id === conv.targetId)
       return {
         ...conv,
-        targetUser: {
+        targetInfo: {
           id: group.id,
           name: group.name,
-          avatar: group.avatar
+          avatar: group.avatar,
+          memberCount: group.memberCount
         }
       }
     }
@@ -497,7 +500,7 @@ Mock.mock(new RegExp('/api/im/conversation/\\w+'), 'get', options => {
     message: '获取会话详情成功',
     data: {
       ...conversation,
-      targetUser: targetInfo
+      targetInfo: targetInfo
     }
   }
 })
@@ -602,6 +605,15 @@ Mock.mock(new RegExp('/api/im/search-contacts'), 'get', options => {
     code: 200,
     message: '搜索联系人成功',
     data: resultsWithFriendInfo.slice(0, 20) // 最多返回20条
+  }
+})
+
+// 模拟未读消息数量
+Mock.mock('/api/im/unread-count', 'get', () => {
+  return {
+    code: 200,
+    message: '获取未读消息数成功',
+    data: Math.floor(Math.random() * 10) // 随机生成0-9的未读消息数
   }
 })
 

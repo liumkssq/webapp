@@ -5,12 +5,12 @@
         round
         width="3rem"
         height="3rem"
-        :src="conversation.targetUser.avatar"
+        :src="conversation.targetInfo?.avatar"
         fit="cover"
       >
         <template #error>
           <div class="avatar-fallback">
-            {{ getInitials(conversation.targetUser.name) }}
+            {{ getInitials(conversation.targetInfo?.name) }}
           </div>
         </template>
       </van-image>
@@ -19,7 +19,7 @@
     
     <div class="content">
       <div class="top-row">
-        <div class="username">{{ conversation.targetUser.name }}</div>
+        <div class="username">{{ conversation.targetInfo?.name }}</div>
         <div class="time">{{ formatTime(conversation.lastMessage?.timestamp) }}</div>
       </div>
       
@@ -99,7 +99,7 @@ const getInitials = (name) => {
 
 // 是否在线
 const isOnline = computed(() => {
-  return props.conversation.targetUser.status === 'online'
+  return props.conversation.targetInfo?.onlineStatus === 'online'
 })
 
 // 点击处理

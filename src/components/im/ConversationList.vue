@@ -49,7 +49,7 @@ const filteredConversations = computed(() => {
   
   const keyword = searchText.value.toLowerCase()
   return conversations.value.filter(conversation => {
-    const username = conversation.targetUser.name.toLowerCase()
+    const username = conversation.targetInfo?.name?.toLowerCase() || ''
     // 搜索用户名
     if (username.includes(keyword)) return true
     
@@ -92,7 +92,7 @@ const onRefresh = () => {
 const handleConversationClick = (conversation) => {
   router.push({
     path: `/chat/conversation/${conversation.id}`,
-    query: { name: conversation.targetUser.name }
+    query: { name: conversation.targetInfo?.name || '会话' }
   })
 }
 

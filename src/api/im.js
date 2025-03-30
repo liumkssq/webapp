@@ -1,28 +1,20 @@
 import request from '@/utils/request'
-import { generateMockData } from '@/utils/mock'
 
 // 获取联系人列表
 export function getContactList(params) {
-  // 生成模拟好友数据，按字母分组
-  const mockData = generateMockData('contactList', params)
-  
-  // 返回Promise格式的模拟响应
-  return Promise.resolve({
-    code: 200,
-    message: '获取联系人列表成功',
-    data: mockData
+  return request({
+    url: '/api/im/contacts',
+    method: 'get',
+    params
   })
 }
 
 // 获取好友申请列表
 export function getFriendRequests(params) {
-  const { status = 'all' } = params || {}
-  const mockData = generateMockData('friendRequests', { status })
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取好友申请列表成功',
-    data: mockData
+  return request({
+    url: '/api/im/friend-requests',
+    method: 'get',
+    params
   })
 }
 
@@ -141,12 +133,10 @@ export function getUserDetail(id) {
 
 // 获取会话列表
 export function getConversationList() {
-  const mockData = generateMockData('conversationList')
-  
-  return Promise.resolve({
-    code: 200,
-    message: '获取会话列表成功',
-    data: mockData
+  // 这里不再使用utils/mock.js，直接请求mock服务接口
+  return request({
+    url: '/api/im/conversations',
+    method: 'get'
   })
 }
 
@@ -191,10 +181,9 @@ export function markMessageRead(conversationId) {
 
 // 获取未读消息数
 export function getUnreadCount() {
-  return Promise.resolve({
-    code: 200,
-    message: '获取未读消息数成功',
-    data: Math.floor(Math.random() * 10) // 随机生成0-9的未读消息数
+  return request({
+    url: '/api/im/unread-count',
+    method: 'get'
   })
 }
 

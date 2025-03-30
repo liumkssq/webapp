@@ -119,8 +119,7 @@ const routes = [
   },
   {
     path: '/message',
-    name: 'Message',
-    component: () => import('../pages/Message.vue'),
+    redirect: '/im/message',
     meta: {
       requiresAuth: true
     }

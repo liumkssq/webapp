@@ -59,17 +59,17 @@
           round
           width="3rem"
           height="3rem"
-          :src="session.targetUser.avatar"
+          :src="session.targetInfo?.avatar"
           fit="cover"
         >
           <template #error>
-            <div class="avatar-fallback">{{ getInitials(session.targetUser.name) }}</div>
+            <div class="avatar-fallback">{{ getInitials(session.targetInfo?.name) }}</div>
           </template>
         </van-image>
         
         <div class="chat-info">
           <div class="top-line">
-            <div class="nickname">{{ session.targetUser.name }}</div>
+            <div class="nickname">{{ session.targetInfo?.name }}</div>
             <div class="time">{{ formatTime(session.lastMessage?.timestamp) }}</div>
           </div>
           
@@ -273,6 +273,11 @@ const handleNotification = (notification) => {
 
 // 跳转到聊天页面
 const navigateToChat = (session) => {
+  if (!session.targetInfo) {
+    console.error('会话缺少目标信息', session)
+    return
+  }
+  
   // 根据路由配置，使用im目录下的聊天路由
   if (session.type === 'group') {
     router.push(`/im/group/${session.targetId}?name=${encodeURIComponent(session.targetInfo.name)}`)
@@ -284,7 +289,9 @@ const navigateToChat = (session) => {
 // 获取姓名首字母作为头像占位
 const getInitials = (name) => {
   if (!name) return '?'
-  return name.charAt(0).toUpperCase()
+  // 处理中文字符，取第一个字
+  const firstChar = name.charAt(0)
+  return firstChar.toUpperCase()
 }
 
 // 获取通知图标
