@@ -133,3 +133,27 @@ export function uploadLostFoundImages(data) {
     }
   })
 }
+
+/**
+ * 点赞失物招领
+ * @param {number} id 失物招领ID
+ * @returns {Promise} Promise对象
+ */
+export function likeLostFound(id) {
+  return request({
+    url: `/api/lost-found/${id}/like`,
+    method: 'post'
+  })
+}
+
+/**
+ * 取消点赞失物招领
+ * @param {number} id 失物招领ID
+ * @returns {Promise} Promise对象
+ */
+export function unlikeLostFound(id) {
+  return request({
+    url: `/api/lost-found/${id}/unlike`,
+    method: 'post'
+  })
+}

@@ -1,449 +1,274 @@
 import Mock from 'mockjs'
 import { getUrlParams } from '../utils'
 
-// 生成随机商品分类
-const categories = [
-  { id: 'electronics', name: '电子数码' },
-  { id: 'books', name: '图书教材' },
-  { id: 'clothing', name: '服装鞋包' },
-  { id: 'sports', name: '运动户外' },
-  { id: 'beauty', name: '美妆日化' },
-  { id: 'furniture', name: '家具家电' },
-  { id: 'tickets', name: '门票卡券' },
-  { id: 'stationery', name: '文具办公' },
-  { id: 'toys', name: '玩具乐器' },
-  { id: 'bicycles', name: '自行车' },
-  { id: 'others', name: '其他' }
-]
-
-// 生成随机商品数据
-const products = Mock.mock({
-  'list|100': [{
+// 创建模拟数据
+const mockProducts = Mock.mock({
+  'list|20': [{
     'id|+1': 1,
     'title': '@ctitle(5, 20)',
-    'description': '@cparagraph(1, 3)',
-    'price|10-9999': 100,
-    'originalPrice|+1': function() {
-      return this.price + Math.floor(Math.random() * 2000);
-    },
-    'categoryId': function() {
-      return Mock.Random.pick(categories.map(c => c.id).concat('all'));
-    },
-    'category': function() {
-      return categories.find(c => c.id === this.categoryId) || { id: 'all', name: '全部' };
-    },
-    'condition|1': ['全新', '几乎全新', '轻微使用痕迹', '使用良好', '使用正常'],
-    'images': function() {
-      const count = Mock.Random.integer(1, 5);
-      const images = [];
-      for (let i = 0; i < count; i++) {
-        images.push(`https://picsum.photos/id/${Mock.Random.integer(1, 200)}/300/300`);
-      }
-      return images;
-    },
-    'viewCount|100-9999': 1000,
-    'favoriteCount|0-100': 0,
-    'status|1': ['published', 'sold', 'removed'],
-    'location': '@city',
+    'description': '@cparagraph(3, 5)',
+    'price|1-9999': 100,
+    'originalPrice|+1000': 2000,
+    'images|1-5': ['@image("300x300", "#4A7BF7", "#FFF", "商品")'],
+    'category|1': ['数码电子', '服装', '书籍', '美妆', '家具', '其他'],
+    'condition|1': ['全新', '几乎全新', '轻微使用痕迹', '使用正常'],
+    'deliveryMethod|1': ['线下自取', '校内配送', '快递邮寄'],
+    'location': '@city(true)',
     'createTime': '@datetime("yyyy-MM-dd HH:mm:ss")',
-    'updateTime': '@datetime("yyyy-MM-dd HH:mm:ss")',
+    'status|1': ['在售', '已售出', '已下架'],
+    'viewCount|100-5000': 100,
+    'contactInfo': {
+      'phone': /1[3-9]\d{9}/,
+      'wechat': /wx_\w{6,12}/,
+      'showPhone|1': [true, false],
+      'showWechat|1': [true, false]
+    },
+    'isLiked|1': [true, false],
     'seller': {
-      'id|1-20': 1,
-      'nickname': '@cname',
-      'avatar': function() {
-        return `https://api.dicebear.com/6.x/avataaars/svg?seed=${Mock.Random.word(5)}`;
+      'id|+1': 10000,
+      'name': '@cname',
+      'avatar': '@image("100x100", "#4A7BF7", "#FFF", "用户")',
+      'school': '@ctitle(4, 8)大学',
+      'verified|1': [true, false],
+      'goodRate|70-100': 70,
+      'otherProducts|0-4': [{
+        'id|+1': 1000,
+        'title': '@ctitle(5, 15)',
+        'images|1-3': ['@image("200x200", "#4A7BF7", "#FFF", "其他商品")'],
+        'price|1-9999': 100,
+        'status|1': ['在售', '已售出', '已下架']
+      }]
+    },
+    'comments|0-10': [{
+      'id|+1': 1,
+      'content': '@cparagraph(1, 3)',
+      'createTime': '@datetime("yyyy-MM-dd HH:mm:ss")',
+      'likeCount|0-50': 0,
+      'isLiked|1': [true, false],
+      'author': {
+        'id|+1': 20000,
+        'name': '@cname',
+        'avatar': '@image("100x100", "#4A7BF7", "#FFF", "评论者")'
       },
-      'rating|3.5-5.0': 4.5
-    }
+      'replies|0-3': [{
+        'id|+1': 1,
+        'content': '@cparagraph(1, 2)',
+        'createTime': '@datetime("yyyy-MM-dd HH:mm:ss")',
+        'author': {
+          'id|+1': 30000,
+          'name': '@cname',
+          'avatar': '@image("100x100", "#4A7BF7", "#FFF", "回复者")'
+        },
+        'replyTo': {
+          'id': '@integer(20000, 30000)',
+          'name': '@cname'
+        }
+      }]
+    }],
+    'similarProducts|0-5': [{
+      'id|+1': 2000,
+      'title': '@ctitle(5, 15)',
+      'images|1-3': ['@image("200x200", "#4A7BF7", "#FFF", "相似商品")'],
+      'price|1-9999': 100,
+      'description': '@csentence(10, 20)'
+    }]
   }]
-}).list
+})
 
-// 用户收藏商品记录
-const favorites = []
-
-// 商品相关mock接口
-export default {
-  // 获取商品列表
-  'GET /api/product/list': (options) => {
-    const params = getUrlParams(options.url)
-    
-    let filteredProducts = [...products]
-    
-    // 分类过滤
-    if (params.category && params.category !== 'all') {
-      filteredProducts = filteredProducts.filter(p => p.categoryId === params.category)
-    }
-    
-    // 关键词搜索
-    if (params.keywords) {
-      const keywords = params.keywords.toLowerCase()
-      filteredProducts = filteredProducts.filter(p => 
-        p.title.toLowerCase().includes(keywords) || 
-        p.description.toLowerCase().includes(keywords)
-      )
-    }
-    
-    // 价格区间过滤
-    if (params.minPrice) {
-      filteredProducts = filteredProducts.filter(p => p.price >= parseInt(params.minPrice))
-    }
-    if (params.maxPrice) {
-      filteredProducts = filteredProducts.filter(p => p.price <= parseInt(params.maxPrice))
-    }
-    
-    // 排序
-    if (params.sort) {
-      switch (params.sort) {
-        case 'price-asc':
-          filteredProducts.sort((a, b) => a.price - b.price)
-          break
-        case 'price-desc':
-          filteredProducts.sort((a, b) => b.price - a.price)
-          break
-        case 'latest':
-          filteredProducts.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-          break
-        case 'hot':
-          filteredProducts.sort((a, b) => b.viewCount - a.viewCount)
-          break
-        default:
-          // 默认按最新排序
-          filteredProducts.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-      }
-    } else {
-      // 默认按最新排序
-      filteredProducts.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-    }
-    
-    // 分页
-    const page = parseInt(params.page) || 1
-    const pageSize = parseInt(params.pageSize) || 10
-    const limit = parseInt(params.limit) || pageSize
-    
-    const startIndex = (page - 1) * pageSize
-    const endIndex = startIndex + limit
-    
-    const paginatedProducts = filteredProducts.slice(startIndex, endIndex)
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: {
-        total: filteredProducts.length,
-        page,
-        pageSize,
-        list: paginatedProducts
-      }
-    }
-  },
+// 获取商品列表
+Mock.mock(/\/api\/product\/list/, 'get', (options) => {
+  const params = getUrlParams(options.url)
+  const { page = 1, limit = 10, category, sort, keywords } = params
   
-  // 获取商品详情
-  'GET /api/product/detail/:id': (options) => {
-    const id = parseInt(options.url.match(/\/detail\/(\d+)/)[1])
-    const product = products.find(p => p.id === id)
-    
-    if (!product) {
-      return {
-        code: 404,
-        message: '商品不存在',
-        data: null
-      }
-    }
-    
-    // 增加浏览次数
-    product.viewCount += 1
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: product
-    }
-  },
+  let list = mockProducts.list
   
-  // 获取商品分类
-  'GET /api/product/categories': () => {
-    return {
-      code: 200,
-      message: '获取成功',
-      data: [
-        { id: 'all', name: '全部' },
-        ...categories
-      ]
-    }
-  },
+  // 筛选分类
+  if (category) {
+    list = list.filter(item => item.category === category)
+  }
   
-  // 发布商品
-  'POST /api/product/publish': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    const productData = JSON.parse(options.body)
-    
-    // 创建新商品
-    const newProduct = {
-      id: products.length + 1,
-      ...productData,
-      viewCount: 0,
-      favoriteCount: 0,
-      status: 'published',
-      createTime: Mock.Random.datetime('yyyy-MM-dd HH:mm:ss'),
-      updateTime: Mock.Random.datetime('yyyy-MM-dd HH:mm:ss'),
-      seller: {
-        id: 1, // 假设当前登录用户ID为1
-        nickname: '当前用户',
-        avatar: `https://api.dicebear.com/6.x/avataaars/svg?seed=user1`,
-        rating: 5.0
-      }
-    }
-    
-    products.push(newProduct)
-    
-    return {
-      code: 200,
-      message: '发布成功',
-      data: newProduct
-    }
-  },
+  // 搜索关键词
+  if (keywords) {
+    const reg = new RegExp(keywords, 'i')
+    list = list.filter(item => reg.test(item.title) || reg.test(item.description))
+  }
   
-  // 更新商品
-  'PUT /api/product/:id': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    const id = parseInt(options.url.match(/\/product\/(\d+)/)[1])
-    const productIndex = products.findIndex(p => p.id === id)
-    
-    if (productIndex === -1) {
-      return {
-        code: 404,
-        message: '商品不存在',
-        data: null
-      }
-    }
-    
-    const productData = JSON.parse(options.body)
-    
-    // 检查是否是商品的发布者
-    if (products[productIndex].seller.id !== 1) { // 假设当前用户ID为1
-      return {
-        code: 403,
-        message: '无权限修改此商品',
-        data: null
-      }
-    }
-    
-    // 更新商品信息
-    products[productIndex] = {
-      ...products[productIndex],
-      ...productData,
-      updateTime: Mock.Random.datetime('yyyy-MM-dd HH:mm:ss')
-    }
-    
-    return {
-      code: 200,
-      message: '更新成功',
-      data: products[productIndex]
-    }
-  },
-  
-  // 删除商品
-  'DELETE /api/product/:id': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    const id = parseInt(options.url.match(/\/product\/(\d+)/)[1])
-    const productIndex = products.findIndex(p => p.id === id)
-    
-    if (productIndex === -1) {
-      return {
-        code: 404,
-        message: '商品不存在',
-        data: null
-      }
-    }
-    
-    // 检查是否是商品的发布者
-    if (products[productIndex].seller.id !== 1) { // 假设当前用户ID为1
-      return {
-        code: 403,
-        message: '无权限删除此商品',
-        data: null
-      }
-    }
-    
-    // 标记商品为已删除
-    products[productIndex].status = 'removed'
-    
-    return {
-      code: 200,
-      message: '删除成功',
-      data: null
-    }
-  },
-  
-  // 收藏/取消收藏商品
-  'POST /api/product/favorite/:id': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    const id = parseInt(options.url.match(/\/favorite\/(\d+)/)[1])
-    const productIndex = products.findIndex(p => p.id === id)
-    
-    if (productIndex === -1) {
-      return {
-        code: 404,
-        message: '商品不存在',
-        data: null
-      }
-    }
-    
-    const { isFavorite } = JSON.parse(options.body)
-    const userId = 1 // 假设当前用户ID为1
-    
-    // 查找现有收藏记录
-    const favoriteIndex = favorites.findIndex(f => f.productId === id && f.userId === userId)
-    
-    if (isFavorite) {
-      // 添加收藏
-      if (favoriteIndex === -1) {
-        favorites.push({
-          id: favorites.length + 1,
-          userId,
-          productId: id,
-          createTime: Mock.Random.datetime('yyyy-MM-dd HH:mm:ss')
-        })
-        
-        // 增加商品收藏数
-        products[productIndex].favoriteCount += 1
-      }
-    } else {
-      // 取消收藏
-      if (favoriteIndex !== -1) {
-        favorites.splice(favoriteIndex, 1)
-        
-        // 减少商品收藏数
-        products[productIndex].favoriteCount = Math.max(0, products[productIndex].favoriteCount - 1)
-      }
-    }
-    
-    return {
-      code: 200,
-      message: isFavorite ? '收藏成功' : '取消收藏成功',
-      data: {
-        isFavorite,
-        favoriteCount: products[productIndex].favoriteCount
-      }
-    }
-  },
-  
-  // 获取用户收藏的商品列表
-  'GET /api/product/favorites': (options) => {
-    const token = options.headers.Authorization?.split(' ')[1]
-    
-    if (!token) {
-      return {
-        code: 401,
-        message: '未登录或登录已过期',
-        data: null
-      }
-    }
-    
-    const userId = 1 // 假设当前用户ID为1
-    
-    // 获取用户的收藏记录
-    const userFavorites = favorites.filter(f => f.userId === userId)
-    
-    // 获取收藏的商品详情
-    const favoriteProducts = userFavorites.map(f => {
-      const product = products.find(p => p.id === f.productId)
-      return product
-    }).filter(Boolean) // 过滤掉不存在的商品
-    
-    // 分页
-    const params = getUrlParams(options.url)
-    const page = parseInt(params.page) || 1
-    const pageSize = parseInt(params.pageSize) || 10
-    
-    const startIndex = (page - 1) * pageSize
-    const endIndex = startIndex + pageSize
-    
-    const paginatedProducts = favoriteProducts.slice(startIndex, endIndex)
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: {
-        total: favoriteProducts.length,
-        page,
-        pageSize,
-        list: paginatedProducts
-      }
-    }
-  },
-  
-  // 获取用户发布的商品列表
-  'GET /api/product/user': (options) => {
-    const params = getUrlParams(options.url)
-    
-    let userId = parseInt(params.userId) || 1 // 默认为当前用户
-    
-    // 获取用户发布的商品
-    let userProducts = products.filter(p => p.seller.id === userId)
-    
-    // 状态过滤
-    if (params.status) {
-      userProducts = userProducts.filter(p => p.status === params.status)
-    }
-    
-    // 排序
-    userProducts.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-    
-    // 分页
-    const page = parseInt(params.page) || 1
-    const pageSize = parseInt(params.pageSize) || 10
-    
-    const startIndex = (page - 1) * pageSize
-    const endIndex = startIndex + pageSize
-    
-    const paginatedProducts = userProducts.slice(startIndex, endIndex)
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: {
-        total: userProducts.length,
-        page,
-        pageSize,
-        list: paginatedProducts
-      }
+  // 排序
+  if (sort) {
+    switch (sort) {
+      case 'price-asc':
+        list = list.sort((a, b) => a.price - b.price)
+        break
+      case 'price-desc':
+        list = list.sort((a, b) => b.price - a.price)
+        break
+      case 'latest':
+        list = list.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
+        break
+      case 'hot':
+        list = list.sort((a, b) => b.viewCount - a.viewCount)
+        break
     }
   }
-}
+  
+  // 分页
+  const startIndex = (page - 1) * limit
+  const endIndex = startIndex + parseInt(limit)
+  const pageList = list.slice(startIndex, endIndex)
+  
+  return {
+    code: 200,
+    message: '获取成功',
+    data: {
+      total: list.length,
+      page: parseInt(page),
+      pageSize: parseInt(limit),
+      list: pageList
+    }
+  }
+})
+
+// 获取商品详情
+Mock.mock(/\/api\/product\/detail\/\d+/, 'get', (options) => {
+  const id = options.url.match(/\/detail\/(\d+)/)[1]
+  const item = mockProducts.list.find(item => item.id === parseInt(id))
+  
+  if (!item) {
+    return {
+      code: 404,
+      message: '商品不存在'
+    }
+  }
+  
+  // 增加查看次数
+  item.viewCount += 1
+  
+  return {
+    code: 200,
+    message: '获取成功',
+    data: item
+  }
+})
+
+// 获取用户发布的商品
+Mock.mock(/\/api\/product\/user\/\d+/, 'get', (options) => {
+  const userId = options.url.match(/\/user\/(\d+)/)[1]
+  const params = getUrlParams(options.url)
+  const { page = 1, limit = 10 } = params
+  
+  const list = mockProducts.list.filter(item => item.seller.id === parseInt(userId))
+  
+  // 分页
+  const startIndex = (page - 1) * limit
+  const endIndex = startIndex + parseInt(limit)
+  const pageList = list.slice(startIndex, endIndex)
+  
+  return {
+    code: 200,
+    message: '获取成功',
+    data: {
+      total: list.length,
+      page: parseInt(page),
+      pageSize: parseInt(limit),
+      list: pageList
+    }
+  }
+})
+
+// 收藏商品
+Mock.mock(/\/api\/product\/\d+\/favorite/, 'post', (options) => {
+  const id = options.url.match(/\/product\/(\d+)\/favorite/)[1]
+  const item = mockProducts.list.find(item => item.id === parseInt(id))
+  
+  if (!item) {
+    return {
+      code: 404,
+      message: '商品不存在'
+    }
+  }
+  
+  item.isLiked = true
+  
+  return {
+    code: 200,
+    message: '收藏成功',
+    data: {
+      isLiked: true
+    }
+  }
+})
+
+// 取消收藏商品
+Mock.mock(/\/api\/product\/\d+\/unfavorite/, 'post', (options) => {
+  const id = options.url.match(/\/product\/(\d+)\/unfavorite/)[1]
+  const item = mockProducts.list.find(item => item.id === parseInt(id))
+  
+  if (!item) {
+    return {
+      code: 404,
+      message: '商品不存在'
+    }
+  }
+  
+  item.isLiked = false
+  
+  return {
+    code: 200,
+    message: '已取消收藏',
+    data: {
+      isLiked: false
+    }
+  }
+})
+
+// 评论商品
+Mock.mock(/\/api\/product\/\d+\/comment/, 'post', (options) => {
+  const id = options.url.match(/\/product\/(\d+)\/comment/)[1]
+  const { content, replyToId } = JSON.parse(options.body)
+  const item = mockProducts.list.find(item => item.id === parseInt(id))
+  
+  if (!item) {
+    return {
+      code: 404,
+      message: '商品不存在'
+    }
+  }
+  
+  // 模拟新评论
+  const newComment = Mock.mock({
+    'id': '@integer(1000, 9999)',
+    'content': content,
+    'createTime': '@now',
+    'likeCount': 0,
+    'isLiked': false,
+    'author': {
+      'id': '@integer(1000, 9999)',
+      'name': '@cname',
+      'avatar': '@image("100x100", "#4A7BF7", "#FFF", "评论者")'
+    }
+  })
+  
+  // 如果是回复
+  if (replyToId) {
+    newComment.replyTo = {
+      id: replyToId,
+      name: Mock.Random.cname()
+    }
+  }
+  
+  // 添加到评论列表
+  if (!item.comments) {
+    item.comments = []
+  }
+  
+  item.comments.unshift(newComment)
+  
+  return {
+    code: 200,
+    message: '评论成功',
+    data: newComment
+  }
+})
+
+// 导出模块
+export default mockProducts

@@ -210,24 +210,28 @@
     <!-- 底部操作栏 -->
     <div class="bottom-action-bar">
       <div class="action-icons">
-        <div class="action-icon" @click="handleLike">
-          <i class="icon-like"></i>
+        <div class="action-icon" @click="likeItem">
+          <i :class="['icon-like', {'active': item.isLiked}]"></i>
           <div class="icon-count">{{ item.likes || 0 }}</div>
         </div>
-        <div class="action-icon" @click="handleComment">
+        <div class="action-icon" @click="showComment">
           <i class="icon-comment"></i>
           <div class="icon-count">{{ item.comments || 0 }}</div>
         </div>
+        <div class="action-icon" @click="shareItem">
+          <i class="icon-share"></i>
+          <div class="icon-count">分享</div>
+        </div>
       </div>
       <div class="action-buttons">
-        <div v-if="item.status !== 'completed'" 
+        <div v-if="!isCurrentUser && item.status !== 'closed'" 
              class="action-btn action-contact" 
-             @click="contactOwner">
+             @click="contactPublisher">
           联系发布者
         </div>
-        <div v-if="item.userId === userStore.userId && item.status !== 'completed'" 
+        <div v-if="isCurrentUser && item.status !== 'closed'" 
              class="action-btn action-primary" 
-             @click="markAsCompleted">
+             @click="showStatusUpdatePopup = true">
           {{ item.type === 'lost' ? '标记为已找到' : '标记为已归还' }}
         </div>
       </div>
@@ -348,7 +352,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { getLostFoundDetail, updateLostFoundStatus, commentLostFound } from '@/api/lostFound'
+import { getLostFoundDetail, updateLostFoundStatus, commentLostFound, likeLostFound, unlikeLostFound } from '@/api/lostFound'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
 
@@ -723,6 +727,51 @@ const showToast = (message) => {
   setTimeout(() => {
     toast.show = false
   }, 2000)
+}
+
+// 更新点赞功能
+const likeItem = async () => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath)
+    return
+  }
+  
+  try {
+    const id = item.value.id
+    let res
+    
+    if (item.value.isLiked) {
+      res = await unlikeLostFound(id)
+    } else {
+      res = await likeLostFound(id)
+    }
+    
+    if (res.code === 200) {
+      item.value.isLiked = res.data.isLiked
+      item.value.likes = res.data.likeCount
+      showToast(item.value.isLiked ? '点赞成功' : '已取消点赞')
+    } else {
+      showToast('操作失败')
+    }
+  } catch (error) {
+    console.error('点赞操作失败', error)
+    showToast('操作失败，请稍后重试')
+  }
+}
+
+// 处理评论按钮点击
+const handleComment = () => {
+  showComment()
+}
+
+// 联系发布者
+const contactOwner = () => {
+  contactPublisher()
+}
+
+// 更新状态 - 标记为已完成
+const markAsCompleted = () => {
+  showStatusUpdatePopup.value = true
 }
 
 // 页面加载时获取失物招领详情

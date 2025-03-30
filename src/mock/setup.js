@@ -3,6 +3,7 @@ import Mock from 'mockjs'
 // 导入模块
 import './modules/im'
 import './modules/user'  // 添加用户模块
+import './modules/lostFound'  // 添加失物招领模块
 
 // 设置更宽松的超时时间，避免请求超时问题
 Mock.setup({

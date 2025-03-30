@@ -199,18 +199,18 @@
     <!-- 底部操作栏 -->
     <div class="bottom-action-bar">
       <div class="action-icons">
-        <div class="action-icon" @click="toggleFavorite" style="position: relative; z-index: 10;">
+        <div class="action-icon" @click="toggleFavorite">
           <i :class="[product.isLiked ? 'icon-favorite-filled' : 'icon-favorite']"></i>
           <div class="icon-text">{{ product.isLiked ? '已收藏' : '收藏' }}</div>
         </div>
-        <div class="action-icon" @click="shareProduct" style="position: relative; z-index: 10;">
+        <div class="action-icon" @click="shareProduct">
           <i class="icon-share"></i>
           <div class="icon-text">分享</div>
         </div>
       </div>
       <div class="action-buttons">
-        <button class="action-btn contact" @click="contactSeller" style="position: relative; z-index: 10;">联系卖家</button>
-        <button class="action-btn buy" @click="buyProduct" style="position: relative; z-index: 10;">立即购买</button>
+        <button class="action-btn contact" @click="contactSeller">联系卖家</button>
+        <button class="action-btn buy" @click="buyProduct">立即购买</button>
       </div>
     </div>
     
@@ -457,7 +457,7 @@ const toggleFavorite = async () => {
     }
     
     if (res.code === 200) {
-      product.value.isLiked = !product.value.isLiked
+      product.value.isLiked = res.data.isLiked
       showToast(product.value.isLiked ? '收藏成功' : '已取消收藏')
     }
   } catch (error) {
@@ -510,6 +510,8 @@ const goToChat = (sellerId) => {
 
 // 立即购买
 const buyProduct = () => {
+  console.log('buyProduct clicked!') // 调试日志
+  
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
@@ -672,5 +674,25 @@ const showToast = (message) => {
 // 页面加载时获取商品详情
 onMounted(async () => {
   await fetchProductDetail()
+  
+  // 添加调试日志，确保底部操作栏按钮可点击
+  console.log('Product detail page mounted')
+  
+  // 确保底部操作栏z-index足够高，在iOS设备上能正常点击
+  setTimeout(() => {
+    const actionBar = document.querySelector('.bottom-action-bar')
+    if (actionBar) {
+      console.log('Setting up action bar interactivity')
+      actionBar.style.zIndex = '101'
+      
+      // 确保触摸事件可以正常传递
+      const actionButtons = actionBar.querySelectorAll('.action-btn, .action-icon')
+      actionButtons.forEach(btn => {
+        btn.addEventListener('touchstart', (e) => {
+          console.log('Button touchstart:', e.target.textContent || e.target.className)
+        })
+      })
+    }
+  }, 500)
 })
 </script>
