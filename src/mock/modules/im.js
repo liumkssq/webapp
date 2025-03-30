@@ -1,14 +1,12 @@
 import Mock from 'mockjs'
-import { getUrlParams } from '../utils'
+import { getUrlParams, delay, generateId } from '../utils/mock-helpers'
+import { getMockAdapter } from '../interceptor'
 
-// 生成随机ID
-const generateId = () => Math.floor(Math.random() * 1000000).toString()
+// 获取mock适配器实例
+const mockAdapter = getMockAdapter()
 
 // 当前用户ID (模拟)
 const currentUserId = 1
-
-// 模拟延时
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms))
 
 // 模拟WebSocket连接
 class MockWebSocket {
@@ -513,8 +511,45 @@ class MockWebSocket {
   }
 }
 
-// 创建Mock WebSocket实例
-const mockWebSocket = new MockWebSocket()
+// 创建一个全局实例供所有模块使用
+const globalMockWebSocket = new MockWebSocket()
+
+// 注册IM相关的API端点
+if (mockAdapter) {
+  // 获取会话列表
+  mockAdapter.onGet('/api/im/conversations').reply(config => {
+    console.log('Mock: 拦截到 GET /api/im/conversations 请求')
+    const { conversations } = globalMockWebSocket.mockData
+    return [200, {
+      code: 200,
+      message: '获取成功',
+      data: conversations
+    }]
+  })
+
+  // 获取会话消息
+  mockAdapter.onGet(/\/api\/im\/conversation\/\d+\/messages/).reply(config => {
+    console.log('Mock: 拦截到 GET /api/im/conversation/:id/messages 请求')
+    const conversationId = config.url.split('/').pop()
+    const { page = 1, limit = 20 } = getUrlParams(config.url)
+    
+    const messages = globalMockWebSocket.mockData.messages[conversationId] || []
+    const start = (page - 1) * limit
+    const end = start + parseInt(limit)
+    const pagedMessages = messages.slice(start, end)
+    
+    return [200, {
+      code: 200,
+      message: '获取成功',
+      data: {
+        list: pagedMessages,
+        total: messages.length,
+        page: parseInt(page),
+        limit: parseInt(limit)
+      }
+    }]
+  })
+}
 
 // 重写浏览器WebSocket类，拦截WebSocket请求
 class WebSocketMock {
@@ -532,7 +567,7 @@ class WebSocketMock {
     
     // 连接到Mock服务
     setTimeout(() => {
-      mockWebSocket.connect()
+      globalMockWebSocket.connect()
         .then(() => {
           this.readyState = 1 // OPEN
           if (this.onopen) this.onopen({ target: this })
@@ -545,12 +580,12 @@ class WebSocketMock {
     }, 200)
     
     // 监听消息
-    mockWebSocket.addEventListener('message', (event) => {
+    globalMockWebSocket.addEventListener('message', (event) => {
       if (this.onmessage) this.onmessage(event)
     })
     
     // 监听关闭
-    mockWebSocket.addEventListener('close', () => {
+    globalMockWebSocket.addEventListener('close', () => {
       this.readyState = 3 // CLOSED
       if (this.onclose) this.onclose({ target: this, code: 1000, reason: 'Normal closure' })
     })
@@ -561,11 +596,11 @@ class WebSocketMock {
       throw new Error('WebSocket is not open')
     }
     
-    mockWebSocket.send(typeof data === 'string' ? JSON.parse(data) : data)
+    globalMockWebSocket.send(typeof data === 'string' ? JSON.parse(data) : data)
   }
 
   close(code = 1000, reason = '') {
-    mockWebSocket.close()
+    globalMockWebSocket.close()
     this.readyState = 3 // CLOSED
     if (this.onclose) this.onclose({ target: this, code, reason })
   }
@@ -631,7 +666,7 @@ Mock.mock(/\/api\/im\/conversations/, 'get', () => {
   return {
     code: 200,
     message: '获取成功',
-    data: mockWebSocket.getConversations()
+    data: globalMockWebSocket.getConversations()
   }
 })
 
@@ -650,7 +685,7 @@ Mock.mock(/\/api\/im\/messages/, 'get', (config) => {
   return {
     code: 200,
     message: '获取成功',
-    data: mockWebSocket.getMessages(conversationId, page, limit)
+    data: globalMockWebSocket.getMessages(conversationId, page, limit)
   }
 })
 
@@ -671,7 +706,7 @@ Mock.mock(/\/api\/im\/message/, 'post', (config) => {
   message.status = 'sent'
   
   // 保存消息
-  mockWebSocket.handleChatMessage(message)
+  globalMockWebSocket.handleChatMessage(message)
   
   return {
     code: 200,
@@ -687,7 +722,7 @@ Mock.mock(/\/api\/im\/message/, 'post', (config) => {
 
 // 模拟未读消息数接口
 Mock.mock(/\/api\/im\/unread-count/, 'get', () => {
-  const conversations = mockWebSocket.getConversations()
+  const conversations = globalMockWebSocket.getConversations()
   let total = 0
   
   const conversionsWithUnread = conversations.map(conv => {
@@ -719,7 +754,7 @@ Mock.mock(/\/api\/im\/conversation\/.*\/read/, 'put', (config) => {
     }
   }
   
-  mockWebSocket.handleReadAck({ conversationId })
+  globalMockWebSocket.handleReadAck({ conversationId })
   
   return {
     code: 200,
@@ -740,7 +775,7 @@ Mock.mock(/\/api\/im\/message\/.*\/recall/, 'put', (config) => {
     }
   }
   
-  mockWebSocket.handleRecallMessage({ messageId, conversationId })
+  globalMockWebSocket.handleRecallMessage({ messageId, conversationId })
   
   return {
     code: 200,
@@ -778,7 +813,7 @@ Mock.mock(/\/api\/im\/contacts/, 'get', () => {
   return {
     code: 200,
     message: '获取成功',
-    data: mockWebSocket.mockData.contacts
+    data: globalMockWebSocket.mockData.contacts
   }
 })
 
@@ -795,7 +830,7 @@ Mock.mock(/\/api\/im\/search-contacts/, 'get', (config) => {
   }
   
   // 模糊搜索
-  const results = mockWebSocket.mockData.contacts.filter(contact => 
+  const results = globalMockWebSocket.mockData.contacts.filter(contact => 
     contact.name.includes(keyword) || (contact.remarkName && contact.remarkName.includes(keyword))
   )
   
@@ -820,7 +855,7 @@ Mock.mock(/\/api\/im\/conversation\/.*/, 'delete', (config) => {
   }
   
   // 删除会话逻辑
-  const conversations = mockWebSocket.getConversations();
+  const conversations = globalMockWebSocket.getConversations();
   const index = conversations.findIndex(c => c.id === id);
   
   if (index > -1) {
@@ -875,5 +910,5 @@ Mock.mock(/\/api\/im\/friend-requests/, 'get', (config) => {
 
 // 导出mock模块
 export default {
-  mockWebSocket
+  globalMockWebSocket
 }

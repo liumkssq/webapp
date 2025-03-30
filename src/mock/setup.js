@@ -1,14 +1,27 @@
 import Mock from 'mockjs'
 
-// 导入模块
+// 导入所有模块
 import './modules/im'
-import './modules/user'  // 添加用户模块
-import './modules/lostFound'  // 添加失物招领模块
+import './modules/user'
+import './modules/lostFound'
+import './modules/product'
+import './modules/article'
+import './modules/chat'
+import './modules/map'
+import './modules/ai'
+import './modules/search'
+import './modules/common'
 
 // 设置更宽松的超时时间，避免请求超时问题
 Mock.setup({
   timeout: '100-1000'
 })
+
+// 使用通用工具函数
+import { getUrlParams, getRequestBody, delay, setupMockDelay } from './utils/mock-helpers'
+
+// 重新导出这些工具函数
+export { getUrlParams, getRequestBody, delay, setupMockDelay }
 
 // 输出 Mock 初始化信息
 console.log('Mock 服务已初始化成功')
@@ -36,5 +49,13 @@ const logMockedApis = () => {
 };
 
 logMockedApis();
+
+// 设置Mock服务器函数
+export const setupMockServer = () => {
+  console.log('Mock服务器已设置，API请求将被拦截')
+  return {
+    isMockEnabled: true
+  }
+}
 
 export default Mock

@@ -2,13 +2,13 @@ import request from '@/utils/request'
 
 /**
  * 获取商品列表
- * @param {Object} params - 查询参数
- * @param {number} [params.page=1] - 页码
- * @param {number} [params.limit=10] - 每页数量
- * @param {string} [params.category] - 商品分类
- * @param {string} [params.keywords] - 搜索关键词
- * @param {string} [params.sort] - 排序方式: latest, hot, price-asc, price-desc
- * @returns {Promise<Object>} 商品列表数据
+ * @param {Object} params 查询参数
+ * @param {number} params.page 页码
+ * @param {number} params.limit 每页数量
+ * @param {string} params.category 商品分类
+ * @param {string} params.keyword 搜索关键词
+ * @param {string} params.sort 排序方式
+ * @returns {Promise} Promise对象
  */
 export function getProductList(params) {
   return request({
@@ -20,8 +20,8 @@ export function getProductList(params) {
 
 /**
  * 获取商品详情
- * @param {number|string} id - 商品ID
- * @returns {Promise<Object>} 商品详情数据
+ * @param {number|string} id 商品ID
+ * @returns {Promise} Promise对象
  */
 export function getProductDetail(id) {
   return request({
@@ -42,52 +42,9 @@ export function getProductCategories() {
 }
 
 /**
- * 获取用户发布的商品
- * @param {Object} params - 查询参数
- * @param {number|string} params.userId - 用户ID
- * @param {number} [params.page=1] - 页码
- * @param {number} [params.limit=10] - 每页数量
- * @returns {Promise<Object>} 用户商品列表数据
- */
-export function getUserProducts(params) {
-  return request({
-    url: `/api/product/user/${params.userId}`,
-    method: 'get',
-    params: {
-      page: params.page,
-      limit: params.limit
-    }
-  })
-}
-
-/**
- * 获取用户收藏的商品
- * @param {Object} params - 查询参数
- * @param {number} [params.page=1] - 页码
- * @param {number} [params.limit=10] - 每页数量
- * @returns {Promise<Object>} 用户收藏的商品列表数据
- */
-export function getFavoriteProducts(params) {
-  return request({
-    url: '/api/product/favorites',
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 发布商品
- * @param {Object} data - 商品数据
- * @param {string} data.title - 商品标题
- * @param {string} data.description - 商品描述
- * @param {number} data.price - 商品价格
- * @param {number} [data.originalPrice] - 商品原价
- * @param {string} data.category - 商品分类
- * @param {string} data.condition - 商品成色状态
- * @param {string[]} data.images - 商品图片URL数组
- * @param {string} data.deliveryMethod - 交付方式
- * @param {Object} data.contactInfo - 联系信息
- * @returns {Promise<Object>} 发布结果
+ * 发布新商品
+ * @param {Object} data 商品信息
+ * @returns {Promise} Promise对象
  */
 export function publishProduct(data) {
   return request({
@@ -99,13 +56,13 @@ export function publishProduct(data) {
 
 /**
  * 更新商品信息
- * @param {number|string} id - 商品ID
- * @param {Object} data - 更新的商品数据
- * @returns {Promise<Object>} 更新结果
+ * @param {number|string} id 商品ID
+ * @param {Object} data 商品信息
+ * @returns {Promise} Promise对象
  */
 export function updateProduct(id, data) {
   return request({
-    url: `/api/product/${id}`,
+    url: `/api/product/update/${id}`,
     method: 'put',
     data
   })
@@ -113,68 +70,67 @@ export function updateProduct(id, data) {
 
 /**
  * 删除商品
- * @param {number|string} id - 商品ID
- * @returns {Promise<Object>} 删除结果
+ * @param {number|string} id 商品ID
+ * @returns {Promise} Promise对象
  */
 export function deleteProduct(id) {
   return request({
-    url: `/api/product/${id}`,
+    url: `/api/product/delete/${id}`,
     method: 'delete'
   })
 }
 
 /**
- * 收藏商品
- * @param {number|string} id - 商品ID
- * @returns {Promise<Object>} 收藏结果
+ * 获取用户发布的商品列表
+ * @param {number|string} userId 用户ID
+ * @param {Object} params 查询参数
+ * @returns {Promise} Promise对象
  */
-export function favoriteProduct(id) {
+export function getUserProducts(userId, params) {
   return request({
-    url: `/api/product/${id}/favorite`,
-    method: 'post'
+    url: `/api/product/user/${userId}`,
+    method: 'get',
+    params
   })
 }
 
 /**
- * 取消收藏商品
- * @param {number|string} id - 商品ID
- * @returns {Promise<Object>} 取消收藏结果
+ * 收藏/取消收藏商品
+ * @param {number|string} id 商品ID
+ * @param {boolean} favorite 是否收藏
+ * @returns {Promise} Promise对象
  */
-export function unfavoriteProduct(id) {
+export function favoriteProduct(id, favorite) {
   return request({
-    url: `/api/product/${id}/unfavorite`,
-    method: 'post'
-  })
-}
-
-/**
- * 评论商品
- * @param {number|string} id - 商品ID
- * @param {Object} data - 评论数据
- * @param {string} data.content - 评论内容
- * @param {number|string} [data.replyToId] - 回复的评论ID
- * @returns {Promise<Object>} 评论结果
- */
-export function commentProduct(id, data) {
-  return request({
-    url: `/api/product/${id}/comment`,
+    url: `/api/product/favorite/${id}`,
     method: 'post',
-    data
+    data: { favorite }
   })
 }
 
 /**
- * 上传商品图片
- * @param {FormData} data - 包含图片文件的FormData对象
- * @returns {Promise<Object>} 上传结果
+ * 获取收藏的商品列表
+ * @param {Object} params 查询参数
+ * @returns {Promise} Promise对象
  */
-export function uploadProductImages(data) {
+export function getFavoriteProducts(params) {
   return request({
-    url: '/api/product/upload',
+    url: '/api/product/favorites',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 商品举报
+ * @param {number|string} id 商品ID
+ * @param {Object} data 举报信息
+ * @returns {Promise} Promise对象
+ */
+export function reportProduct(id, data) {
+  return request({
+    url: `/api/product/report/${id}`,
     method: 'post',
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    },
     data
   })
 }

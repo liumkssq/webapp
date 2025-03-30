@@ -1,5 +1,5 @@
 import Mock from 'mockjs'
-import { getQueryParams, delay, getUrlParams } from '../utils'
+import { getUrlParams, delay, getQueryParams } from '../utils'
 import { generateId, generateListPageData } from '../helpers'
 
 const Random = Mock.Random

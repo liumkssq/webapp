@@ -1,5 +1,6 @@
 <script setup>
-import { defineProps } from 'vue'
+// Remove the unnecessary import of defineProps
+// import { defineProps } from 'vue'
 
 defineProps({
   product: {

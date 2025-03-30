@@ -41,6 +41,9 @@ const randomUsers = Mock.mock({
 // 组合完整的用户列表
 const users = [admin, ...randomUsers];
 
+// 为了让search.js可以导入这些用户数据
+const allUsers = users;
+
 console.log('【Mock系统】已加载用户数据，admin用户:', admin, '总用户数:', users.length);
 
 // 模拟token
@@ -180,4 +183,7 @@ Mock.mock(/\/api\/user\/logout(\?.*)?$/, 'post', () => {
 
 console.log('【Mock系统】已注册用户相关接口');
 
-// 不需要导出default对象，因为已经直接使用Mock.mock注册了拦截器
+// 添加默认导出，供其他模块引用
+export default {
+  allUsers
+};
