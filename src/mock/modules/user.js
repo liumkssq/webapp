@@ -129,6 +129,33 @@ Mock.mock(/\/api\/user\/login(\?.*)?$/, 'post', (options) => {
   }
 });
 
+// 验证码登录请求
+Mock.mock(/\/api\/user\/login\/sms-code(\?.*)?$/, 'post', (options) => {
+  console.log('【Mock登录】接收到验证码登录请求:', options);
+  
+  try {
+    // 简化的登录处理逻辑 - 永远返回管理员登录成功
+    const token = 'token_admin_' + Mock.Random.guid();
+    tokens[token] = admin.id;
+    
+    return {
+      code: 200,
+      message: '登录成功',
+      data: {
+        token,
+        userInfo: admin
+      }
+    };
+  } catch (error) {
+    console.error('【Mock登录】处理错误:', error);
+    return {
+      code: 500,
+      message: '服务器内部错误',
+      data: null
+    };
+  }
+});
+
 // 用户信息请求
 Mock.mock(/\/api\/user\/info(\?.*)?$/, 'get', (options) => {
   const token = options.headers?.Authorization?.split(' ')[1] || '';
@@ -162,12 +189,25 @@ Mock.mock(/\/api\/user\/profile\/\d+(\?.*)?$/, 'get', (options) => {
 });
 
 // 验证码请求
-Mock.mock(/\/api\/user\/verification-code(\?.*)?$/, 'post', () => {
+Mock.mock(/\/api\/user\/send-code(\?.*)?$/, 'post', (options) => {
+  console.log('【Mock系统】收到发送验证码请求:', options);
   return {
     code: 200,
     message: '验证码发送成功',
     data: {
       code: '1234' // 模拟验证码
+    }
+  };
+});
+
+// 验证验证码请求
+Mock.mock(/\/api\/user\/verify-code(\?.*)?$/, 'post', (options) => {
+  console.log('【Mock系统】收到验证验证码请求:', options);
+  return {
+    code: 200,
+    message: '验证码验证成功',
+    data: {
+      valid: true
     }
   };
 });
@@ -179,6 +219,77 @@ Mock.mock(/\/api\/user\/logout(\?.*)?$/, 'post', () => {
     message: '退出成功',
     data: null
   };
+});
+
+// 注册请求
+Mock.mock(/\/api\/user\/register(\?.*)?$/, 'post', (options) => {
+  console.log('【Mock注册】接收到注册请求:', options);
+  
+  try {
+    const requestBody = JSON.parse(options.body);
+    
+    // 验证请求参数
+    if (!requestBody.username || !requestBody.phone || !requestBody.password || !requestBody.verificationCode) {
+      return {
+        code: 400,
+        message: '请提供完整的注册信息',
+        data: null
+      };
+    }
+    
+    // 检查用户名是否已存在
+    if (users.some(user => user.username === requestBody.username)) {
+      return {
+        code: 400,
+        message: '用户名已存在',
+        data: null
+      };
+    }
+    
+    // 检查手机号是否已存在
+    if (users.some(user => user.phone === requestBody.phone)) {
+      return {
+        code: 400,
+        message: '手机号已注册',
+        data: null
+      };
+    }
+    
+    // 创建新用户（但不实际添加到用户列表，保持幂等性）
+    const newUser = {
+      id: users.length + 1,
+      username: requestBody.username,
+      nickname: requestBody.username,
+      phone: requestBody.phone,
+      email: '',
+      avatar: `https://api.dicebear.com/6.x/avataaars/svg?seed=${requestBody.username}`,
+      gender: 'other',
+      bio: '',
+      school: '',
+      createTime: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      online: false,
+      verified: false,
+      role: 'user'
+    };
+    
+    console.log('【Mock注册】注册成功，新用户:', newUser);
+    
+    return {
+      code: 200,
+      message: '注册成功',
+      data: {
+        userId: newUser.id
+      }
+    };
+  } catch (error) {
+    console.error('【Mock注册】处理错误:', error);
+    return {
+      code: 500,
+      message: '服务器内部错误',
+      data: null
+    };
+  }
 });
 
 console.log('【Mock系统】已注册用户相关接口');

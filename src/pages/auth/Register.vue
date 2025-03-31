@@ -42,7 +42,8 @@
             @click="sendVerificationCode" 
             :disabled="codeSending || countdown > 0"
           >
-            {{ countdown > 0 ? `${countdown}秒后重新获取` : '获取验证码' }}
+            {{ getVerifyCodeButtonText }}
+            <span v-if="codeSending" class="loading-indicator"></span>
           </button>
         </div>
         
@@ -95,9 +96,9 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { register, sendVerificationCode as apiSendVerificationCode } from '@/api/user'
+import { register, apiSendVerificationCode } from '@/api/user'
 import { useMessageStore } from '@/store/message'
 
 const router = useRouter()
@@ -125,47 +126,63 @@ const codeSending = ref(false)
 const countdown = ref(0)
 let countdownTimer = null
 
+// 验证码按钮文本计算属性
+const getVerifyCodeButtonText = computed(() => {
+  if (codeSending.value) return '发送中...';
+  if (countdown.value > 0) return `${countdown.value}秒后重新获取`;
+  return '获取验证码';
+})
+
 // 发送验证码
 const sendVerificationCode = async () => {
   // 简单的手机号验证
   const phoneRegex = /^1[3-9]\d{9}$/
   if (!phoneRegex.test(registerForm.phone)) {
-    messageStore.showError('请输入正确的手机号')
-    return
+    messageStore.showError('请输入正确的手机号');
+    // 聚焦到手机号输入框
+    document.querySelector('input[v-model="registerForm.phone"]')?.focus();
+    return;
   }
   
   try {
-    codeSending.value = true
+    codeSending.value = true;
     
     const response = await apiSendVerificationCode({
-      phone: registerForm.phone
-    })
+      phone: registerForm.phone,
+      type: 'register'
+    });
     
     if (response.code === 200) {
-      messageStore.showSuccess('验证码已发送')
+      messageStore.showSuccess('验证码已发送，请注意查收');
+      
+      // 震动反馈（如果设备支持）
+      if (navigator.vibrate) {
+        navigator.vibrate(10);
+      }
       
       // 开始倒计时
-      countdown.value = 60
+      countdown.value = 60;
       countdownTimer = setInterval(() => {
         if (countdown.value > 0) {
-          countdown.value -= 1
+          countdown.value -= 1;
         } else {
-          clearInterval(countdownTimer)
+          clearInterval(countdownTimer);
         }
-      }, 1000)
+      }, 1000);
     } else {
-      messageStore.showError(response.message || '验证码发送失败')
+      messageStore.showError(response.message || '验证码发送失败');
     }
   } catch (error) {
-    console.error('验证码发送失败:', error)
-    messageStore.showError('验证码发送失败，请稍后重试')
+    console.error('验证码发送失败:', error);
+    messageStore.showError('网络异常，请稍后重试');
   } finally {
-    codeSending.value = false
+    codeSending.value = false;
   }
 }
 
 // 处理注册
 const handleRegister = async () => {
+  console.log('处理注册表单提交');
   // 验证两次密码输入是否一致
   if (registerForm.password !== registerForm.confirmPassword) {
     messageStore.showError('两次密码输入不一致')
@@ -175,6 +192,13 @@ const handleRegister = async () => {
   try {
     registerLoading.value = true
     
+    console.log('发送注册请求:', {
+      username: registerForm.username,
+      phone: registerForm.phone,
+      verificationCode: registerForm.verificationCode,
+      password: registerForm.password
+    });
+    
     const response = await register({
       username: registerForm.username,
       phone: registerForm.phone,
@@ -182,14 +206,20 @@ const handleRegister = async () => {
       password: registerForm.password
     })
     
+    console.log('注册响应:', response);
+    
     if (response.code === 200) {
       messageStore.showSuccess('注册成功，请登录')
-      router.push('/login')
+      console.log('准备跳转到登录页面');
+      // 确保这里能正确执行跳转
+      setTimeout(() => {
+        router.push('/login')
+      }, 500);
     } else {
       messageStore.showError(response.message || '注册失败，请稍后重试')
     }
   } catch (error) {
-    console.error('注册失败:', error)
+    console.error('注册失败详情:', error)
     messageStore.showError('注册失败，请稍后重试')
   } finally {
     registerLoading.value = false
@@ -290,11 +320,50 @@ const showPrivacy = () => {
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .send-code-button:disabled {
   background-color: #b3d9ff;
   cursor: not-allowed;
+}
+
+.loading-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 适配iOS样式的输入框 */
+input {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 8px; 
+  padding: 12px 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  background-color: #f5f5f5;
+  width: 100%;
+  transition: all 0.3s;
+}
+
+input:focus {
+  outline: none;
+  border-color: #007aff;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 
 .terms-agreement {

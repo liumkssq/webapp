@@ -5,16 +5,16 @@
     <header class="chat-header">
       <div class="back-btn" @click="goBack">
         <i class="icon-back"></i>
-      </div>
+        </div>
       <div class="title">
         <h1>{{ chatTitle }}</h1>
         <div class="subtitle" v-if="showSubtitle">
           {{ isOnline ? '在线' : lastActiveText }}
         </div>
-      </div>
+          </div>
       <div class="more-btn" @click="showChatOptions">
         <i class="icon-more-vertical"></i>
-      </div>
+        </div>
     </header>
     
     <!-- 消息列表 -->
@@ -27,21 +27,21 @@
       <div class="loading-more" v-if="loading.more">
         <div class="loading-spinner"></div>
         <span>加载更多消息...</span>
-      </div>
+              </div>
       
       <!-- 没有更多消息提示 -->
       <div class="no-more-messages" v-if="!hasMoreMessages && messages.length > 0">
         没有更多消息了
-      </div>
-      
+              </div>
+              
       <!-- 消息为空提示 -->
       <div class="empty-message" v-if="!loading.messages && messages.length === 0">
         <div class="empty-icon">
           <i class="icon-chat-empty"></i>
         </div>
         <div class="empty-text">暂无消息，开始聊天吧</div>
-      </div>
-      
+              </div>
+              
       <!-- 消息列表 -->
       <template v-for="(message, index) in messages" :key="message.id">
         <!-- 时间分割线 -->
@@ -50,8 +50,8 @@
           v-if="shouldShowTime(message, messages[index - 1])"
         >
           {{ formatTime(message.timestamp) }}
-        </div>
-        
+              </div>
+              
         <!-- 消息气泡 -->
         <ChatBubble
           :message="message"
@@ -71,12 +71,12 @@
       <!-- 对方正在输入提示 -->
       <div class="typing-indicator" v-if="isTyping">
         {{ typingName }} 正在输入...
-      </div>
-      
+              </div>
+              
       <!-- 底部空白填充，确保内容不被输入框遮挡 -->
       <div class="bottom-spacer"></div>
-    </div>
-    
+              </div>
+              
     <!-- 聊天输入框 -->
     <ChatInput
       ref="chatInputEl"
@@ -96,12 +96,12 @@
     <div class="image-preview" v-if="showImagePreview" @click="closeImagePreview">
       <div class="preview-image">
         <img :src="previewImageUrl" alt="图片预览">
-      </div>
+                </div>
       <div class="preview-close">
         <i class="icon-close"></i>
-      </div>
-    </div>
-    
+              </div>
+              </div>
+              
     <!-- 聊天选项菜单 -->
     <div class="chat-options" v-if="showOptions">
       <div class="options-overlay" @click="showOptions = false"></div>
@@ -113,9 +113,9 @@
           @click="handleOptionClick(option.id)"
         >
           {{ option.name }}
+          </div>
         </div>
       </div>
-    </div>
   </div>
 </template>
 
@@ -320,7 +320,7 @@ const loadMoreMessages = async () => {
       hasMoreMessages.value = result.hasMore
       
       // 下一个渲染周期后恢复滚动位置
-      nextTick(() => {
+  nextTick(() => {
         if (messageListEl.value) {
           const newScrollHeight = messageListEl.value.scrollHeight
           messageListEl.value.scrollTop = lastScrollTop.value + (newScrollHeight - lastScrollHeight.value)
@@ -422,7 +422,7 @@ const forwardMessage = (message) => {
 const deleteMessage = (message) => {
   // 从消息列表中删除
   const index = messages.value.findIndex(m => m.id === message.id)
-  if (index !== -1) {
+    if (index !== -1) {
     messages.value.splice(index, 1)
   }
 }
@@ -1028,4 +1028,4 @@ onBeforeUnmount(() => {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-</style>
+</style> 

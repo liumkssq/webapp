@@ -39,11 +39,11 @@ export default defineConfig({
     cors: true,
     proxy: {
       // 可以配置后端接口代理
-      // '/api': {
-      //   target: 'http://localhost:8080',
-      //   changeOrigin: true,
-      //   rewrite: (path) => path.replace(/^\/api/, ''),
-      // },
+      '/api': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+        // rewrite: (path) => path.replace(/^\/api/, ''),
+      },
     },
   },
   build: {

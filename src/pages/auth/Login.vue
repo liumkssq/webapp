@@ -100,10 +100,12 @@
           <button 
             type="button" 
             class="send-code-button" 
+            id="send-verification-code-btn"
             @click="sendVerificationCode" 
             :disabled="codeSending || countdown > 0"
           >
-            {{ countdown > 0 ? `${countdown}秒后重新获取` : '获取验证码' }}
+            {{ getVerifyCodeButtonText }}
+            <span v-if="codeSending" class="loading-indicator"></span>
           </button>
         </div>
         
@@ -119,14 +121,16 @@
       <div class="register-link">
         还没有账号? <router-link to="/register">立即注册</router-link>
       </div>
+      
+      <!-- 图形验证码已移除 -->
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onBeforeUnmount, onMounted } from 'vue'
+import { ref, reactive, onBeforeUnmount, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { login, loginByVerificationCode, apiSendVerificationCode, autoLogin, adminLogin } from '@/api/user'
+import { loginByPassword, loginByVerificationCode, apiSendVerificationCode, autoLogin, adminLogin } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { useMessageStore } from '@/store/message'
 
@@ -138,6 +142,8 @@ const messageStore = useMessageStore()
 // 登录类型切换
 const loginType = ref('account')
 const showPassword = ref(false)
+
+// 已移除图形验证码相关变量
 
 // 账号密码登录表单
 const accountForm = reactive({
@@ -161,11 +167,20 @@ const codeSending = ref(false)
 const countdown = ref(0)
 let countdownTimer = null
 
+// 验证码按钮文本计算属性
+const getVerifyCodeButtonText = computed(() => {
+  if (codeSending.value) return '发送中...';
+  if (countdown.value > 0) return `${countdown.value}秒后重新获取`;
+  return '获取验证码';
+})
+
+// 已移除图形验证码相关函数
+
 // 账号密码登录
 const handleAccountLogin = async () => {
   try {
     accountLoading.value = true
-    const response = await login({
+    const response = await loginByPassword({
       username: accountForm.username,
       password: accountForm.password
     })
@@ -222,42 +237,51 @@ const handleSmsLogin = async () => {
   }
 }
 
-// 发送验证码
+// 发送短信验证码的主函数
 const sendVerificationCode = async () => {
   // 简单的手机号验证
   const phoneRegex = /^1[3-9]\d{9}$/
   if (!phoneRegex.test(smsForm.phone)) {
-    messageStore.showError('请输入正确的手机号')
-    return
+    messageStore.showError('请输入正确的手机号');
+    // 聚焦到手机号输入框
+    document.querySelector('input[v-model="smsForm.phone"]')?.focus();
+    return;
   }
   
   try {
-    codeSending.value = true
+    codeSending.value = true;
     
+    // 直接调用API发送短信验证码
     const response = await apiSendVerificationCode({
-      phone: smsForm.phone
-    })
+      phone: smsForm.phone,
+      type: 'login'
+    });
     
     if (response.code === 200) {
-      messageStore.showSuccess('验证码已发送')
+      messageStore.showSuccess('验证码已发送，请注意查收');
+      
+      // 震动反馈（如果设备支持）
+      if (navigator.vibrate) {
+        navigator.vibrate(10);
+      }
       
       // 开始倒计时
-      countdown.value = 60
+      countdown.value = 60;
       countdownTimer = setInterval(() => {
         if (countdown.value > 0) {
-          countdown.value -= 1
+          countdown.value -= 1;
         } else {
-          clearInterval(countdownTimer)
+          clearInterval(countdownTimer);
         }
-      }, 1000)
+      }, 1000);
     } else {
-      messageStore.showError(response.message || '验证码发送失败')
+      messageStore.showError(response.message || '验证码发送失败');
     }
   } catch (error) {
-    console.error('验证码发送失败:', error)
-    messageStore.showError('验证码发送失败，请稍后重试')
+    console.error('验证码发送失败:', error);
+    messageStore.showError('网络异常，请稍后重试');
   } finally {
-    codeSending.value = false
+    codeSending.value = false;
   }
 }
 
@@ -301,6 +325,20 @@ onMounted(() => {
     if (route.query.auto === 'true') {
       handleAccountLogin()
     }
+    
+    // 添加直接发送验证码的测试代码
+    // 延迟2秒后执行，确保页面完全加载
+    setTimeout(() => {
+      // 切换到短信验证码登录标签
+      loginType.value = 'sms'
+      
+      // 填充手机号
+      smsForm.phone = '13800138000'
+      
+      console.log('正在执行发送验证码测试...')
+      // 直接调用发送验证码函数
+      sendVerificationCode()
+    }, 2000)
   }
 })
 
@@ -313,6 +351,223 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 登录页面样式 */
+.login-page {
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-header h1 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.login-header p {
+  color: #666;
+  font-size: 14px;
+}
+
+.login-form {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.login-tabs {
+  display: flex;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 12px 0;
+  font-size: 15px;
+  color: #666;
+  cursor: pointer;
+  position: relative;
+}
+
+.tab-item.active {
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40%;
+  height: 2px;
+  background-color: #1890ff;
+}
+
+.form-item {
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.form-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.form-item input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.form-item input:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  outline: none;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 40px;
+  cursor: pointer;
+  color: #999;
+}
+
+.verification-code {
+  display: flex;
+  align-items: flex-end;
+}
+
+.verification-code input {
+  flex: 1;
+  margin-right: 8px;
+}
+
+.send-code-button {
+  white-space: nowrap;
+  padding: 12px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-code-button:hover {
+  background-color: #40a9ff;
+}
+
+.send-code-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.loading-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 添加iOS风格的输入框 */
+.form-item input {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 8px; 
+  padding: 12px 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  background-color: #f5f5f5;
+  width: 100%;
+  transition: all 0.3s;
+}
+
+.form-item input:focus {
+  outline: none;
+  border-color: #007aff;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+.remember-me {
+  display: flex;
+  align-items: center;
+}
+
+.remember-me input {
+  margin-right: 8px;
+}
+
+.login-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.login-button:hover {
+  background-color: #40a9ff;
+}
+
+.login-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.register-link {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+.register-link a {
+  color: #1890ff;
+  text-decoration: none;
+}
+
 /* 快速登录样式 */
 .quick-login {
   margin-top: 20px;
@@ -346,4 +601,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #999;
 }
+
+/* 已移除验证码弹窗相关样式 */
 </style>

@@ -1,46 +1,17 @@
 import request from '@/utils/request'
 
 /**
- * 用户登录
+ * 账号密码登录
  * @param {object} data 登录信息
- * @param {string} data.username 用户名/手机号/邮箱
+ * @param {string} data.username 用户名/邮箱
  * @param {string} data.password 密码
  * @returns {Promise} Promise对象
  */
-export function login(data) {
+export function loginByPassword(data) {
   return request({
-    url: '/api/user/login',
+    url: '/api/user/login/password',
     method: 'post',
     data
-  })
-}
-
-/**
- * 自动登录（仅用于开发环境测试）
- * 无需提供用户名和密码，会自动登录为管理员账号
- * @returns {Promise} Promise对象
- */
-export function autoLogin() {
-  return request({
-    url: '/api/user/login?admin_test=true',
-    method: 'post',
-    data: {}
-  })
-}
-
-/**
- * 管理员账号登录（简化方式）
- * 直接使用admin/123456登录，开发环境使用
- * @returns {Promise} Promise对象
- */
-export function adminLogin() {
-  return request({
-    url: '/api/user/login',
-    method: 'post',
-    data: {
-      username: 'admin',
-      password: '123456'
-    }
   })
 }
 
@@ -53,9 +24,38 @@ export function adminLogin() {
  */
 export function loginByVerificationCode(data) {
   return request({
-    url: '/api/user/login',
+    url: '/api/user/login/sms-code',
     method: 'post',
     data
+  })
+}
+
+/**
+ * 自动登录（仅用于开发环境测试）
+ * 无需提供用户名和密码，会自动登录为管理员账号
+ * @returns {Promise} Promise对象
+ */
+export function autoLogin() {
+  return request({
+    url: '/api/user/login/auto?admin_test=true',
+    method: 'post',
+    data: {}
+  })
+}
+
+/**
+ * 管理员账号登录（简化方式）
+ * 直接使用admin/123456登录，开发环境使用
+ * @returns {Promise} Promise对象
+ */
+export function adminLogin() {
+  return request({
+    url: '/api/user/login/password',
+    method: 'post',
+    data: {
+      username: 'admin',
+      password: '123456'
+    }
   })
 }
 
@@ -131,18 +131,37 @@ export function changePassword(data) {
  * 发送验证码
  * @param {object} data 手机信息
  * @param {string} data.phone 手机号
+ * @param {string} data.type 验证码类型，如login、register、reset_password等
  * @returns {Promise} Promise对象
  */
-export function sendVerificationCode(data) {
+export function apiSendVerificationCode(data) {
+  console.log('API函数apiSendVerificationCode被调用，参数:', data);
+  
+  // 确保type参数
+  const requestData = {
+    ...data,
+    type: data.type || 'login'  // 默认为登录验证码
+  };
+  
+  console.log('发送验证码请求数据:', requestData);
+  console.log('请求URL:', '/api/user/send-code');
+  
   return request({
-    url: '/api/user/verification-code',
+    url: '/api/user/send-code',
     method: 'post',
-    data
+    data: requestData
   })
+    .then(response => {
+      console.log('验证码请求成功响应:', response);
+      return response;
+    })
+    .catch(error => {
+      console.error('验证码请求失败:', error);
+      throw error;
+    });
 }
 
-// 重命名为apiSendVerificationCode以避免与Login.vue中的sendVerificationCode函数冲突
-export { sendVerificationCode as apiSendVerificationCode }
+// 图形验证码相关函数已移除
 
 /**
  * 退出登录
@@ -248,4 +267,14 @@ export function verifyCode(data) {
     method: 'post',
     data
   })
+}
+
+// 为了向后兼容，保留原来的login函数
+export function login(data) {
+  // 根据数据内容判断使用哪种登录方式
+  if (data.phone && data.verificationCode) {
+    return loginByVerificationCode(data)
+  } else {
+    return loginByPassword(data)
+  }
 }
