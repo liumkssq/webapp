@@ -40,9 +40,41 @@ const navItems = [
     id: 'user', 
     label: '我的', 
     icon: 'user', 
-    route: '/user/profile' 
+    route: '/mine'
   }
 ]
+
+const isActive = (item) => {
+  const currentPath = router.currentRoute.value.path;
+  
+  if (item.id === 'home' && currentPath === '/') {
+    return true;
+  }
+  
+  if (item.id === 'market' && currentPath.startsWith('/product')) {
+    return true;
+  }
+  
+  if (item.id === 'publish' && currentPath.startsWith('/publish')) {
+    return true;
+  }
+  
+  if (item.id === 'message' && 
+     (currentPath.startsWith('/message') || 
+      currentPath.startsWith('/im') || 
+      currentPath.startsWith('/chat'))) {
+    return true;
+  }
+  
+  if (item.id === 'user' && 
+     (currentPath === '/mine' || 
+      currentPath.startsWith('/user') || 
+      currentPath.startsWith('/settings'))) {
+    return true;
+  }
+  
+  return item.id === props.activeTab;
+}
 
 const navigateTo = (route) => {
   router.push(route)
@@ -55,7 +87,7 @@ const navigateTo = (route) => {
       v-for="item in navItems" 
       :key="item.id" 
       class="nav-item" 
-      :class="{ active: activeTab === item.id }"
+      :class="{ active: isActive(item) }"
       @click="navigateTo(item.route)"
     >
       <div class="icon-wrapper">

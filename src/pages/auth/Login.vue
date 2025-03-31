@@ -180,60 +180,168 @@ const getVerifyCodeButtonText = computed(() => {
 const handleAccountLogin = async () => {
   try {
     accountLoading.value = true
+    console.log('发送账号密码登录请求:', {
+      username: accountForm.username,
+      password: accountForm.password
+    })
+    
     const response = await loginByPassword({
       username: accountForm.username,
       password: accountForm.password
     })
     
-    if (response.code === 200) {
-      // 保存用户信息和token
-      userStore.login(response.data.token, response.data.userInfo)
-      
-      // 显示登录成功消息
-      messageStore.showSuccess('登录成功')
-      
-      // 重定向到之前的页面或首页
-      const redirect = route.query.redirect || '/'
-      router.push(redirect)
+    console.log('收到登录响应:', response);
+    console.log('响应类型:', typeof response);
+    console.log('响应属性:', Object.keys(response));
+    
+    // 检查响应是否存在
+    if (!response) {
+      console.error('登录响应为空');
+      messageStore.showError('服务器响应异常，请重试');
+      return;
+    }
+    
+    // 处理成功情况 - 检查多种可能的响应格式
+    if (response.accessToken) {
+      // 直接返回token的情况
+      console.log('直接包含token的响应格式');
+      handleLoginSuccess(response);
+    } else if (response.data && response.data.accessToken) {
+      // 嵌套在data字段中的情况
+      console.log('嵌套在data中的token');
+      handleLoginSuccess(response.data);
+    } else if (response.code === 200 && response.data) {
+      // 标准成功响应但token在其他地方
+      console.log('标准成功响应，检查data:', response.data);
+      handleLoginSuccess(response.data);
     } else {
-      messageStore.showError(response.message || '登录失败')
+      // 处理错误情况
+      console.error('登录失败，响应:', response);
+      let errorMessage = '登录失败，请重试';
+      
+      if (response.message) {
+        errorMessage = response.message;
+      } else if (response.code === 401) {
+        errorMessage = '用户名或密码错误';
+      } else if (response.code === 403) {
+        errorMessage = '账号已被禁用';
+      } else if (response.code === 429) {
+        errorMessage = '登录尝试次数过多，请稍后再试';
+      }
+      
+      messageStore.showError(errorMessage);
     }
   } catch (error) {
-    console.error('登录失败:', error)
-    messageStore.showError('登录失败，请稍后重试')
+    console.error('登录过程发生异常:', error);
+    messageStore.showError(error.message || '登录失败，请稍后重试');
   } finally {
-    accountLoading.value = false
+    accountLoading.value = false;
   }
 }
+
+// 处理登录成功的通用函数
+const handleLoginSuccess = async (userData) => {
+  console.log('登录成功，保存用户数据:', userData);
+  
+  // 保存用户基本信息到localStorage
+  localStorage.setItem('token', userData.accessToken);
+  localStorage.setItem('tokenExpire', userData.accessExpire?.toString() || '');
+  localStorage.setItem('refreshAfter', userData.refreshAfter?.toString() || '');
+  localStorage.setItem('userId', userData.userId?.toString() || '');
+  localStorage.setItem('username', userData.username || '');
+  localStorage.setItem('isLoggedIn', 'true');
+  
+  // 存储到Pinia，确保状态管理一致性
+  userStore.setToken(userData.accessToken);
+  
+  // 获取完整的用户信息
+  try {
+    console.log('获取完整用户信息...');
+    const userInfoResponse = await getUserInfo();
+    
+    if (userInfoResponse && userInfoResponse.code === 200 && userInfoResponse.data) {
+      console.log('获取用户信息成功:', userInfoResponse.data);
+      // 更新Pinia状态管理
+      userStore.setUserInfo(userInfoResponse.data);
+    } else {
+      console.warn('获取用户信息失败:', userInfoResponse);
+    }
+  } catch (error) {
+    console.error('获取用户信息时出错:', error);
+  }
+  
+  // 显示成功消息
+  messageStore.showSuccess('登录成功，正在跳转...');
+  
+  // 确保消息显示后再跳转
+  setTimeout(() => {
+    console.log('准备跳转到首页...');
+    // 重定向到之前的页面或首页
+    const redirect = route.query.redirect || '/';
+    window.location.replace(redirect);
+  }, 1000);
+};
 
 // 短信验证码登录
 const handleSmsLogin = async () => {
   try {
     smsLoading.value = true
+    console.log('发送验证码登录请求:', {
+      phone: smsForm.phone,
+      verificationCode: smsForm.verificationCode
+    })
     
     const response = await loginByVerificationCode({
       phone: smsForm.phone,
       verificationCode: smsForm.verificationCode
     })
     
-    if (response.code === 200) {
-      // 保存用户信息和token
-      userStore.login(response.data.token, response.data.userInfo)
-      
-      // 显示登录成功消息
-      messageStore.showSuccess('登录成功')
-      
-      // 重定向到之前的页面或首页
-      const redirect = route.query.redirect || '/'
-      router.push(redirect)
+    console.log('收到验证码登录响应:', response);
+    console.log('响应类型:', typeof response);
+    console.log('响应属性:', Object.keys(response));
+    
+    // 检查响应是否存在
+    if (!response) {
+      console.error('登录响应为空');
+      messageStore.showError('服务器响应异常，请重试');
+      return;
+    }
+    
+    // 处理成功情况 - 检查多种可能的响应格式
+    if (response.accessToken) {
+      // 直接返回token的情况
+      console.log('直接包含token的响应格式');
+      handleLoginSuccess(response);
+    } else if (response.data && response.data.accessToken) {
+      // 嵌套在data字段中的情况
+      console.log('嵌套在data中的token');
+      handleLoginSuccess(response.data);
+    } else if (response.code === 200 && response.data) {
+      // 标准成功响应但token在其他地方
+      console.log('标准成功响应，检查data:', response.data);
+      handleLoginSuccess(response.data);
     } else {
-      messageStore.showError(response.message || '登录失败，请检查手机号和验证码')
+      // 处理错误情况
+      console.error('登录失败，响应:', response);
+      let errorMessage = '登录失败，请重试';
+      
+      if (response.message) {
+        errorMessage = response.message;
+      } else if (response.code === 401) {
+        errorMessage = '验证码错误或已过期';
+      } else if (response.code === 403) {
+        errorMessage = '账号已被禁用';
+      } else if (response.code === 429) {
+        errorMessage = '登录尝试次数过多，请稍后再试';
+      }
+      
+      messageStore.showError(errorMessage);
     }
   } catch (error) {
-    console.error('登录失败:', error)
-    messageStore.showError('登录失败，请稍后重试')
+    console.error('登录过程发生异常:', error);
+    messageStore.showError(error.message || '登录失败，请稍后重试');
   } finally {
-    smsLoading.value = false
+    smsLoading.value = false;
   }
 }
 
@@ -321,28 +429,50 @@ const sendVerificationCode = async () => {
 const handleAdminLogin = async () => {
   try {
     accountLoading.value = true
+    console.log('发送管理员一键登录请求')
     
-    // 使用专门的admin登录方法
     const response = await adminLogin()
     
-    if (response.code === 200) {
-      // 保存用户信息和token
-      userStore.login(response.data.token, response.data.userInfo)
-      
-      // 显示登录成功消息
-      messageStore.showSuccess('管理员一键登录成功')
-      
-      // 重定向到之前的页面或首页
-      const redirect = route.query.redirect || '/'
-      router.push(redirect)
+    console.log('收到管理员登录响应:', response);
+    console.log('响应类型:', typeof response);
+    console.log('响应属性:', Object.keys(response));
+    
+    // 检查响应是否存在
+    if (!response) {
+      console.error('登录响应为空');
+      messageStore.showError('服务器响应异常，请重试');
+      return;
+    }
+    
+    // 处理成功情况 - 检查多种可能的响应格式
+    if (response.accessToken) {
+      // 直接返回token的情况
+      console.log('直接包含token的响应格式');
+      handleLoginSuccess(response);
+    } else if (response.data && response.data.accessToken) {
+      // 嵌套在data字段中的情况
+      console.log('嵌套在data中的token');
+      handleLoginSuccess(response.data);
+    } else if (response.code === 200 && response.data) {
+      // 标准成功响应但token在其他地方
+      console.log('标准成功响应，检查data:', response.data);
+      handleLoginSuccess(response.data);
     } else {
-      messageStore.showError(response.message || '一键登录失败')
+      // 处理错误情况
+      console.error('管理员登录失败，响应:', response);
+      let errorMessage = '一键登录失败，请重试';
+      
+      if (response.message) {
+        errorMessage = response.message;
+      }
+      
+      messageStore.showError(errorMessage);
     }
   } catch (error) {
-    console.error('一键登录失败:', error)
-    messageStore.showError('一键登录失败，请稍后重试')
+    console.error('管理员登录过程发生异常:', error);
+    messageStore.showError(error.message || '一键登录失败，请稍后重试');
   } finally {
-    accountLoading.value = false
+    accountLoading.value = false;
   }
 }
 
@@ -358,19 +488,15 @@ onMounted(() => {
       handleAccountLogin()
     }
     
-    // 添加直接发送验证码的测试代码
-    // 延迟2秒后执行，确保页面完全加载
-    setTimeout(() => {
+    // 检查是否需要自动切换到短信验证码登录
+    if (route.query.sms === 'true') {
+      console.log('自动切换到验证码登录模式')
       // 切换到短信验证码登录标签
       loginType.value = 'sms'
       
       // 填充手机号
       smsForm.phone = '13800138000'
-      
-      console.log('正在执行发送验证码测试...')
-      // 直接调用发送验证码函数
-      sendVerificationCode()
-    }, 2000)
+    }
   }
 })
 

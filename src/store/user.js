@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { getUserInfo } from '@/api/user'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -21,11 +22,26 @@ export const useUserStore = defineStore('user', {
       localStorage.setItem('userInfo', JSON.stringify(userInfo))
     },
     
+    setToken(token) {
+      this.token = token
+      // 不重复写入localStorage，因为Login.vue已经处理了
+    },
+    
+    setUserInfo(userInfo) {
+      this.userInfo = userInfo
+      localStorage.setItem('userInfo', JSON.stringify(userInfo))
+    },
+    
     logout() {
       this.token = ''
       this.userInfo = {}
       localStorage.removeItem('token')
       localStorage.removeItem('userInfo')
+      localStorage.removeItem('isLoggedIn')
+      localStorage.removeItem('tokenExpire')
+      localStorage.removeItem('refreshAfter')
+      localStorage.removeItem('userId')
+      localStorage.removeItem('username')
     },
     
     setLoggedIn(status) {
@@ -55,6 +71,52 @@ export const useUserStore = defineStore('user', {
     
     updateUnreadNotificationCount(count) {
       this.unreadNotificationCount = count
+    },
+    
+    async getUserInfo() {
+      try {
+        console.log('从Pinia store中获取用户信息');
+        const res = await getUserInfo();
+        
+        // 处理各种响应格式
+        if (res && res.data) {
+          if (res.code === 200) {
+            console.log('成功获取用户信息，更新store');
+            this.updateUserInfo(res.data);
+            return res.data;
+          } else {
+            console.error('获取用户信息响应错误码:', res.code, res.message);
+          }
+        } else if (res && !res.code && res.userId) {
+          // 处理直接返回用户对象的情况
+          console.log('后端直接返回用户对象，进行处理');
+          const userData = {
+            id: res.userId || res.id,
+            username: res.username || '未知用户',
+            nickname: res.nickname || res.username || '未知用户',
+            avatar: res.avatar || '',
+            phone: res.phone || '',
+            email: res.email || '',
+            gender: res.gender || '',
+            bio: res.bio || '',
+            school: res.school || '',
+            followerCount: res.followerCount || res.followersCount || 0,
+            followingCount: res.followingCount || 0,
+            productCount: res.productCount || 0,
+            articleCount: res.articleCount || 0,
+            lostFoundCount: res.lostFoundCount || 0,
+            favoriteCount: res.favoriteCount || 0
+          };
+          this.updateUserInfo(userData);
+          return userData;
+        } else {
+          console.error('获取用户信息失败，响应格式异常:', res);
+        }
+        return null;
+      } catch (error) {
+        console.error('获取用户信息异常', error);
+        return null;
+      }
     }
   }
 })

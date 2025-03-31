@@ -6,19 +6,26 @@
     <!-- 用户信息头部 -->
     <section class="user-info-header">
       <div class="user-header-wrapper" ref="headerRef">
-        <div class="user-header-bg" :style="{backgroundImage: `url(${userInfo.backgroundImage || defaultBgImage})`}"></div>
+        <div class="user-header-bg" :style="{backgroundImage: `url(${getSafeImageUrl(userInfo.backgroundImage, defaultBgImage)})`}"></div>
         <div class="header-content">
           <div class="avatar-wrapper">
-            <img :src="userInfo.avatar" alt="用户头像" class="user-avatar" />
+            <img :src="getSafeImageUrl(userInfo.avatar, defaultAvatar)" alt="用户头像" class="user-avatar" @error="e => e.target.src = defaultAvatar" />
             <div v-if="isCurrentUser" class="edit-avatar" @click="handleEditAvatar">
               <i class="material-icons">photo_camera</i>
             </div>
           </div>
           <div class="user-info">
-            <h2 class="user-name">{{ userInfo.nickname || userInfo.username }}</h2>
-            <p class="user-id">ID: {{ userInfo.id }}</p>
+            <h2 class="user-name">{{ userInfo.nickname || userInfo.username || '未知用户' }}</h2>
+            <p class="user-id">ID: {{ userInfo.id || userId }}</p>
             <p v-if="userInfo.school" class="user-school">{{ userInfo.school }}</p>
             <p v-if="userInfo.bio" class="user-bio">{{ userInfo.bio }}</p>
+            <p v-if="!userInfo.id && !userInfo.username" class="user-id">数据加载中...</p>
+            <p v-if="isDebugMode" class="debug-info">
+              路径: {{ route.path }}<br>
+              ID参数: {{ route.params.id || route.query.id || '无' }}<br>
+              当前用户模式: {{ isCurrentUser ? '是' : '否' }}<br>
+              数据ID: {{ userInfo.id || '无' }}
+            </p>
           </div>
           <div class="actions">
             <template v-if="isCurrentUser">
@@ -57,8 +64,12 @@
         <div class="stat-label">粉丝</div>
       </div>
       <div class="stat-item">
-        <div class="stat-number">{{ userInfo.likeCount || 0 }}</div>
-        <div class="stat-label">获赞</div>
+        <div class="stat-number">{{ userInfo.articleCount || 0 }}</div>
+        <div class="stat-label">文章</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">{{ userInfo.productCount || 0 }}</div>
+        <div class="stat-label">商品</div>
       </div>
     </section>
 
@@ -186,6 +197,28 @@
 
     <!-- 消息提示 -->
     <Toast ref="toast" />
+
+    <!-- 调试面板 -->
+    <div v-if="isDebugMode" class="debug-panel">
+      <h4>调试面板</h4>
+      <div class="debug-controls">
+        <button @click="forceReloadData" class="debug-btn">重新加载数据</button>
+        <button @click="logCurrentState" class="debug-btn">输出当前状态</button>
+        <button @click="toggleDebugMode" class="debug-btn">{{ isDebugMode ? '关闭' : '开启' }}调试模式</button>
+        <button v-if="isDebugMode" @click="useMockData" class="debug-btn mock-data-btn">
+          使用模拟数据
+        </button>
+        <button v-if="isDebugMode" @click="showRawApiData" class="debug-btn api-data-btn">
+          显示原始API数据
+        </button>
+      </div>
+      <div class="debug-data">
+        <p>路径: {{ route.path }}</p>
+        <p>用户ID: {{ userId }}</p>
+        <p>当前用户: {{ isCurrentUser ? '是' : '否' }}</p>
+        <p>用户数据: {{ userInfo.id ? '已加载' : '未加载' }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -201,13 +234,13 @@ import FooterNavigation from '@/components/common/FooterNavigation.vue'
 import UploadDialog from '@/components/dialog/UploadDialog.vue'
 import UserEditDialog from '@/components/dialog/UserEditDialog.vue'
 import Toast from '@/components/common/Toast.vue'
-import { getUserProfile, followUser, unfollowUser, uploadAvatar, updateUserInfo } from '@/api/user'
-import { getUserArticles } from '@/api/article'
+import { getUserProfile, followUser, unfollowUser, uploadAvatar, updateUserInfo, getUserInfo } from '@/api/user'
+import { getUserArticles, getFavoriteArticles } from '@/api/article'
 import { getUserProducts, getFavoriteProducts } from '@/api/product'
 import { getUserLostFound } from '@/api/lostFound'
 import { getConversationDetail } from '@/api/chat'
 import { useUserStore } from '@/store/user'
-import { getFavoriteArticles } from '@/api/article'
+import { getSafeImageUrl, DEFAULT_AVATAR, DEFAULT_BACKGROUND } from '@/utils/defaultImages'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,15 +248,63 @@ const userStore = useUserStore()
 const toast = ref(null)
 const headerRef = ref(null)
 
+// 判断是否为个人主页路径
+const isPersonalProfileRoute = computed(() => {
+  return route.path === '/user/profile' || route.path === '/user/me';
+});
+
 // 当前用户ID
-const userId = computed(() => route.query.id || userStore.currentUser?.id)
-const isCurrentUser = computed(() => 
-  userStore.currentUser && Number(userId.value) === Number(userStore.currentUser.id)
-)
+const userId = computed(() => {
+  // 如果路由是/user/profile或/user/me，始终显示自己的资料
+  if (isPersonalProfileRoute.value) {
+    console.log('当前页面为个人主页，使用当前登录用户ID');
+    return userStore.userInfo?.id || localStorage.getItem('userId');
+  }
+  
+  // 如果路由是/user/:id，显示指定用户的资料
+  if (route.params.id) {
+    console.log('当前页面为用户主页，使用路由参数ID:', route.params.id);
+    return route.params.id;
+  }
+  
+  // 兼容旧版路由查询参数方式
+  if (route.query.id) {
+    console.log('当前页面使用查询参数ID:', route.query.id);
+    return route.query.id;
+  }
+  
+  console.log('无法确定要显示的用户ID，尝试使用当前登录用户');
+  // 如果都没有，尝试显示当前登录用户
+  return userStore.userInfo?.id || localStorage.getItem('userId');
+});
+
+// 判断是否为当前用户的资料页
+const isCurrentUser = computed(() => {
+  // 如果路由是/user/profile或/user/me，强制视为当前用户
+  if (isPersonalProfileRoute.value) {
+    console.log('当前页面是个人主页，设置为当前用户模式');
+    return true;
+  }
+  
+  if (!userStore.userInfo?.id || !userId.value) {
+    console.log('无法判断是否为当前用户（用户未登录或ID未知）');
+    return false;
+  }
+  
+  const isCurrent = String(userStore.userInfo.id) === String(userId.value);
+  console.log('当前页面用户ID比较结果:', {
+    storeId: userStore.userInfo.id,
+    pageId: userId.value,
+    isCurrent
+  });
+  
+  return isCurrent;
+});
 
 // 用户信息
 const userInfo = ref({})
-const defaultBgImage = '/images/default-bg.jpg'
+const defaultBgImage = DEFAULT_BACKGROUND
+const defaultAvatar = DEFAULT_AVATAR
 
 // 选项卡状态
 const activeTab = ref('articles')
@@ -278,18 +359,126 @@ const hasMore = computed(() => {
 const showUploadDialog = ref(false)
 const showEditDialog = ref(false)
 
+// 调试模式
+const isDebugMode = ref(true)
+
+// 添加保存原始API数据的变量
+const rawApiData = ref(null);
+
 // 获取用户信息
 const fetchUserProfile = async () => {
   try {
-    if (!userId.value) return
+    console.log('获取用户信息，当前状态:', {
+      routePath: route.path,
+      isPersonalRoute: isPersonalProfileRoute.value,
+      routeParams: route.params,
+      routeQuery: route.query,
+      storeUserId: userStore.userInfo?.id,
+      computedUserId: userId.value,
+      isCurrentUser: isCurrentUser.value,
+      isToastReady: !!toast.value
+    });
     
-    const res = await getUserProfile(userId.value)
-    if (res.data) {
-      userInfo.value = res.data
+    // 检查用户ID
+    if (!userId.value) {
+      console.error('未找到有效的userId，无法获取用户资料');
+      if (toast.value) {
+        toast.value.show('无法获取用户信息', 'error');
+      } else {
+        console.error('Toast组件未初始化');
+        alert('无法获取用户信息');
+      }
+      
+      if (isPersonalProfileRoute.value) {
+        console.log('个人主页无法获取ID，重定向到登录页');
+        router.replace('/login');
+      }
+      return;
+    }
+    
+    // 严格区分API调用
+    let res;
+    
+    if (isPersonalProfileRoute.value || isCurrentUser.value) {
+      // 当前用户：使用getUserInfo API，不需要传递ID
+      console.log('获取当前用户个人资料 - 调用/api/user/info');
+      res = await getUserInfo();
+      console.log('API返回原始数据:', JSON.stringify(res));
+    } else {
+      // 其他用户：使用getUserProfile API，需要传递ID
+      console.log(`获取其他用户资料 - 调用/api/user/profile/${userId.value}`);
+      res = await getUserProfile(userId.value);
+      console.log('API返回原始数据:', JSON.stringify(res));
+    }
+    
+    if (res && res.code === 200 && res.data) {
+      console.log('成功获取用户资料:', JSON.stringify(res.data));
+      
+      // 保存原始API数据用于调试
+      rawApiData.value = res.data;
+      
+      // 确保核心字段存在并使用安全的图片URL处理
+      const userData = {
+        ...res.data,
+        // 确保有ID
+        id: res.data.id || res.data.userId || userId.value,
+        // 确保有显示名
+        username: res.data.username || '用户' + userId.value,
+        nickname: res.data.nickname || res.data.username || '用户' + userId.value,
+        // 确保有头像和背景图（使用备用图）
+        avatar: getSafeImageUrl(res.data.avatar, defaultAvatar),
+        backgroundImage: getSafeImageUrl(res.data.backgroundImage, defaultBgImage),
+        // 确保有基本信息字段
+        bio: res.data.bio || '',
+        school: res.data.school || '',
+        // 处理计数字段（避免null或undefined）
+        followingCount: res.data.followingCount || 0,
+        followerCount: res.data.followerCount || res.data.followersCount || 0,
+        likeCount: res.data.likeCount || 0,
+        // 关注状态
+        isFollowing: res.data.isFollowing || false,
+        // 内容计数
+        productCount: res.data.productCount || 0,
+        articleCount: res.data.articleCount || 0,
+        lostFoundCount: res.data.lostFoundCount || 0
+      };
+      
+      // 更新用户信息
+      userInfo.value = userData;
+      
+      if (isDebugMode.value) {
+        console.log('处理后的用户数据:', JSON.stringify(userData));
+      }
+      
+      // 如果是当前用户，同步更新Pinia store
+      if (isCurrentUser.value) {
+        console.log('更新当前用户Pinia状态...');
+        userStore.updateUserInfo(userData);
+      }
+      
+      // 设置页面标题
+      document.title = isPersonalProfileRoute.value 
+        ? '个人主页' 
+        : `${userData.nickname || userData.username || '用户'}的主页`;
+    } else {
+      console.error('获取用户资料失败:', res);
+      // 安全地显示错误信息
+      if (toast.value) {
+        toast.value.show('获取用户信息失败: ' + (res?.message || '服务器错误'), 'error');
+      } else {
+        console.error('Toast组件未初始化');
+        alert('获取用户信息失败: ' + (res?.message || '服务器错误'));
+      }
     }
   } catch (error) {
-    console.error('获取用户信息失败:', error)
-    toast.value.show('获取用户信息失败', 'error')
+    console.error('获取用户信息异常:', error);
+    // 安全地显示错误信息
+    if (toast.value) {
+      toast.value.show('获取用户信息失败: ' + (error.message || '未知错误'), 'error');
+    } else {
+      console.error('Toast组件未初始化');
+      alert('获取用户信息失败: ' + (error.message || '未知错误'));
+    }
   }
 }
 
@@ -498,7 +687,7 @@ const loadMore = async () => {
 // 关注/取消关注用户
 const handleFollowUser = async () => {
   try {
-    if (!userStore.currentUser) {
+    if (!userStore.userInfo) {
       router.push('/login')
       return
     }
@@ -523,7 +712,7 @@ const handleFollowUser = async () => {
 // 开始私信
 const handleStartChat = async () => {
   try {
-    if (!userStore.currentUser) {
+    if (!userStore.userInfo) {
       router.push('/login')
       return
     }
@@ -630,25 +819,214 @@ watch(activeFavoriteTab, (newTab, oldTab) => {
   }
 })
 
-// 监听路由参数变化
-watch(() => route.query.id, (newId, oldId) => {
-  if (newId !== oldId) {
-    // 重置数据
-    userArticles.value = []
-    userProducts.value = []
-    userLostFound.value = []
-    favoriteArticles.value = []
-    favoriteProducts.value = []
-    
+// 监听整个路由对象变化，确保捕获所有路由变化
+watch(() => route.fullPath, async (newPath, oldPath) => {
+  console.log('路由完整路径变化:', {
+    newPath, 
+    oldPath,
+    params: route.params,
+    query: route.query
+  });
+  
+  // 重置数据
+  userArticles.value = []
+  userProducts.value = []
+  userLostFound.value = []
+  favoriteArticles.value = []
+  favoriteProducts.value = []
+  
+  // 确保Toast组件已初始化
+  await nextTick();
+  
+  try {
     // 重新加载数据
-    fetchUserProfile()
-    fetchUserArticles()
+    await fetchUserProfile();
+    
+    // 如果成功获取了用户资料，再加载文章等内容
+    if (userInfo.value && userInfo.value.id) {
+      await fetchUserArticles();
+    }
+  } catch (error) {
+    console.error('路由变化时加载数据失败:', error);
   }
-}, { immediate: true })
+}, { immediate: true });
+
+// 监听用户登录状态，确保用户信息更新时重新加载数据
+watch(() => userStore.userInfo?.id, async (newUserId, oldUserId) => {
+  console.log('用户信息ID变化:', newUserId, oldUserId);
+  
+  // 如果是在个人主页路径且用户ID变化，则重新加载资料
+  if ((route.path === '/user/profile' || route.path === '/user/me') && newUserId !== oldUserId) {
+    console.log('个人主页检测到用户ID变化，重新加载资料');
+    
+    // 确保Toast组件已初始化
+    await nextTick();
+    
+    try {
+      await fetchUserProfile();
+      
+      // 如果成功获取了用户资料，再加载文章等内容
+      if (userInfo.value && userInfo.value.id) {
+        await fetchUserArticles();
+      }
+    } catch (error) {
+      console.error('用户ID变化时加载数据失败:', error);
+    }
+  }
+}, { immediate: true });
+
+// 调试功能
+const forceReloadData = async () => {
+  toast.value.show('正在重新加载数据...', 'info');
+  
+  // 重置数据
+  userInfo.value = {};
+  userArticles.value = [];
+  userProducts.value = [];
+  userLostFound.value = [];
+  
+  // 重新加载
+  await nextTick();
+  await fetchUserProfile();
+  await fetchUserArticles();
+}
+
+const logCurrentState = () => {
+  console.log('当前状态:', {
+    route: {
+      path: route.path,
+      params: route.params,
+      query: route.query
+    },
+    user: {
+      storeInfo: userStore.userInfo,
+      computedId: userId.value,
+      isCurrentUser: isCurrentUser.value,
+      displayInfo: userInfo.value
+    },
+    data: {
+      articles: userArticles.value.length,
+      products: userProducts.value.length,
+      lostFound: userLostFound.value.length
+    }
+  });
+  
+  toast.value.show('状态已输出到控制台', 'info');
+}
+
+const toggleDebugMode = () => {
+  isDebugMode.value = !isDebugMode.value;
+  toast.value.show(`调试模式已${isDebugMode.value ? '开启' : '关闭'}`, 'info');
+}
+
+// 添加模拟数据功能
+const useMockData = () => {
+  toast.value.show('正在加载模拟数据...', 'info');
+  
+  // 模拟用户数据
+  const mockUserData = {
+    id: userId.value || 1001,
+    username: 'mockuser',
+    nickname: '模拟用户',
+    avatar: 'https://img01.yzcdn.cn/vant/cat.jpeg',
+    backgroundImage: 'https://img01.yzcdn.cn/vant/cat-2.jpeg',
+    bio: '这是一个模拟的用户简介，用于测试界面显示效果。',
+    school: '模拟大学',
+    followerCount: 458,
+    followingCount: 253,
+    likeCount: 1024,
+    isFollowing: false
+  };
+  
+  // 设置模拟数据
+  userInfo.value = mockUserData;
+  
+  // 模拟文章数据
+  userArticles.value = Array(5).fill(null).map((_, index) => ({
+    id: 10000 + index,
+    title: `模拟文章标题 ${index + 1}`,
+    content: `这是模拟文章内容，用于测试界面显示效果。这是文章 ${index + 1}`,
+    coverImage: index % 2 === 0 ? 'https://img01.yzcdn.cn/vant/cat.jpeg' : '',
+    createTime: new Date(Date.now() - index * 86400000).toISOString(),
+    viewCount: Math.floor(Math.random() * 1000),
+    likeCount: Math.floor(Math.random() * 100),
+    commentCount: Math.floor(Math.random() * 50),
+    user: {
+      id: mockUserData.id,
+      nickname: mockUserData.nickname,
+      avatar: mockUserData.avatar
+    }
+  }));
+  
+  // 设置模拟分页信息
+  pageInfo.value.articles = {
+    page: 1,
+    limit: 10,
+    total: 5,
+    hasMore: false
+  };
+  
+  toast.value.show('已加载模拟数据', 'success');
+}
+
+// 添加显示原始API数据的函数
+const showRawApiData = () => {
+  if (rawApiData.value) {
+    console.log('原始API数据:', rawApiData.value);
+    alert(JSON.stringify(rawApiData.value, null, 2));
+  } else {
+    toast.value.show('暂无原始API数据', 'info');
+  }
+};
 
 onMounted(async () => {
-  await fetchUserProfile()
-  await fetchUserArticles()
+  console.log('Profile页面加载，路由信息:', {
+    path: route.path,
+    isPersonalRoute: isPersonalProfileRoute.value,
+    params: route.params,
+    query: route.query
+  });
+  console.log('从store获取的用户信息:', userStore.userInfo);
+  console.log('计算得到的userId:', userId.value);
+  console.log('是否为当前用户:', isCurrentUser.value);
+  console.log('Toast组件状态:', toast.value ? '已初始化' : '未初始化');
+  
+  // 确保组件挂载完成后再获取数据
+  await nextTick();
+  
+  // 处理路由异常情况
+  if (isPersonalProfileRoute.value && !userStore.token) {
+    console.log('访问个人主页但未登录，重定向到登录页');
+    router.replace('/login?redirect=' + encodeURIComponent(route.fullPath));
+    return;
+  }
+  
+  // 如果是/user/:id路由但ID是当前用户，重定向到/mine
+  if (route.params.id && userStore.userInfo?.id && 
+      String(route.params.id) === String(userStore.userInfo.id)) {
+    console.log('检测到访问自己的用户主页，重定向到个人中心');
+    router.replace('/mine');
+    return;
+  }
+  
+  // 如果是访问个人主页，也重定向到/mine
+  if (isPersonalProfileRoute.value) {
+    console.log('访问个人主页，重定向到个人中心');
+    router.replace('/mine');
+    return;
+  }
+  
+  // 到这里，只处理查看其他用户资料的情况
+  try {
+    await fetchUserProfile();
+    
+    // 如果成功获取了用户资料，再加载文章等内容
+    if (userInfo.value && userInfo.value.id) {
+      await fetchUserArticles();
+    }
+  } catch (error) {
+    console.error('加载用户资料失败:', error);
+  }
   
   // 实现滚动渐变效果
   const handleScroll = () => {
@@ -672,7 +1050,7 @@ onMounted(async () => {
   return () => {
     window.removeEventListener('scroll', handleScroll)
   }
-})
+});
 </script>
 
 <style scoped>
@@ -715,6 +1093,9 @@ onMounted(async () => {
   padding: 20px;
   height: 100%;
   z-index: 1;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0));
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
 .avatar-wrapper {
@@ -887,5 +1268,65 @@ onMounted(async () => {
 
 .header-shadow {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.debug-info {
+  margin-top: 5px;
+  font-size: 0.8rem;
+  color: #ff5722;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.debug-panel {
+  margin: 20px 10px;
+  padding: 10px;
+  border: 1px dashed #ff5722;
+  border-radius: 8px;
+  background: rgba(255, 87, 34, 0.1);
+}
+
+.debug-panel h4 {
+  margin: 0 0 10px;
+  color: #ff5722;
+}
+
+.debug-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.debug-btn {
+  padding: 6px 12px;
+  background: #ff5722;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.debug-data {
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.debug-data p {
+  margin: 3px 0;
+}
+
+.mock-data-btn {
+  background-color: #1e88e5;
+  color: white;
+}
+
+.api-data-btn {
+  background-color: #9c27b0;
+  color: white;
 }
 </style>

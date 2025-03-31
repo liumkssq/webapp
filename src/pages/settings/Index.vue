@@ -378,12 +378,14 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { useMessageStore } from '@/store/message'
 import { getUserInfo, logout as apiLogout } from '@/api/user'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+const messageStore = useMessageStore()
 
 // 状态变量
 const user = ref({})
@@ -456,26 +458,47 @@ const updatePrivacySetting = (value) => {
 // 获取用户信息
 const fetchUserInfo = async () => {
   try {
-    const res = await getUserInfo()
+    console.log('设置页面获取用户信息...');
     
-    if (res.code === 200) {
-      user.value = res.data
+    // 首先尝试从store中获取数据
+    if (userStore.userInfo && Object.keys(userStore.userInfo).length > 0) {
+      console.log('从Pinia获取用户数据:', userStore.userInfo);
+      user.value = userStore.userInfo;
+    }
+    
+    // 无论如何，都从API获取最新数据确保同步
+    const res = await getUserInfo();
+    
+    if (res && res.code === 200 && res.data) {
+      console.log('API获取用户信息成功:', res.data);
+      user.value = res.data;
+      
+      // 更新store
+      userStore.setUserInfo(res.data);
       
       // 合并用户设置
       if (res.data.settings) {
         // 合并通知设置
         if (res.data.settings.notifications) {
-          Object.assign(settings.notifications, res.data.settings.notifications)
+          Object.assign(settings.notifications, res.data.settings.notifications);
         }
         
         // 合并隐私设置
         if (res.data.settings.privacy) {
-          Object.assign(settings.privacy, res.data.settings.privacy)
+          Object.assign(settings.privacy, res.data.settings.privacy);
         }
+      }
+    } else {
+      console.error('API获取用户信息失败:', res);
+      if (!user.value || Object.keys(user.value).length === 0) {
+        messageStore.showError('获取用户信息失败');
       }
     }
   } catch (error) {
-    console.error('获取用户信息失败', error)
+    console.error('获取用户信息过程异常:', error);
+    if (!user.value || Object.keys(user.value).length === 0) {
+      messageStore.showError('获取用户信息失败');
+    }
   }
 }
 
@@ -542,18 +565,25 @@ const confirmClearCache = () => {
 // 退出登录
 const logout = async () => {
   try {
-    await apiLogout()
-    userStore.clearUserInfo()
-    showLogoutConfirm.value = false
-    showToast('已退出登录')
+    console.log('执行退出登录操作...');
+    
+    // 调用API登出
+    await apiLogout();
+    
+    // 清除所有用户状态
+    userStore.logout(); // 这会清除localStorage和store中的所有数据
+    
+    showLogoutConfirm.value = false;
+    messageStore.showSuccess('已退出登录');
     
     // 跳转到登录页
     setTimeout(() => {
-      router.push('/login')
-    }, 500)
+      console.log('重定向到登录页面...');
+      router.push('/login');
+    }, 500);
   } catch (error) {
-    console.error('退出登录失败', error)
-    showToast('退出登录失败，请稍后重试')
+    console.error('退出登录失败', error);
+    messageStore.showError('退出登录失败，请稍后重试');
   }
 }
 
@@ -569,7 +599,9 @@ const showToast = (message) => {
 
 // 页面跳转
 const goToProfile = () => {
-  router.push('/profile/edit')
+  console.log('跳转到个人资料页面');
+  // 直接导航到个人主页，不需要传递ID参数
+  router.push('/user/me');
 }
 
 const goToChangePassword = () => {

@@ -260,17 +260,23 @@ const routes = [
   
   // 用户相关路由
   {
-    path: '/user/:id',
-    name: 'UserHomepage',
-    component: () => import('../pages/user/Homepage.vue'),
-    props: true
+    path: '/user/me',
+    name: 'UserMe',
+    component: () => import('../pages/user/Profile.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的主页',
+      description: '我的个人资料'
+    }
   },
   {
     path: '/user/profile',
     name: 'UserProfile',
     component: () => import('../pages/user/Profile.vue'),
     meta: {
-      requiresAuth: true
+      requiresAuth: true,
+      title: '个人主页',
+      description: '查看和编辑自己的个人资料'
     }
   },
   {
@@ -279,6 +285,16 @@ const routes = [
     component: () => import('../pages/user/Settings.vue'),
     meta: {
       requiresAuth: true
+    }
+  },
+  {
+    path: '/user/:id',
+    name: 'UserHomepage',
+    component: () => import('../pages/user/Profile.vue'),
+    props: true,
+    meta: {
+      title: '用户主页',
+      description: '查看其他用户的资料'
     }
   },
   
@@ -354,6 +370,18 @@ const routes = [
     path: '/examples/product-publish',
     name: 'ProductPublishExample',
     component: () => import('../components/examples/ProductPublishExample.vue')
+  },
+  
+  // 添加"我的"页面路由
+  {
+    path: '/mine',
+    name: 'Mine',
+    component: () => import('../pages/user/Mine.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的',
+      description: '个人中心'
+    }
   },
   
   // 404页面
