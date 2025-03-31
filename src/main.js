@@ -20,9 +20,9 @@ import SvgIcon from '@/components/SvgIcon.vue'
 import AppLoading from '@/components/AppLoading.vue'
 
 // 导入 Mock 服务（始终导入以确保开发时可用）
-console.log('导入 Mock 服务')
-import './mock'
-console.log('Mock 服务导入完成')
+// console.log('导入 Mock 服务')
+// import './mock'
+// console.log('Mock 服务导入完成')
 
 // 创建应用实例
 const app = createApp(App)

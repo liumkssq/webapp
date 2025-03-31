@@ -34,8 +34,11 @@ export const setupMockInterceptor = (options = {}) => {
     onNoMatch
   })
 
+  // 添加全局错误处理
+  mockAdapter.onAny().passthrough();
+
   // 在控制台输出初始化信息
-  console.log(`Mock拦截器已初始化，请求延迟: ${delay}ms`)
+  console.log(`Mock拦截器已初始化，请求延迟: ${delay}ms, onNoMatch: ${onNoMatch}`)
 
   return mockAdapter
 }

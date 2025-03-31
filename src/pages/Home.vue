@@ -126,8 +126,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { useMessageStore } from '@/store/message'
 import ProductItem from '@/components/product/ProductItem.vue'
 import LostFoundItem from '@/components/lostFound/LostFoundItem.vue'
 import FooterNavigation from '@/components/common/FooterNavigation.vue'
@@ -199,6 +200,9 @@ const hotProducts = ref([])
 const latestLostFound = ref([])
 const hotArticles = ref([])
 
+// 引入消息提示功能
+const messageStore = useMessageStore()
+
 // 跳转到搜索页面
 const navigateToSearch = () => {
   router.push('/search')
@@ -237,10 +241,39 @@ const fetchHomeData = async () => {
   }
 }
 
-onMounted(() => { 
-  startBannerAutoPlay()
-  fetchHomeData() 
-})
+onMounted(async () => {
+  console.log('Home页面加载，当前路径:', window.location.pathname);
+  console.log('登录状态:', {
+    token: localStorage.getItem('token'),
+    userId: localStorage.getItem('userId'),
+    username: localStorage.getItem('username'),
+    isLoggedIn: localStorage.getItem('isLoggedIn'),
+    isFirstVisit: localStorage.getItem('isFirstVisit')
+  });
+
+  // 启动轮播和获取数据
+  startBannerAutoPlay();
+  
+  try {
+    await fetchHomeData();
+    console.log('首页数据加载成功');
+    
+    // 检查是否是注册后首次访问
+    const isFirstVisit = localStorage.getItem('isFirstVisit') === 'true';
+    if (isFirstVisit && localStorage.getItem('isLoggedIn') === 'true') {
+      const username = localStorage.getItem('username');
+      if (username) {
+        console.log('显示欢迎消息给用户:', username);
+        messageStore.showSuccess(`欢迎 ${username}，注册成功！`);
+      }
+      // 标记已经不是首次访问
+      localStorage.setItem('isFirstVisit', 'false');
+    }
+  } catch (error) {
+    console.error('首页初始化失败:', error);
+    messageStore.showError('数据加载失败，请刷新重试');
+  }
+});
 
 onBeforeUnmount(() => { 
   if (bannerTimer) clearInterval(bannerTimer) 

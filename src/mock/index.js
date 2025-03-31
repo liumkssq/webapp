@@ -17,6 +17,7 @@ import './modules/lostFound'
 const enableMock = true
 
 if (enableMock) {
+  setupMockInterceptor() // 确保正确调用拦截器设置
   console.log('Mock 服务已启用，所有API请求将被拦截')
 } else {
   // 如果不启用Mock，则恢复拦截器

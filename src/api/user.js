@@ -69,11 +69,62 @@ export function adminLogin() {
  * @returns {Promise} Promise对象
  */
 export function register(data) {
+  console.log('发起注册请求，参数:', data);
+  
   return request({
     url: '/api/user/register',
     method: 'post',
     data
   })
+  .then(response => {
+    console.log('注册请求成功响应:', response);
+    return response;
+  })
+  .catch(error => {
+    console.error('注册请求失败详情:', error);
+    console.error('错误响应数据:', error.response?.data);
+    
+    // 处理特定的错误情况并提供更有用的信息
+    if (error.response) {
+      const errorData = error.response.data || {};
+      
+      // 创建一个标准的错误响应格式
+      return {
+        code: error.response.status,
+        message: errorData.message || getErrorMessage(error.response.status),
+        data: null
+      };
+    }
+    
+    // 其他类型的错误
+    return {
+      code: 500,
+      message: error.message || '注册失败，请稍后重试',
+      data: null
+    };
+  });
+}
+
+// 根据状态码获取错误消息
+function getErrorMessage(statusCode) {
+  switch (statusCode) {
+    case 400:
+      return '请求参数错误，请检查输入信息';
+    case 401:
+      return '未授权，请重新登录';
+    case 403:
+      return '没有权限执行此操作';
+    case 404:
+      return '请求的资源不存在';
+    case 409:
+      return '用户名或手机号已存在';
+    case 422:
+      return '验证码错误或已过期';
+    case 500:
+      return '服务器错误，请稍后重试';
+    default:
+      return '请求失败，状态码：' + statusCode;
+  }
 }
 
 /**
@@ -137,28 +188,68 @@ export function changePassword(data) {
 export function apiSendVerificationCode(data) {
   console.log('API函数apiSendVerificationCode被调用，参数:', data);
   
-  // 确保type参数
-  const requestData = {
-    ...data,
-    type: data.type || 'login'  // 默认为登录验证码
-  };
-  
-  console.log('发送验证码请求数据:', requestData);
-  console.log('请求URL:', '/api/user/send-code');
-  
-  return request({
-    url: '/api/user/send-code',
-    method: 'post',
-    data: requestData
-  })
-    .then(response => {
-      console.log('验证码请求成功响应:', response);
-      return response;
+  try {
+    // 确保type参数
+    const requestData = {
+      ...data,
+      type: data.type || 'login'  // 默认为登录验证码
+    };
+    
+    console.log('发送验证码请求数据:', requestData);
+    console.log('请求URL:', '/api/user/send-code');
+    
+    return request({
+      url: '/api/user/send-code',
+      method: 'post',
+      data: requestData
     })
-    .catch(error => {
-      console.error('验证码请求失败:', error);
-      throw error;
+      .then(response => {
+        console.log('验证码请求原始响应:', response);
+        
+        // 适配后端响应格式到前端期望的格式
+        // 后端返回 { success: true/false }
+        // 前端期望 { code: 200/500, message: '...', data: {...} }
+        if (response && typeof response === 'object') {
+          // 如果响应已经是前端期望的格式 (code/message/data)
+          if ('code' in response) {
+            return response;
+          }
+          
+          // 如果是后端原始响应格式 (success)
+          if ('success' in response) {
+            return {
+              code: response.success ? 200 : 500,
+              message: response.success ? '验证码发送成功' : '验证码发送失败',
+              data: { success: response.success }
+            };
+          }
+        }
+        
+        // 如果响应格式完全无法识别，返回标准格式的错误响应
+        return {
+          code: 500,
+          message: '无法识别的响应格式',
+          data: null
+        };
+      })
+      .catch(error => {
+        console.error('验证码请求失败:', error);
+        // 返回一个统一格式的错误响应对象
+        return {
+          code: 500,
+          data: null,
+          message: error.message || '验证码发送失败，请稍后重试'
+        };
+      });
+  } catch (outerError) {
+    console.error('验证码函数执行发生错误:', outerError);
+    // 捕获函数执行中可能出现的任何错误
+    return Promise.resolve({
+      code: 500,
+      data: null,
+      message: outerError.message || '验证码函数执行失败'
     });
+  }
 }
 
 // 图形验证码相关函数已移除

@@ -251,12 +251,43 @@ const sendVerificationCode = async () => {
   
   try {
     codeSending.value = true;
-    
-    const response = await apiSendVerificationCode({
+    console.log('准备发送验证码请求:', {
       phone: verifyForm.phone,
-      type: 'resetPassword' // 指定验证码类型为重置密码
+      type: 'resetPassword'
     });
     
+    let response;
+    try {
+      response = await apiSendVerificationCode({
+        phone: verifyForm.phone,
+        type: 'resetPassword' // 指定验证码类型为重置密码
+      });
+    } catch (requestError) {
+      console.error('验证码请求异常被捕获:', requestError);
+      response = {
+        code: 500,
+        message: requestError.message || '请求发送失败',
+        data: null
+      };
+    }
+    
+    console.log('验证码请求完成，响应结果:', response);
+    
+    // 进行安全检查，确保响应有效
+    if (!response) {
+      console.error('响应为null或undefined');
+      messageStore.showError('验证码发送失败，服务器无响应');
+      return;
+    }
+    
+    // 确保响应是一个有效的对象
+    if (typeof response !== 'object') {
+      console.error('响应不是对象:', response);
+      messageStore.showError('验证码发送失败，响应格式无效');
+      return;
+    }
+    
+    // 检查响应是否存在且有code属性
     if (response.code === 200) {
       messageStore.showSuccess('验证码已发送，请注意查收');
       
@@ -275,10 +306,12 @@ const sendVerificationCode = async () => {
         }
       }, 1000);
     } else {
-      messageStore.showError(response.message || '验证码发送失败');
+      // 处理错误响应
+      console.warn('验证码请求返回错误状态码:', response.code);
+      messageStore.showError(response.message || '验证码发送失败，请稍后重试');
     }
   } catch (error) {
-    console.error('验证码发送失败:', error);
+    console.error('发送验证码过程中出现未捕获异常:', error);
     messageStore.showError('网络异常，请稍后重试');
   } finally {
     codeSending.value = false;

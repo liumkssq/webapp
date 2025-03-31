@@ -146,12 +146,43 @@ const sendVerificationCode = async () => {
   
   try {
     codeSending.value = true;
-    
-    const response = await apiSendVerificationCode({
+    console.log('准备发送验证码请求:', {
       phone: registerForm.phone,
       type: 'register'
     });
     
+    let response;
+    try {
+      response = await apiSendVerificationCode({
+        phone: registerForm.phone,
+        type: 'register'
+      });
+    } catch (requestError) {
+      console.error('验证码请求异常被捕获:', requestError);
+      response = {
+        code: 500,
+        message: requestError.message || '请求发送失败',
+        data: null
+      };
+    }
+    
+    console.log('验证码请求完成，响应结果:', response);
+    
+    // 进行安全检查，确保响应有效
+    if (!response) {
+      console.error('响应为null或undefined');
+      messageStore.showError('验证码发送失败，服务器无响应');
+      return;
+    }
+    
+    // 确保响应是一个有效的对象
+    if (typeof response !== 'object') {
+      console.error('响应不是对象:', response);
+      messageStore.showError('验证码发送失败，响应格式无效');
+      return;
+    }
+    
+    // 检查响应是否存在且有code属性
     if (response.code === 200) {
       messageStore.showSuccess('验证码已发送，请注意查收');
       
@@ -170,10 +201,12 @@ const sendVerificationCode = async () => {
         }
       }, 1000);
     } else {
-      messageStore.showError(response.message || '验证码发送失败');
+      // 处理错误响应
+      console.warn('验证码请求返回错误状态码:', response.code);
+      messageStore.showError(response.message || '验证码发送失败，请稍后重试');
     }
   } catch (error) {
-    console.error('验证码发送失败:', error);
+    console.error('发送验证码过程中出现未捕获异常:', error);
     messageStore.showError('网络异常，请稍后重试');
   } finally {
     codeSending.value = false;
@@ -182,15 +215,43 @@ const sendVerificationCode = async () => {
 
 // 处理注册
 const handleRegister = async () => {
-  console.log('处理注册表单提交');
   // 验证两次密码输入是否一致
   if (registerForm.password !== registerForm.confirmPassword) {
-    messageStore.showError('两次密码输入不一致')
-    return
+    messageStore.showError('两次密码输入不一致');
+    return;
+  }
+  
+  // 基本表单验证
+  if (!registerForm.username.trim()) {
+    messageStore.showError('请输入用户名');
+    return;
+  }
+  
+  if (!registerForm.phone.trim()) {
+    messageStore.showError('请输入手机号');
+    return;
+  }
+  
+  if (!registerForm.verificationCode.trim()) {
+    messageStore.showError('请输入验证码');
+    return;
+  }
+  
+  // 验证密码长度
+  if (registerForm.password.length < 6) {
+    messageStore.showError('密码长度不能少于6位');
+    return;
+  }
+  
+  // 验证手机号格式
+  const phoneRegex = /^1[3-9]\d{9}$/;
+  if (!phoneRegex.test(registerForm.phone)) {
+    messageStore.showError('请输入正确的手机号格式');
+    return;
   }
   
   try {
-    registerLoading.value = true
+    registerLoading.value = true;
     
     console.log('发送注册请求:', {
       username: registerForm.username,
@@ -204,25 +265,72 @@ const handleRegister = async () => {
       phone: registerForm.phone,
       verificationCode: registerForm.verificationCode,
       password: registerForm.password
-    })
+    });
     
-    console.log('注册响应:', response);
+    console.log('收到注册响应:', response);
     
-    if (response.code === 200) {
-      messageStore.showSuccess('注册成功，请登录')
-      console.log('准备跳转到登录页面');
-      // 确保这里能正确执行跳转
+    // 检查响应是否存在
+    if (!response) {
+      console.error('注册响应为空');
+      messageStore.showError('服务器响应异常，请重试');
+      return;
+    }
+    
+    // 直接判断是否包含必要的登录信息
+    if (response.accessToken) {
+      console.log('注册成功，保存用户数据:', response);
+      
+      // 保存用户信息到localStorage
+      localStorage.setItem('token', response.accessToken);
+      localStorage.setItem('tokenExpire', response.accessExpire?.toString() || '');
+      localStorage.setItem('refreshAfter', response.refreshAfter?.toString() || '');
+      localStorage.setItem('userId', response.userId?.toString() || '');
+      localStorage.setItem('username', response.username || '');
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('isFirstVisit', 'true');
+      
+      // 显示成功消息
+      messageStore.showSuccess('注册成功，正在跳转...');
+      
+      // 确保消息显示后再跳转
       setTimeout(() => {
-        router.push('/login')
-      }, 500);
+        console.log('准备跳转到首页...');
+        window.location.replace('/');
+      }, 1000);
+      
+      return;
     } else {
-      messageStore.showError(response.message || '注册失败，请稍后重试')
+      // 如果没有token但响应码是200
+      if (response.code === 200) {
+        console.warn('注册成功但未返回token:', response);
+        messageStore.showSuccess('注册成功，请重新登录');
+        setTimeout(() => {
+          window.location.replace('/login');
+        }, 1000);
+        return;
+      }
+      
+      // 处理错误情况
+      console.error('注册失败，响应:', response);
+      let errorMessage = '注册失败，请重试';
+      
+      if (response.message) {
+        errorMessage = response.message;
+      } else if (response.code === 409) {
+        errorMessage = '用户名或手机号已被注册';
+      } else if (response.code === 422) {
+        errorMessage = '验证码错误或已过期';
+      } else if (response.code === 400) {
+        errorMessage = '请检查输入信息是否正确';
+      }
+      
+      messageStore.showError(errorMessage);
     }
   } catch (error) {
-    console.error('注册失败详情:', error)
-    messageStore.showError('注册失败，请稍后重试')
+    console.error('注册过程发生异常:', error);
+    messageStore.showError(error.message || '注册失败，请稍后重试');
   } finally {
-    registerLoading.value = false
+    registerLoading.value = false;
   }
 }
 
@@ -377,11 +485,26 @@ input:focus {
 .terms-agreement input {
   margin-right: 8px;
   margin-top: 3px;
+  width: auto;
+  height: auto;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+}
+
+.terms-agreement label {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  line-height: 1.5;
 }
 
 .terms-agreement a {
   color: #1890ff;
   text-decoration: none;
+  margin: 0 3px;
 }
 
 .register-button {
