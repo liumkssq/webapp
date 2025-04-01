@@ -836,13 +836,13 @@ watch(() => route.fullPath, async (newPath, oldPath) => {
     query: route.query
   });
   
-  // 重置数据
-  userArticles.value = []
-  userProducts.value = []
-  userLostFound.value = []
-  favoriteArticles.value = []
-  favoriteProducts.value = []
-  
+    // 重置数据
+    userArticles.value = []
+    userProducts.value = []
+    userLostFound.value = []
+    favoriteArticles.value = []
+    favoriteProducts.value = []
+    
   // 确保Toast组件已初始化
   await nextTick();
   

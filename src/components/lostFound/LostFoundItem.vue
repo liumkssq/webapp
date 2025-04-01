@@ -15,7 +15,7 @@ const props = defineProps({
 
 // 处理图片显示
 const getImageUrl = (item) => {
-  if (!item) return 'https://via.placeholder.com/300';
+  if (!item) return `https://picsum.photos/id/1/300/300`;
   
   // 直接使用imageUrl字段
   if (item.imageUrl) return item.imageUrl;
@@ -31,7 +31,7 @@ const getImageUrl = (item) => {
             const parsedImages = JSON.parse(firstImage);
             return Array.isArray(parsedImages) && parsedImages.length > 0 
               ? parsedImages[0] 
-              : 'https://via.placeholder.com/300';
+              : `https://picsum.photos/id/${(item.id % 30) + 1}/300/300`;
           } catch (e) {
             console.error('解析失物招领图片JSON失败:', e);
             return firstImage;
@@ -49,7 +49,7 @@ const getImageUrl = (item) => {
           const parsedImages = JSON.parse(item.images);
           return Array.isArray(parsedImages) && parsedImages.length > 0 
             ? parsedImages[0] 
-            : 'https://via.placeholder.com/300';
+            : `https://picsum.photos/id/${(item.id % 30) + 1}/300/300`;
         } catch (e) {
           console.error('解析失物招领图片字符串失败:', e);
           return item.images;
@@ -59,14 +59,27 @@ const getImageUrl = (item) => {
     }
   }
   
-  // 默认返回占位图
-  return 'https://via.placeholder.com/300';
+  // 默认返回占位图，使用item.id确保每个item有不同的图片
+  return `https://picsum.photos/id/${(item.id % 30) + 1}/300/300`;
 };
 
 // 图片加载错误处理
 const handleImageError = (event) => {
   console.warn('失物招领图片加载失败，使用占位图替换');
-  event.target.src = 'https://via.placeholder.com/300';
+  
+  // 检查是否已经是占位图，避免循环加载
+  if (event.target.getAttribute('data-is-placeholder') === 'true') {
+    console.log('已经是占位图，不再替换');
+    return;
+  }
+  
+  // 使用当前时间作为随机种子，避免缓存问题
+  const randomId = Math.floor(Math.random() * 100) + 1;
+  const timestamp = new Date().getTime();
+  event.target.src = `https://picsum.photos/id/${randomId}/300/300?t=${timestamp}`;
+  
+  // 标记这个图片已经使用了占位图
+  event.target.setAttribute('data-is-placeholder', 'true');
 };
 
 // 处理点击事件
@@ -79,27 +92,33 @@ const handleClick = () => {
 </script>
 
 <template>
-  <div class="lost-found-item" :class="item.type" @click.stop="handleClick">
-    <div class="item-image" v-if="item.imageUrl || item.images">
-      <img :src="getImageUrl(item)" :alt="item.title" @error="handleImageError" />
+  <div class="lost-found-item ios-card" :class="item.type" @click.stop="handleClick">
+    <div class="item-image">
+      <img 
+        :src="getImageUrl(item)" 
+        :alt="item.title" 
+        @error="handleImageError" 
+        loading="lazy"
+        class="ios-image"
+      />
     </div>
     <div class="item-info">
-      <div class="item-badge">{{ item.type === 'lost' ? '寻物启事' : '招领启事' }}</div>
-      <div class="item-title">{{ item.title }}</div>
-      <div v-if="showDescription" class="item-description">{{ item.description }}</div>
-      <div class="item-detail">
+      <div class="item-badge ios-badge">{{ item.type === 'lost' ? '寻物启事' : '招领启事' }}</div>
+      <div class="item-title ios-title">{{ item.title }}</div>
+      <div v-if="showDescription" class="item-description ios-description">{{ item.description }}</div>
+      <div class="item-detail ios-detail">
         <div class="location">
-          <svg-icon name="location" size="14" />
+          <svg-icon name="location" class="ios-icon" />
           {{ item.location || '未知位置' }}
         </div>
         <div class="time">
-          <svg-icon name="time" size="14" />
+          <svg-icon name="time" class="ios-icon" />
           {{ item.time || '未知时间' }}
         </div>
       </div>
-      <div class="item-meta">
+      <div class="item-meta ios-meta">
         <div class="publisher">{{ item.publisher?.nickname || '未知用户' }}</div>
-        <div class="status" :class="item.status">{{ 
+        <div class="status ios-status" :class="item.status">{{ 
           item.status === 'open' ? '进行中' : 
           item.status === 'pending' ? '确认中' : '已完成' 
         }}</div>
@@ -109,28 +128,28 @@ const handleClick = () => {
 </template>
 
 <style scoped>
-.lost-found-item {
+.ios-card {
   display: flex;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   overflow: hidden;
-  background-color: var(--bg-primary);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 16px;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-  border-left: 4px solid var(--info-color);
+  background-color: var(--background-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+  border: 0.5px solid var(--separator-color);
 }
 
-.lost-found-item:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+.ios-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
 }
 
-.lost-found-item.lost {
-  border-left-color: var(--warning-color);
+.ios-card.lost {
+  border-left: 4px solid var(--warning-color);
 }
 
-.lost-found-item.found {
-  border-left-color: var(--success-color);
+.ios-card.found {
+  border-left: 4px solid var(--success-color);
 }
 
 .item-image {
@@ -139,10 +158,15 @@ const handleClick = () => {
   overflow: hidden;
 }
 
-.item-image img {
+.ios-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.ios-image:hover {
+  transform: scale(1.05);
 }
 
 .item-info {
@@ -151,48 +175,51 @@ const handleClick = () => {
   position: relative;
 }
 
-.item-badge {
+.ios-badge {
   position: absolute;
   top: 12px;
   right: 12px;
-  padding: 2px 8px;
-  font-size: var(--font-size-caption-2);
+  padding: 4px 8px;
+  font-size: 12px;
   color: white;
-  border-radius: 10px;
+  border-radius: 12px;
   background-color: var(--info-color);
+  font-weight: 500;
 }
 
-.lost .item-badge {
+.lost .ios-badge {
   background-color: var(--warning-color);
 }
 
-.found .item-badge {
+.found .ios-badge {
   background-color: var(--success-color);
 }
 
-.item-title {
-  font-weight: 500;
-  font-size: var(--font-size-headline);
+.ios-title {
+  font-weight: 600;
+  font-size: 16px;
   margin-bottom: 8px;
   color: var(--text-primary);
   padding-right: 70px;
+  line-height: 1.3;
 }
 
-.item-description {
-  font-size: var(--font-size-subhead);
+.ios-description {
+  font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  line-height: 1.4;
 }
 
-.item-detail {
+.ios-detail {
   display: flex;
   gap: 16px;
   margin-bottom: 8px;
-  font-size: var(--font-size-footnote);
+  font-size: 13px;
   color: var(--text-tertiary);
 }
 
@@ -202,42 +229,76 @@ const handleClick = () => {
   gap: 4px;
 }
 
-.item-meta {
+.ios-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+
+.ios-meta {
   display: flex;
   justify-content: space-between;
-  font-size: var(--font-size-caption-1);
+  align-items: center;
+  font-size: 13px;
 }
 
 .publisher {
   color: var(--text-tertiary);
 }
 
-.status {
+.ios-status {
   padding: 2px 8px;
   border-radius: 10px;
-  background-color: var(--bg-tertiary);
-  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.status.open {
-  background-color: var(--warning-color);
-  color: white;
+.ios-status.open {
+  background-color: rgba(255, 149, 0, 0.1);
+  color: var(--warning-color);
 }
 
-.status.pending {
-  background-color: var(--info-color);
-  color: white;
+.ios-status.pending {
+  background-color: rgba(0, 122, 255, 0.1);
+  color: var(--primary-color);
 }
 
-.status.closed {
-  background-color: var(--success-color);
-  color: white;
+.ios-status.closed {
+  background-color: rgba(52, 199, 89, 0.1);
+  color: var(--success-color);
 }
 
 @media (max-width: 767px) {
   .item-image {
     flex: 0 0 100px;
     height: 100px;
+  }
+  
+  .ios-title {
+    font-size: 15px;
+  }
+  
+  .ios-description {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .ios-card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .ios-status.open {
+    background-color: rgba(255, 149, 0, 0.2);
+  }
+  
+  .ios-status.pending {
+    background-color: rgba(0, 122, 255, 0.2);
+  }
+  
+  .ios-status.closed {
+    background-color: rgba(52, 199, 89, 0.2);
   }
 }
 </style>

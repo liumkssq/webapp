@@ -67,6 +67,15 @@ export function getLostFoundList(params) {
           // 创建一个新对象，避免直接修改原对象
           const processedItem = { ...item };
           
+          // 处理特殊字符 \u0000
+          if (processedItem.type === '\u0000') {
+            processedItem.type = 'found'; // 默认为招领启事
+          }
+          
+          if (processedItem.status === '\u0000') {
+            processedItem.status = 'open'; // 默认为进行中
+          }
+          
           // 处理图片字段
           if (processedItem.images) {
             // 如果images是字符串，尝试解析JSON
@@ -83,6 +92,21 @@ export function getLostFoundList(params) {
               }
             }
             
+            // 如果是数组的第一项是JSON字符串
+            if (Array.isArray(processedItem.images) && processedItem.images.length > 0) {
+              const firstImage = processedItem.images[0];
+              if (typeof firstImage === 'string' && firstImage.includes('[')) {
+                try {
+                  const parsed = JSON.parse(firstImage);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    processedItem.images = parsed;
+                  }
+                } catch (e) {
+                  console.error('解析嵌套JSON失败:', e);
+                }
+              }
+            }
+            
             // 设置imageUrl
             if (Array.isArray(processedItem.images) && processedItem.images.length > 0) {
               processedItem.imageUrl = processedItem.images[0];
@@ -91,7 +115,7 @@ export function getLostFoundList(params) {
           
           // 确保类型字段存在
           if (!processedItem.type) {
-            processedItem.type = 'lost'; // 默认为寻物启事
+            processedItem.type = 'found'; // 默认为招领启事
           }
           
           // 确保状态字段存在

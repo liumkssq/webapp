@@ -26,6 +26,8 @@
       :categoryId="activeCategoryId"
       :showFilter="true"
       ref="productList"
+      @refresh="onProductListRefresh"
+      @emptyAction="goToPublish"
     />
     
     <!-- 浮动按钮 -->
@@ -89,6 +91,7 @@ const switchCategory = (categoryId) => {
     productList.value.refresh()
   } else {
     console.warn('商品列表组件未初始化');
+    messageStore.showWarning('加载商品列表失败，请刷新页面');
   }
 }
 
@@ -158,6 +161,14 @@ onMounted(() => {
     } else {
       console.warn('初始化时商品列表组件未找到');
       messageStore.showWarning('加载商品列表失败，请刷新页面');
+      
+      // 在组件未找到的情况下，尝试延迟获取
+      setTimeout(() => {
+        if (productList.value) {
+          console.log('延迟获取到商品列表组件');
+          productList.value.refresh();
+        }
+      }, 800);
     }
   })
 })
@@ -170,10 +181,13 @@ onActivated(() => {
   if (productList.value) {
     console.log('页面激活时刷新商品列表');
     productList.value.refresh()
-  } else {
-    console.warn('页面激活时商品列表组件未找到');
   }
 })
+
+// 处理商品列表刷新
+const onProductListRefresh = (info) => {
+  console.log('商品列表刷新完成:', info);
+}
 </script>
 
 <style scoped>
@@ -190,6 +204,7 @@ onActivated(() => {
   background-color: var(--background-primary);
   z-index: 5;
   border-bottom: 0.5px solid var(--separator-color);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .category-scroll {
@@ -231,13 +246,19 @@ onActivated(() => {
   justify-content: center;
   background-color: var(--primary-color);
   color: var(--white);
-  width: 90px;
-  height: 36px;
+  width: 110px;
+  height: 38px;
   border-radius: var(--radius-full);
-  box-shadow: var(--shadow-medium);
+  box-shadow: 0 4px 10px rgba(0, 122, 255, 0.25);
   z-index: 99;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.float-button:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 5px rgba(0, 122, 255, 0.2);
 }
 
 .float-button i {
@@ -248,6 +269,10 @@ onActivated(() => {
 @media (prefers-color-scheme: dark) {
   .category-item.active {
     background-color: rgba(0, 122, 255, 0.2);
+  }
+  
+  .float-button {
+    box-shadow: 0 4px 10px rgba(0, 122, 255, 0.4);
   }
 }
 </style>

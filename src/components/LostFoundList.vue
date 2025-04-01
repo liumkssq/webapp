@@ -3,25 +3,13 @@
     <!-- 顶部选项卡切换 -->
     <div class="tabs-container" v-if="showTabs">
       <div 
-        class="tab-item" 
-        :class="{ active: activeTab === 'all' }"
-        @click="switchTab('all')"
+        v-for="tab in tabs" 
+        :key="tab.value"
+        class="tab-item"
+        :class="{ active: activeTab === tab.value }"
+        @click="switchTab(tab.value)"
       >
-        全部
-      </div>
-      <div 
-        class="tab-item" 
-        :class="{ active: activeTab === 'lost' }"
-        @click="switchTab('lost')"
-      >
-        寻物启事
-      </div>
-      <div 
-        class="tab-item" 
-        :class="{ active: activeTab === 'found' }"
-        @click="switchTab('found')"
-      >
-        招领启事
+        {{ tab.label }}
       </div>
     </div>
     
@@ -50,9 +38,10 @@
         <!-- 物品图片 -->
         <div class="item-image" v-if="item.images && item.images.length > 0">
           <img 
-            :src="item.images[0]" 
+            :src="getImageUrl(item)" 
             :alt="item.title"
-            @error="handleImageError"
+            @error="(e) => handleImageError(e, item)"
+            loading="lazy"
           >
         </div>
         <div class="item-placeholder" v-else>
@@ -362,93 +351,203 @@ const confirmFilter = () => {
   fetchItems()
 }
 
-// 获取失物招领列表
-const fetchItems = async (isLoadMore = false) => {
-  if (isLoadMore) {
-    loadingMore.value = true
-  } else {
-    loading.value = true
+// 获取图片URL
+const getImageUrl = (item) => {
+  if (!item || (!item.images && !item.imageUrl)) {
+    return `https://picsum.photos/id/${(item?.id || 1) % 30 + 1}/300/300`;
   }
   
+  // 如果已有解析好的imageUrl
+  if (item.imageUrl) {
+    return item.imageUrl;
+  }
+  
+  // 处理images字段
+  if (item.images) {
+    // 如果images是数组
+    if (Array.isArray(item.images)) {
+      if (item.images.length > 0) {
+        const firstImage = item.images[0];
+        // 处理嵌套的JSON字符串情况
+        if (typeof firstImage === 'string') {
+          try {
+            // 可能是JSON字符串数组 ["[\"url\"]"]
+            if (firstImage.includes('[') && firstImage.includes(']')) {
+              const parsed = JSON.parse(firstImage);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed[0];
+              }
+            }
+            return firstImage;
+          } catch (e) {
+            console.error('解析失物招领图片失败:', e, firstImage);
+            return firstImage;
+          }
+        }
+      }
+    }
+    // 如果images是字符串
+    else if (typeof item.images === 'string') {
+      try {
+        if (item.images.includes('[') && item.images.includes(']')) {
+          const parsed = JSON.parse(item.images);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed[0];
+          }
+        }
+        return item.images;
+      } catch (e) {
+        console.error('解析失物招领图片字符串失败:', e);
+        return item.images;
+      }
+    }
+  }
+  
+  // 默认图片
+  return `https://picsum.photos/id/${(item.id || 1) % 30 + 1}/300/300`;
+};
+
+// 处理图片解析和清理特殊字符
+const processItems = (items) => {
+  if (!Array.isArray(items)) return [];
+  
+  return items.map(item => {
+    const processedItem = { ...item };
+    
+    // 处理图片
+    if (processedItem.images) {
+      try {
+        // 解析嵌套JSON字符串
+        if (Array.isArray(processedItem.images) && processedItem.images.length > 0) {
+          const firstImage = processedItem.images[0];
+          if (typeof firstImage === 'string' && firstImage.includes('[') && firstImage.includes(']')) {
+            const parsed = JSON.parse(firstImage);
+            processedItem.imageUrl = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+          } else {
+            processedItem.imageUrl = firstImage;
+          }
+        } else if (typeof processedItem.images === 'string') {
+          if (processedItem.images.includes('[') && processedItem.images.includes(']')) {
+            const parsed = JSON.parse(processedItem.images);
+            processedItem.imageUrl = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+          } else {
+            processedItem.imageUrl = processedItem.images;
+          }
+        }
+      } catch (e) {
+        console.error('处理失物招领图片失败:', e, processedItem.images);
+      }
+    }
+    
+    // 处理类型字段中的特殊字符
+    if (processedItem.type === '\u0000' || !processedItem.type) {
+      processedItem.type = 'found'; // 默认为招领启事
+    }
+    
+    // 处理状态字段中的特殊字符
+    if (processedItem.status === '\u0000' || !processedItem.status) {
+      processedItem.status = 'open'; // 默认为进行中
+    }
+    
+    // 处理分类字段
+    if (!processedItem.category) {
+      processedItem.category = '未分类';
+    }
+    
+    // 确保发布者信息存在
+    if (!processedItem.publisher) {
+      processedItem.publisher = {
+        id: processedItem.publisherId || 0,
+        nickname: processedItem.publisherName || '未知用户',
+        avatar: processedItem.publisherAvatar || ''
+      };
+    }
+    
+    return processedItem;
+  });
+};
+
+// 获取失物招领列表
+const fetchItems = async () => {
+  if (loading.value) return;
+  
+  loading.value = true;
+  
   try {
-    // 构建查询参数
-    const params = {
+    console.log('获取失物招领列表，参数:', {
       page: page.value,
-      limit: props.pageSize
-    }
+      limit: props.pageSize,
+      type: activeTab.value,
+      status: activeFilters.status,
+      category: activeFilters.category,
+      location: activeFilters.location,
+      time: activeFilters.time
+    });
     
-    // 添加类型筛选
-    if (activeTab.value !== 'all') {
-      params.type = activeTab.value
-    }
+    const response = await getLostFoundList({
+      page: page.value,
+      limit: props.pageSize,
+      type: activeTab.value === 'all' ? '' : activeTab.value,
+      status: activeFilters.status === 'all' ? '' : activeFilters.status,
+      category: activeFilters.category === 'all' ? '' : activeFilters.category,
+      location: activeFilters.location === 'all' ? '' : activeFilters.location,
+      time: activeFilters.time === 'all' ? '' : activeFilters.time
+    });
     
-    // 添加用户ID
-    if (props.userId) {
-      params.userId = props.userId
-    }
+    // 记录原始响应
+    console.log('失物招领列表原始响应:', response);
     
-    // 添加物品类别
-    if (activeFilters.category !== 'all') {
-      params.category = activeFilters.category
-    }
-    
-    // 添加地点
-    if (activeFilters.location !== 'all') {
-      params.location = activeFilters.location
-    }
-    
-    // 添加状态
-    if (activeFilters.status !== 'all') {
-      params.status = activeFilters.status
-    }
-    
-    // 添加时间筛选
-    if (activeFilters.time !== 'all') {
-      const now = new Date()
-      let startTime
+    if (response && (response.code === 200 || response.success)) {
+      // 处理接口返回的数据结构不一致的情况
+      let responseData = response.data;
       
-      if (activeFilters.time === 'today') {
-        startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-      } else if (activeFilters.time === 'yesterday') {
-        startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime()
-        const endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - 1
-        params.endTime = endTime
-      } else if (activeFilters.time === 'this_week') {
-        const day = now.getDay() || 7
-        startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1).getTime()
-      } else if (activeFilters.time === 'this_month') {
-        startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
-      } else if (activeFilters.time === 'custom') {
-        // 自定义时间范围
-        // 在实际应用中，这里会获取日期选择器的值
+      // 如果data属性不存在，直接使用response
+      if (!responseData && (response.list || Array.isArray(response))) {
+        responseData = response;
       }
       
-      if (startTime) {
-        params.startTime = startTime
+      // 从不同的数据结构中提取列表数据
+      let itemList = [];
+      let total = 0;
+      
+      if (Array.isArray(responseData)) {
+        itemList = responseData;
+        total = responseData.length;
+      } else if (responseData.list && Array.isArray(responseData.list)) {
+        itemList = responseData.list;
+        total = responseData.total || responseData.list.length;
+      } else if (Array.isArray(responseData.data)) {
+        itemList = responseData.data;
+        total = responseData.total || responseData.data.length;
       }
-    }
-    
-    const res = await getLostFoundList(params)
-    
-    if (res.code === 200 && res.data && res.data.list) {
-      if (isLoadMore) {
-        items.value = [...items.value, ...res.data.list]
+      
+      // 处理返回的数据
+      const processedList = processItems(itemList);
+      console.log('处理后的失物招领列表:', processedList);
+      
+      // 更新视图数据
+      if (page.value === 1) {
+        items.value = processedList; // 首页加载，直接替换数据
       } else {
-        items.value = res.data.list
+        items.value = [...items.value, ...processedList]; // 加载更多，追加数据
       }
       
-      // 更新是否有更多数据
-      hasMore.value = res.data.hasMore || false
+      // 更新分页信息
+      totalItems.value = total;
+      hasMore.value = items.value.length < total;
+      loadingMore.value = false;
     } else {
-      console.error('返回数据格式错误', res)
+      console.error('获取失物招领列表失败:', response);
     }
   } catch (error) {
-    console.error('获取失物招领列表失败', error)
+    console.error('获取失物招领列表异常:', error);
   } finally {
-    loading.value = false
-    loadingMore.value = false
+    loading.value = false;
+    
+    // 通知父组件加载状态变化
+    emit('loading', false);
   }
-}
+};
 
 // 格式化时间
 const formatTime = (time) => {
@@ -534,9 +633,23 @@ const goToDetail = (id) => {
 }
 
 // 处理图片加载错误
-const handleImageError = (e) => {
-  e.target.src = '/placeholder.png'
-}
+const handleImageError = (event, item) => {
+  console.warn(`失物招领图片加载失败: ${item.id}`, event.target.src);
+  
+  // 检查是否已经是占位图，避免循环加载
+  if (event.target.getAttribute('data-is-placeholder') === 'true') {
+    console.log('已经是占位图，不再替换');
+    return;
+  }
+  
+  // 使用物品ID确保每个物品有不同的图片
+  const randomId = (item.id % 30) + 1;
+  const timestamp = new Date().getTime();
+  event.target.src = `https://picsum.photos/id/${randomId}/300/300?t=${timestamp}`;
+  
+  // 标记这个图片已经使用了占位图
+  event.target.setAttribute('data-is-placeholder', 'true');
+};
 
 // 处理空状态操作
 const handleEmptyAction = () => {
@@ -548,7 +661,7 @@ const loadMore = () => {
   if (loading.value || loadingMore.value || !hasMore.value) return
   
   page.value++
-  fetchItems(true)
+  fetchItems()
 }
 
 // 刷新列表
@@ -606,3 +719,369 @@ defineExpose({
   switchTab
 })
 </script>
+
+<style scoped>
+.lost-found-list-component {
+  width: 100%;
+}
+
+.tabs-container {
+  display: flex;
+  background-color: white;
+  border-bottom: 1px solid var(--separator-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 14px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  position: relative;
+  transition: color 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-item.active {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.tab-item.active:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background-color: var(--primary-color);
+  border-radius: 1.5px;
+}
+
+.filter-bar {
+  display: flex;
+  background-color: white;
+  position: relative;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--separator-color);
+  z-index: 5;
+}
+
+.filter-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filter-item.active {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.list-container {
+  padding: 12px;
+  min-height: 200px;
+}
+
+.lost-found-item {
+  display: flex;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-left: 4px solid var(--info-color);
+}
+
+.lost-found-item:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.lost {
+  border-left-color: var(--warning-color);
+}
+
+.found {
+  border-left-color: var(--success-color);
+}
+
+.item-image {
+  flex: 0 0 120px;
+  height: 120px;
+  overflow: hidden;
+  background-color: var(--background-secondary);
+}
+
+.item-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.item-img:hover {
+  transform: scale(1.05);
+}
+
+.item-info {
+  flex: 1;
+  padding: 12px;
+  position: relative;
+}
+
+.item-title-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-type-tag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: var(--info-color);
+  color: white;
+  margin-right: 8px;
+}
+
+.lost .item-type-tag {
+  background-color: var(--warning-color);
+}
+
+.found .item-type-tag {
+  background-color: var(--success-color);
+}
+
+.item-title {
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--text-primary);
+  padding-right: 70px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.item-description {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reward-info {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.reward-amount {
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+.item-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.item-status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: rgba(255, 149, 0, 0.1);
+  color: var(--warning-color);
+}
+
+.lost .item-status {
+  background-color: rgba(255, 149, 0, 0.1);
+  color: var(--warning-color);
+}
+
+.found .item-status {
+  background-color: rgba(52, 199, 89, 0.1);
+  color: var(--success-color);
+}
+
+.item-time {
+  font-size: 12px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  color: var(--text-tertiary);
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 2px solid rgba(0, 122, 255, 0.1);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.empty-icon {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.empty-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.empty-text {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+.empty-action {
+  margin-top: 16px;
+  padding: 8px 20px;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.load-more {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.loading-spinner.small {
+  width: 20px;
+  height: 20px;
+}
+
+.load-more-text {
+  color: var(--primary-color);
+  font-size: 14px;
+}
+
+.filter-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.popup-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.popup-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 12px;
+  width: 80%;
+  max-width: 400px;
+  position: relative;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.popup-title {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.popup-close {
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.filter-options {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.filter-option {
+  padding: 12px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--separator-light);
+  color: var(--text-secondary);
+}
+
+.filter-option.active {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.action-btn {
+  padding: 8px 20px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.action-btn.reset {
+  background-color: var(--text-tertiary);
+  color: white;
+}
+
+.action-btn.confirm {
+  background-color: var(--primary-color);
+  color: white;
+}
+</style>

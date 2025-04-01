@@ -91,10 +91,6 @@ if (enableMock) {
   console.log('Mock 服务已禁用，使用真实API请求')
 }
 
-// 强制禁用所有模拟拦截器
-restoreMockAdapter()
-console.log('已强制恢复所有真实API请求')
-
 // 获取mockAdapter实例
 const mockAdapter = getMockAdapter()
 

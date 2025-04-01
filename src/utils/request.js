@@ -73,6 +73,13 @@ service.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${token}`
     }
     
+    // 打印请求信息
+    console.log(`[API请求] ${config.method.toUpperCase()} ${config.url}`, {
+      params: config.params,
+      data: config.data,
+      headers: config.headers
+    });
+    
     // 处理重复请求
     config = addPendingRequest(config)
     

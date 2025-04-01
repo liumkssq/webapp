@@ -442,7 +442,8 @@ const fetchHomeData = async () => {
             } else if (processedItem.imageUrl) {
               // 已有imageUrl，不做处理
             } else {
-              processedItem.imageUrl = 'https://via.placeholder.com/300';
+              // 使用picsum.photos代替via.placeholder.com
+              processedItem.imageUrl = `https://picsum.photos/id/${(processedItem.id % 30) + 1}/300/300`;
             }
             
             // 确保类型字段存在

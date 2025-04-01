@@ -1,481 +1,151 @@
 <template>
   <div class="lost-found-detail-page">
     <!-- 头部导航 -->
-    <HeaderNav :title="item.type === 'lost' ? '寻物详情' : '招领详情'" />
+    <HeaderNav 
+      :title="item.type === 'lost' ? '寻物启事' : '招领启事'" 
+      :showBack="true" 
+      class="ios-header"
+    />
     
-    <!-- 主要内容 -->
-    <div class="content" v-if="!loading">
-      <!-- 状态标签 -->
-      <div class="status-label" :class="statusClass">
-        {{ statusText }}
+    <!-- 主要内容区域 -->
+    <div class="detail-container">
+      <!-- 物品图片 -->
+      <div class="image-container" v-if="item.images && item.images.length > 0">
+        <swiper 
+          :slides-per-view="1" 
+          :pagination="{ clickable: true }" 
+          :autoplay="{ delay: 3000 }"
+          class="image-swiper"
+        >
+          <swiper-slide v-for="(img, index) in parsedImages" :key="index">
+            <img :src="img" @error="handleImageError" class="detail-image" :alt="item.title">
+          </swiper-slide>
+        </swiper>
       </div>
       
-      <!-- 标题和基本信息 -->
-      <div class="item-header">
-        <div class="item-title">{{ item.title }}</div>
+      <!-- 物品基本信息 -->
+      <div class="info-card ios-card">
+        <div class="item-header">
+          <div class="item-status ios-badge" :class="item.status">{{ 
+            item.status === 'open' ? '进行中' : 
+            item.status === 'pending' ? '确认中' : '已完成' 
+          }}</div>
+          <h1 class="item-title">{{ item.title }}</h1>
+        </div>
+        
         <div class="item-meta">
-          <span class="item-category">
-            <i class="van-icon van-icon-label"></i> {{ item.category }}
-          </span>
-          <span class="item-time">
-            <i class="van-icon van-icon-clock-o"></i> {{ formatTime(item.eventTime, 'short') }}
-          </span>
-          <span class="item-views" v-if="item.viewCount">
-            <i class="van-icon van-icon-eye-o"></i> {{ formatNumber(item.viewCount) }}
-          </span>
+          <div class="meta-item">
+            <svg-icon name="location" class="ios-icon" />
+            <span>{{ item.location || '未知位置' }}</span>
+          </div>
+          <div class="meta-item">
+            <svg-icon name="time" class="ios-icon" />
+            <span>{{ formatTime(item.createTime) }}</span>
+          </div>
+          <div class="meta-item">
+            <svg-icon name="category" class="ios-icon" />
+            <span>{{ item.category?.name || '未分类' }}</span>
+          </div>
+        </div>
+        
+        <div class="item-description">
+          <h2 class="section-title">物品描述</h2>
+          <p class="description-text">{{ item.description }}</p>
         </div>
       </div>
       
-      <!-- 图片轮播 -->
-      <div class="image-carousel" v-if="item.images && item.images.length > 0">
-        <div class="carousel-container">
-          <!-- 主轮播区域 -->
-          <div class="carousel-main">
-            <div 
-              class="carousel-slide" 
-              v-for="(image, index) in item.images" 
-              :key="index"
-              :style="{ transform: `translateX(${(index - currentImageIndex) * 100}%)` }"
-              @click="previewImage(index)"
-            >
-              <img :src="image" :alt="item.title">
-            </div>
-            
-            <!-- 前后导航按钮 -->
-            <div class="carousel-nav prev" @click.stop="prevImage" v-if="item.images.length > 1">
-              <i class="van-icon van-icon-arrow-left"></i>
-            </div>
-            <div class="carousel-nav next" @click.stop="nextImage" v-if="item.images.length > 1">
-              <i class="van-icon van-icon-arrow"></i>
-            </div>
+      <!-- 发布者信息 -->
+      <div class="publisher-card ios-card">
+        <h2 class="section-title">发布者信息</h2>
+        <div class="publisher-info">
+          <img :src="item.publisher?.avatar || '/images/default-avatar.jpg'" class="publisher-avatar" alt="发布者头像">
+          <div class="publisher-detail">
+            <div class="publisher-name">{{ item.publisher?.nickname || '未知用户' }}</div>
+            <div class="publisher-time">发布于 {{ formatTime(item.createTime) }}</div>
           </div>
-          
-          <!-- 分页指示器 -->
-          <div class="carousel-indicators" v-if="item.images.length > 1">
-            <div 
-              v-for="(_, index) in item.images" 
-              :key="index"
-              class="indicator-dot"
-              :class="{ active: currentImageIndex === index }"
-              @click="currentImageIndex = index"
-            ></div>
-          </div>
-          
-          <!-- 缩略图导航 -->
-          <div class="carousel-thumbnails" v-if="item.images.length > 1">
-            <div 
-              v-for="(image, index) in item.images" 
-              :key="index"
-              class="thumbnail"
-              :class="{ active: currentImageIndex === index }"
-              @click="currentImageIndex = index"
-            >
-              <img :src="image" :alt="item.title">
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 详情信息 -->
-      <div class="detail-section">
-        <div class="section-title">
-          <i class="van-icon van-icon-info-o"></i> 详情信息
-        </div>
-        
-        <div class="detail-card">
-          <div class="description-block">
-            <div class="description-label">物品描述</div>
-            <div class="description-content">{{ item.description || '暂无描述' }}</div>
-          </div>
-          
-          <div class="detail-items">
-            <div class="detail-item">
-              <div class="detail-label">
-                <i class="van-icon van-icon-location-o"></i>
-                {{ item.type === 'lost' ? '丢失地点' : '拾获地点' }}
-              </div>
-              <div class="detail-content location-value">
-                <span>{{ item.location }}</span>
-                <i class="van-icon van-icon-map-marked" @click="viewLocation"></i>
-              </div>
-            </div>
-            
-            <div class="detail-item">
-              <div class="detail-label">
-                <i class="van-icon van-icon-clock-o"></i>
-                {{ item.type === 'lost' ? '丢失时间' : '拾获时间' }}
-              </div>
-              <div class="detail-content">{{ formatDetailTime(item.eventTime) }}</div>
-            </div>
-            
-            <div class="detail-item">
-              <div class="detail-label">
-                <i class="van-icon van-icon-calendar-o"></i>
-                发布时间
-              </div>
-              <div class="detail-content">{{ formatDetailTime(item.createTime) }}</div>
-            </div>
-            
-            <div class="detail-item" v-if="item.reward && item.type === 'lost'">
-              <div class="detail-label">
-                <i class="van-icon van-icon-gold-coin-o"></i>
-                悬赏金额
-              </div>
-              <div class="detail-content reward">¥{{ item.reward }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 联系信息 -->
-      <div class="contact-section">
-        <div class="section-title">
-          <i class="van-icon van-icon-friends-o"></i> 联系信息
-        </div>
-        
-        <div class="user-info" @click="goToUserProfile(item.publisher.id)">
-          <img :src="item.publisher.avatar" class="user-avatar" :alt="item.publisher.name">
-          <div class="user-meta">
-            <div class="user-name">
-              {{ item.publisher.name }}
-              <i class="van-icon van-icon-certificate" v-if="item.publisher.verified"></i>
-              <span class="user-badge" v-if="item.publisher.level">
-                <i class="van-icon van-icon-gem-o"></i> Lv{{ item.publisher.level }}
-              </span>
-            </div>
-            <div class="user-details">
-              <span class="user-school">{{ item.publisher.school }}</span>
-              <span class="user-join" v-if="item.publisher.joinDate">加入于 {{formatTime(item.publisher.joinDate, 'date')}}</span>
-            </div>
-          </div>
-          <div class="contact-btn" v-if="!isCurrentUser">联系Ta</div>
-        </div>
-        
-        <div class="contact-methods" v-if="item.contactInfo">
-          <div class="contact-item" v-if="item.contactInfo.phone && (isCurrentUser || item.contactInfo.showPhone)">
-            <div class="contact-icon phone">
-              <i class="van-icon van-icon-phone-o"></i>
-            </div>
-            <div class="contact-info">
-              <div class="contact-label">电话</div>
-              <div class="contact-value">{{ item.contactInfo.phone }}</div>
-            </div>
-            <div class="action-btn phone-action" v-if="!isCurrentUser" @click="callPhone(item.contactInfo.phone)">拨打</div>
-          </div>
-          
-          <div class="contact-item" v-if="item.contactInfo.wechat && (isCurrentUser || item.contactInfo.showWechat)">
-            <div class="contact-icon wechat">
-              <i class="van-icon van-icon-wechat"></i>
-            </div>
-            <div class="contact-info">
-              <div class="contact-label">微信</div>
-              <div class="contact-value">{{ item.contactInfo.wechat }}</div>
-            </div>
-            <div class="action-btn wechat-action" v-if="!isCurrentUser" @click="copyWechat(item.contactInfo.wechat)">复制</div>
-          </div>
-          
-          <div class="contact-item" v-if="!isCurrentUser">
-            <div class="contact-icon chat">
-              <i class="van-icon van-icon-chat-o"></i>
-            </div>
-            <div class="contact-info">
-              <div class="contact-label">站内聊天</div>
-              <div class="contact-value">在线交流更方便</div>
-            </div>
-            <div class="action-btn chat-action" @click="goToChat(item.publisher.id)">聊天</div>
+          <div class="contact-btn" v-if="item.status === 'open'" @click="contactPublisher">
+            <svg-icon name="chat" class="ios-icon" />
+            <span>联系TA</span>
           </div>
         </div>
       </div>
       
       <!-- 评论区 -->
-      <div class="comment-section">
-        <div class="section-title">
-          <span>留言 {{ item.commentCount || 0 }}</span>
-          <span class="comment-action" @click="showComment">
-            <i class="van-icon van-icon-edit"></i> 我要留言
-          </span>
-        </div>
+      <div class="comments-card ios-card">
+        <h2 class="section-title">互动区 ({{ comments.length }})</h2>
         
         <!-- 评论列表 -->
-        <div class="comment-list" v-if="item.comments && item.comments.length > 0">
-          <div 
-            v-for="comment in item.comments.slice(0, 5)" 
-            :key="comment.id" 
-            class="comment-item"
-          >
-            <!-- 评论信息 -->
-            <div class="comment-user" @click="goToUserProfile(comment.author.id)">
-              <img :src="comment.author.avatar" class="comment-avatar" :alt="comment.author.name">
-            </div>
+        <div class="comments-list" v-if="comments.length > 0">
+          <div class="comment-item" v-for="(comment, index) in comments" :key="index">
+            <img :src="comment.user?.avatar || '/images/default-avatar.jpg'" class="comment-avatar" alt="评论者头像">
             <div class="comment-content">
               <div class="comment-header">
-                <span class="comment-name">{{ comment.author.name }}</span>
-                <span class="user-label" v-if="comment.author.id === item.publisher.id">发布者</span>
-                <span class="comment-time">{{ formatTime(comment.createTime, 'short') }}</span>
+                <span class="comment-user">{{ comment.user?.nickname || '未知用户' }}</span>
+                <span class="comment-time">{{ formatTime(comment.createTime) }}</span>
               </div>
-              <div class="comment-text">
-                {{ comment.content }}
-              </div>
-              
-              <!-- 评论操作 -->
-              <div class="comment-actions">
-                <span class="reply-btn" @click="replyComment(comment)">
-                  <i class="van-icon van-icon-chat-o"></i> 回复
-                </span>
-                <span class="like-btn" @click="likeComment(comment)">
-                  <i :class="['van-icon', comment.isLiked ? 'van-icon-like-fill active' : 'van-icon-like-o']"></i>
-                  <span class="like-count">{{ comment.likeCount > 0 ? comment.likeCount : '' }}</span>
-                </span>
-              </div>
+              <div class="comment-text">{{ comment.content }}</div>
               
               <!-- 回复列表 -->
-              <div class="reply-list" v-if="comment.replies && comment.replies.length > 0">
-                <div 
-                  v-for="reply in comment.replies" 
-                  :key="reply.id" 
-                  class="reply-item"
-                >
-                  <div class="reply-content">
-                    <span class="reply-name">{{ reply.author.name }}</span>
-                    <span class="user-label" v-if="reply.author.id === item.publisher.id">发布者</span>
-                    <span class="reply-to" v-if="reply.replyTo">回复 <span class="reply-to-name">{{ reply.replyTo.name }}</span></span>
-                    <span class="reply-text">{{ reply.content }}</span>
-                  </div>
-                  <div class="reply-actions">
-                    <span class="reply-time">{{ formatTime(reply.createTime, 'short') }}</span>
-                    <span class="reply-btn" @click="replyComment(comment, reply)">
-                      <i class="van-icon van-icon-chat-o"></i> 回复
-                    </span>
-                  </div>
+              <div class="replies" v-if="comment.replies && comment.replies.length > 0">
+                <div class="reply-item" v-for="(reply, rIndex) in comment.replies" :key="rIndex">
+                  <span class="reply-user">{{ reply.user?.nickname || '未知用户' }}</span>
+                  <span class="reply-text">{{ reply.content }}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
         
-        <!-- 无评论 -->
-        <div class="no-comment" v-else>
-          <div class="no-data-icon"></div>
-          <div class="no-data-text">暂无留言</div>
+        <!-- 无评论提示 -->
+        <div class="no-comments" v-else>
+          <svg-icon name="comment-empty" class="empty-icon" />
+          <span>暂无评论，快来留言吧</span>
+        </div>
+        
+        <!-- 评论输入框 -->
+        <div class="comment-input-container">
+          <input 
+            type="text" 
+            v-model="commentText" 
+            placeholder="说点什么..." 
+            class="comment-input ios-input"
+            @keyup.enter="submitComment"
+          />
+          <button class="submit-btn" :disabled="!commentText.trim()" @click="submitComment">
+            <svg-icon name="send" class="ios-icon" />
+          </button>
         </div>
       </div>
       
-      <!-- 相似物品推荐 -->
-      <div class="similar-items" v-if="item.similarItems && item.similarItems.length > 0">
-        <div class="section-title">
-          <span>相似{{ item.type === 'lost' ? '丢失物品' : '招领物品' }}</span>
-          <span class="more-link" @click="viewMoreSimilar">
-            查看更多 <i class="van-icon van-icon-arrow"></i>
-          </span>
-        </div>
-        <div class="similar-scroll">
+      <!-- 相关推荐 -->
+      <div class="related-card ios-card" v-if="relatedItems.length > 0">
+        <h2 class="section-title">相关物品</h2>
+        <div class="related-list">
           <div 
-            v-for="simItem in item.similarItems" 
-            :key="simItem.id" 
-            class="similar-item"
-            @click="goToLostFoundDetail(simItem.id)"
+            class="related-item" 
+            v-for="relatedItem in relatedItems" 
+            :key="relatedItem.id"
+            @click="goToDetail(relatedItem.id)"
           >
-            <div class="similar-image">
-              <img :src="simItem.images && simItem.images.length > 0 ? simItem.images[0] : '/placeholder.png'" :alt="simItem.title">
-              <div class="item-status" :class="getStatusClass(simItem.status)">{{ getStatusText(simItem.status) }}</div>
-            </div>
-            <div class="similar-info">
-              <div class="similar-title">{{ simItem.title }}</div>
-              <div class="similar-meta">
-                <span class="similar-location">{{ simItem.location }}</span>
-                <span class="similar-time">{{ formatTime(simItem.eventTime, 'short') }}</span>
-              </div>
-            </div>
+            <img :src="getImageUrl(relatedItem)" class="related-image" :alt="relatedItem.title">
+            <div class="related-title">{{ relatedItem.title }}</div>
           </div>
         </div>
+      </div>
+    </div>
+    
+    <!-- 底部操作按钮 -->
+    <div class="bottom-actions">
+      <div class="action-button share-btn" @click="shareItem">
+        <svg-icon name="share" class="action-icon" />
+        <span>分享</span>
       </div>
       
-      <!-- 可能是你在找的 -->
-      <div class="similar-items" v-if="item.relatedItems && item.relatedItems.length > 0">
-        <div class="section-title">
-          <span>可能是你在找的</span>
-          <span class="more-link" @click="viewMoreRelated">
-            查看更多 <i class="van-icon van-icon-arrow"></i>
-          </span>
-        </div>
-        <div class="similar-scroll">
-          <div 
-            v-for="relItem in item.relatedItems" 
-            :key="relItem.id" 
-            class="similar-item"
-            @click="goToLostFoundDetail(relItem.id)"
-          >
-            <div class="similar-image">
-              <img :src="relItem.images && relItem.images.length > 0 ? relItem.images[0] : '/placeholder.png'" :alt="relItem.title">
-              <div class="item-status" :class="getStatusClass(relItem.status)">{{ getStatusText(relItem.status) }}</div>
-            </div>
-            <div class="similar-info">
-              <div class="similar-title">{{ relItem.title }}</div>
-              <div class="similar-meta">
-                <span class="similar-location">{{ relItem.location }}</span>
-                <span class="similar-time">{{ formatTime(relItem.eventTime, 'short') }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="action-button primary-btn" @click="handlePrimaryAction">
+        <svg-icon :name="primaryActionIcon" class="action-icon" />
+        <span>{{ primaryActionText }}</span>
       </div>
     </div>
-    
-    <!-- 加载中 -->
-    <div class="loading-container" v-if="loading">
-      <div class="loading-card">
-        <div class="loading-header">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">{{ loadingStatus }}</div>
-        </div>
-        <div class="loading-tips">
-          <div class="tip-icon"><i class="van-icon van-icon-info-o"></i></div>
-          <div class="tip-text">如果加载时间过长，将自动显示示例内容</div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- 添加一个容器元素来增加底部间距，防止内容被底部操作栏遮挡 -->
-    <div class="bottom-spacer" style="height: 72px;"></div>
-    
-    <!-- 底部操作栏 -->
-    <div class="bottom-action-bar">
-      <div class="action-icons">
-        <div class="action-icon" @click="likeItem">
-          <i :class="['icon-like', {'active': item.isLiked}]"></i>
-          <div class="icon-count">{{ item.likes || 0 }}</div>
-        </div>
-        <div class="action-icon" @click="showComment">
-          <i class="icon-comment"></i>
-          <div class="icon-count">{{ item.comments || 0 }}</div>
-        </div>
-        <div class="action-icon" @click="shareItem">
-          <i class="icon-share"></i>
-          <div class="icon-count">分享</div>
-        </div>
-      </div>
-      <div class="action-buttons">
-        <div v-if="!isCurrentUser && item.status !== 'closed'" 
-             class="action-btn action-contact" 
-             @click="contactPublisher">
-          联系发布者
-        </div>
-        <div v-if="isCurrentUser && item.status !== 'closed'" 
-             class="action-btn action-primary" 
-             @click="showStatusUpdatePopup = true">
-          {{ item.type === 'lost' ? '标记为已找到' : '标记为已归还' }}
-        </div>
-      </div>
-    </div>
-    
-    <!-- 留言输入框 -->
-    <div class="comment-input-wrapper" v-if="showCommentInput">
-      <div class="comment-input">
-        <input 
-          type="text" 
-          v-model="commentText" 
-          :placeholder="replyTo ? `回复 ${replyTo.name}` : '有什么想说的...'" 
-          ref="commentInputEl"
-        >
-        <button 
-          class="comment-submit" 
-          :disabled="!commentText.trim()" 
-          @click="submitComment"
-        >发送</button>
-      </div>
-    </div>
-    
-    <!-- 图片预览 -->
-    <div class="image-preview" v-if="showImagePreview" @click="closePreview">
-      <div class="preview-container">
-        <img :src="previewSrc" alt="预览图片">
-      </div>
-      <div class="preview-close">
-        <i class="icon-close"></i>
-      </div>
-    </div>
-    
-    <!-- 分享弹窗 -->
-    <div class="share-popup" v-if="showSharePopup">
-      <div class="popup-mask" @click="showSharePopup = false"></div>
-      <div class="popup-content">
-        <div class="popup-header">
-          <div class="popup-title">分享到</div>
-          <div class="popup-close" @click="showSharePopup = false">
-            <i class="icon-close"></i>
-          </div>
-        </div>
-        <div class="share-options">
-          <div class="share-option" @click="shareVia('wechat')">
-            <div class="option-icon wechat">
-              <i class="icon-wechat"></i>
-            </div>
-            <div class="option-name">微信</div>
-          </div>
-          <div class="share-option" @click="shareVia('moments')">
-            <div class="option-icon moments">
-              <i class="icon-moments"></i>
-            </div>
-            <div class="option-name">朋友圈</div>
-          </div>
-          <div class="share-option" @click="shareVia('qq')">
-            <div class="option-icon qq">
-              <i class="icon-qq"></i>
-            </div>
-            <div class="option-name">QQ</div>
-          </div>
-          <div class="share-option" @click="shareVia('weibo')">
-            <div class="option-icon weibo">
-              <i class="icon-weibo"></i>
-            </div>
-            <div class="option-name">微博</div>
-          </div>
-          <div class="share-option" @click="shareVia('link')">
-            <div class="option-icon link">
-              <i class="icon-link"></i>
-            </div>
-            <div class="option-name">复制链接</div>
-          </div>
-        </div>
-        <div class="cancel-btn" @click="showSharePopup = false">
-          取消
-        </div>
-      </div>
-    </div>
-    
-    <!-- 状态更新弹窗 -->
-    <div class="status-popup" v-if="showStatusUpdatePopup">
-      <div class="popup-mask" @click="showStatusUpdatePopup = false"></div>
-      <div class="popup-content">
-        <div class="popup-header">
-          <div class="popup-title">更新状态</div>
-          <div class="popup-close" @click="showStatusUpdatePopup = false">
-            <i class="icon-close"></i>
-          </div>
-        </div>
-        <div class="status-options">
-          <div 
-            class="status-option" 
-            v-for="status in availableStatuses" 
-            :key="status.value"
-            @click="updateStatus(status.value)"
-          >
-            {{ status.label }}
-          </div>
-        </div>
-        <div class="cancel-btn" @click="showStatusUpdatePopup = false">
-          取消
-        </div>
-      </div>
-    </div>
-    
-    <!-- 提示消息 -->
-    <div class="toast" v-if="toast.show">
-      {{ toast.message }}
-    </div>
-    
-    <!-- 底部导航 -->
-    <FooterNav />
   </div>
 </template>
 
@@ -1240,676 +910,403 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* 通用样式修复 */
-.no-comment {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 30px 0;
-  color: #999;
+.lost-found-detail-page {
+  min-height: 100vh;
+  background-color: var(--background-secondary);
+  padding-top: calc(var(--header-height) + var(--safe-area-inset-top));
+  padding-bottom: calc(60px + var(--safe-area-inset-bottom));
 }
 
-.no-data-icon {
-  width: 60px;
-  height: 60px;
-  background-color: #f5f5f5;
-  border-radius: 50%;
-  margin-bottom: 15px;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"><path d="M20,2H4C2.9,2,2,2.9,2,4v18l4-4h14c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2z M9,11H7V9h2V11z M13,11h-2V9h2V11z M17,11h-2V9h2V11z"/></svg>');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 32px;
+.ios-header {
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.85);
+  border-bottom: 0.5px solid var(--separator-color);
 }
 
-.no-data-text {
-  font-size: 14px;
+.detail-container {
+  padding: 16px;
 }
 
-/* iOS风格轮播图样式 */
-.image-carousel {
-  position: relative;
-  margin: 16px 0;
-  border-radius: 16px;
-  overflow: hidden;
-  background-color: #f8f8f8;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-}
-
-.carousel-container {
-  position: relative;
-}
-
-.carousel-main {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4/3;
-  overflow: hidden;
-  background-color: #f2f2f2;
-}
-
-.carousel-slide {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.3s ease;
-}
-
-.carousel-slide img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  -webkit-user-drag: none;
-  user-select: none;
-}
-
-.carousel-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
-  background-color: rgba(255, 255, 255, 0.8);
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-  opacity: 0.8;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.carousel-nav:hover {
-  opacity: 1;
-  transform: translateY(-50%) scale(1.05);
-}
-
-.carousel-nav.prev {
-  left: 12px;
-}
-
-.carousel-nav.next {
-  right: 12px;
-}
-
-.carousel-nav i {
-  font-size: 20px;
-  color: #333;
-}
-
-/* 分页指示器 */
-.carousel-indicators {
-  display: flex;
-  justify-content: center;
-  position: absolute;
-  bottom: 16px;
-  left: 0;
-  right: 0;
-  z-index: 10;
-}
-
-.indicator-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.5);
-  margin: 0 4px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.indicator-dot.active {
-  width: 16px;
+.ios-card {
   background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 0.5px solid var(--separator-color);
 }
 
-/* 缩略图导航 */
-.carousel-thumbnails {
-  display: flex;
-  overflow-x: auto;
-  padding: 12px;
-  gap: 8px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  scroll-behavior: smooth;
-}
-
-.carousel-thumbnails::-webkit-scrollbar {
-  display: none;
-}
-
-.thumbnail {
-  flex: 0 0 60px;
-  height: 60px;
-  border-radius: 8px;
+.image-container {
+  height: 240px;
   overflow: hidden;
-  cursor: pointer;
-  opacity: 0.6;
-  border: 2px solid transparent;
-  transition: all 0.2s ease;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.thumbnail.active {
-  opacity: 1;
-  border-color: #007AFF;
+.image-swiper {
+  height: 100%;
 }
 
-.thumbnail:hover {
-  opacity: 0.9;
-}
-
-.thumbnail img {
+.detail-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* 评论区域样式 */
-.comment-section {
-  background: white;
-  border-radius: 16px;
-  margin: 16px 0;
-  padding: 20px;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+.item-header {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.item-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  padding-right: 80px;
+  line-height: 1.3;
+}
+
+.ios-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ios-badge.open {
+  background-color: rgba(255, 149, 0, 0.1);
+  color: var(--warning-color);
+}
+
+.ios-badge.pending {
+  background-color: rgba(0, 122, 255, 0.1);
+  color: var(--primary-color);
+}
+
+.ios-badge.closed {
+  background-color: rgba(52, 199, 89, 0.1);
+  color: var(--success-color);
+}
+
+.item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.ios-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
 }
 
 .section-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  font-weight: 600;
   font-size: 16px;
-  color: #333;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px 0;
 }
 
-.comment-action {
-  color: #007AFF;
-  font-size: 14px;
+.description-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.publisher-info {
   display: flex;
   align-items: center;
-  cursor: pointer;
 }
 
-/* 评论列表样式优化 */
-.comment-list {
-  width: 100%;
+.publisher-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  object-fit: cover;
+  margin-right: 12px;
+  border: 1px solid var(--separator-color);
+}
+
+.publisher-detail {
+  flex: 1;
+}
+
+.publisher-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.publisher-time {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.contact-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.contact-btn .ios-icon {
+  color: white;
+}
+
+.comments-list {
+  margin-bottom: 16px;
 }
 
 .comment-item {
   display: flex;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f2f2f2;
+  border-bottom: 0.5px solid var(--separator-color);
 }
 
-.comment-user {
-  flex-shrink: 0;
-  margin-right: 12px;
+.comment-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .comment-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
   object-fit: cover;
+  margin-right: 12px;
 }
 
 .comment-content {
   flex: 1;
-  overflow: hidden;
 }
 
 .comment-header {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
+  justify-content: space-between;
+  margin-bottom: 4px;
 }
 
-.comment-name {
-  font-weight: 500;
+.comment-user {
   font-size: 14px;
-  color: #333;
-  margin-right: 8px;
-  max-width: 120px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-label {
-  background-color: #ff9500;
-  color: white;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  margin-right: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .comment-time {
   font-size: 12px;
-  color: #8e8e93;
-  margin-left: auto;
+  color: var(--text-tertiary);
 }
 
 .comment-text {
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.4;
+  color: var(--text-secondary);
   margin-bottom: 8px;
-  color: #333;
-  word-break: break-word;
 }
 
-.comment-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.reply-btn, .like-btn {
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  color: #8e8e93;
-  margin-left: 16px;
-  cursor: pointer;
-}
-
-.like-btn.active,
-.like-btn .active {
-  color: #ff2d55;
-}
-
-.reply-list {
-  background-color: #f9f9f9;
+.replies {
+  padding: 8px;
+  background-color: var(--background-tertiary);
   border-radius: 8px;
-  padding: 8px 12px;
-  margin-top: 8px;
 }
 
 .reply-item {
-  padding: 8px 0;
-}
-
-.reply-item:not(:last-child) {
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.reply-content {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   font-size: 13px;
   line-height: 1.4;
 }
 
-.reply-name {
+.reply-item:last-child {
+  margin-bottom: 0;
+}
+
+.reply-user {
   font-weight: 500;
-  color: #333;
-}
-
-.reply-to {
-  color: #8e8e93;
-}
-
-.reply-to-name {
-  color: #007AFF;
-}
-
-.reply-text {
-  color: #333;
-  margin-left: 4px;
-}
-
-.reply-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-}
-
-.reply-time {
-  color: #8e8e93;
-}
-
-/* 图片预览 */
-.image-preview {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.9);
-  z-index: 1000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.preview-container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.preview-container img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
-.preview-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  background-color: rgba(255, 255, 255, 0.2);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-}
-
-.preview-close i {
-  color: white;
-  font-size: 20px;
-}
-
-/* 相似物品推荐样式 */
-.similar-items {
-  background: white;
-  border-radius: 16px;
-  margin: 16px 0;
-  padding: 16px;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
-}
-
-.more-link {
-  color: #8e8e93;
-  font-size: 14px;
-  font-weight: normal;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-}
-
-.more-link i {
-  font-size: 12px;
-  margin-left: 4px;
-}
-
-.similar-scroll {
-  display: flex;
-  overflow-x: auto;
-  padding: 8px 0;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  gap: 12px;
-}
-
-.similar-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.similar-item {
-  flex: 0 0 140px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: white;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.similar-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-}
-
-.similar-image {
-  height: 140px;
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-}
-
-.similar-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.similar-item:hover .similar-image img {
-  transform: scale(1.05);
-}
-
-.item-status {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: white;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.status-pending {
-  background: rgba(255, 149, 0, 0.8);
-}
-
-.status-success {
-  background: rgba(52, 199, 89, 0.8);
-}
-
-.status-closed {
-  background: rgba(142, 142, 147, 0.8);
-}
-
-.similar-info {
-  padding: 8px 10px;
-}
-
-.similar-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.similar-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #8e8e93;
-}
-
-.similar-location {
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--primary-color);
   margin-right: 4px;
 }
 
-.similar-time {
-  font-size: 11px;
-  color: #8e8e93;
+.reply-text {
+  color: var(--text-secondary);
 }
 
-/* 底部添加留言按钮样式 */
-.comment-input-wrapper {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 10px 12px;
-  background: white;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 999;
-  transition: transform 0.3s ease;
-}
-
-.comment-input {
-  display: flex;
-  align-items: center;
-  background: #f2f2f7;
-  border-radius: 20px;
-  padding: 8px 12px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.comment-input input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 6px 0;
-  font-size: 15px;
-  outline: none;
-}
-
-.comment-submit {
-  background: #007AFF;
-  color: white;
-  border: none;
-  border-radius: 16px;
-  padding: 6px 12px;
-  font-size: 14px;
-  font-weight: 500;
-  margin-left: 10px;
-  cursor: pointer;
-}
-
-.comment-submit:disabled {
-  background: #c7c7cc;
-  cursor: not-allowed;
-}
-
-/* 底部操作栏样式 */
-.bottom-action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 10px 15px;
-  background-color: #fff;
-  box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 101;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.action-icons {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.action-icon {
+.no-comments {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px;
-  border-radius: 50%;
-  position: relative;
-  z-index: 10;
-  cursor: pointer;
-  pointer-events: auto !important;
+  gap: 12px;
+  padding: 24px 0;
+  color: var(--text-tertiary);
 }
 
-/* 添加明显的点击反馈 */
-.action-icon:active {
-  opacity: 0.7;
-  transform: scale(0.95);
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
 }
 
-.action-buttons {
+.comment-input-container {
   display: flex;
-  gap: 10px;
-}
-
-.action-btn {
-  padding: 10px 15px;
+  align-items: center;
+  margin-top: 16px;
+  background-color: var(--background-tertiary);
   border-radius: 20px;
+  padding: 4px;
+}
+
+.ios-input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 8px 12px;
   font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  pointer-events: auto !important;
+  color: var(--text-primary);
+  outline: none;
 }
 
-.action-contact {
-  background-color: #f2f2f2;
-  color: #333;
-}
-
-.action-primary {
-  background-color: var(--primary-color, #007AFF);
+.submit-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background-color: var(--primary-color);
   color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
 }
 
-/* 添加明显的点击反馈 */
-.action-btn:active {
-  transform: scale(0.97);
+.submit-btn:disabled {
+  background-color: var(--text-tertiary);
+  opacity: 0.5;
 }
 
-/* 修复点赞和评论图标样式 */
-.icon-like, .icon-comment, .icon-share {
-  font-size: 22px;
-  color: #8e8e93;
-  display: inline-block;
+.related-list {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.icon-like.active {
-  color: #ff2d55;
+.related-list::-webkit-scrollbar {
+  display: none;
 }
 
-.icon-count {
-  font-size: 12px;
-  color: #8e8e93;
-  margin-top: 4px;
+.related-item {
+  flex: 0 0 120px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.related-image {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+}
+
+.related-title {
+  font-size: 13px;
+  padding: 8px 4px;
   text-align: center;
-}
-
-/* 修复评论区样式确保内容不超出容器 */
-.comment-item, .reply-item {
-  overflow: hidden;
-}
-
-.comment-text, .reply-text {
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: pre-wrap;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.reply-name, .reply-to-name, .comment-name {
-  max-width: 120px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.bottom-actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  padding: 12px 16px;
+  background-color: white;
+  border-top: 0.5px solid var(--separator-color);
+  z-index: 10;
+  padding-bottom: calc(12px + var(--safe-area-inset-bottom));
+}
+
+.action-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 15px;
   font-weight: 500;
-  color: #333;
+}
+
+.share-btn {
+  margin-right: 12px;
+  background-color: rgba(0, 0, 0, 0.04);
+  color: var(--text-secondary);
+}
+
+.primary-btn {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.action-icon {
+  width: 18px;
+  height: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ios-header {
+    background-color: rgba(30, 30, 30, 0.85);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .ios-card {
+    background-color: rgba(50, 50, 50, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .comment-input-container {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .replies {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .bottom-actions {
+    background-color: rgba(50, 50, 50, 0.95);
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .share-btn {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
 }
 </style>
