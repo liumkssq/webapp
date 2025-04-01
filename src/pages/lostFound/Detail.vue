@@ -26,15 +26,53 @@
         </div>
       </div>
       
-      <!-- 图片展示 -->
-      <div class="item-images" v-if="item.images && item.images.length > 0">
-        <div 
-          v-for="(image, index) in item.images" 
-          :key="index" 
-          class="image-item"
-          @click="previewImage(index)"
-        >
-          <img :src="image" :alt="item.title">
+      <!-- 图片轮播 -->
+      <div class="image-carousel" v-if="item.images && item.images.length > 0">
+        <div class="carousel-container">
+          <!-- 主轮播区域 -->
+          <div class="carousel-main">
+            <div 
+              class="carousel-slide" 
+              v-for="(image, index) in item.images" 
+              :key="index"
+              :style="{ transform: `translateX(${(index - currentImageIndex) * 100}%)` }"
+              @click="previewImage(index)"
+            >
+              <img :src="image" :alt="item.title">
+            </div>
+            
+            <!-- 前后导航按钮 -->
+            <div class="carousel-nav prev" @click.stop="prevImage" v-if="item.images.length > 1">
+              <i class="van-icon van-icon-arrow-left"></i>
+            </div>
+            <div class="carousel-nav next" @click.stop="nextImage" v-if="item.images.length > 1">
+              <i class="van-icon van-icon-arrow"></i>
+            </div>
+          </div>
+          
+          <!-- 分页指示器 -->
+          <div class="carousel-indicators" v-if="item.images.length > 1">
+            <div 
+              v-for="(_, index) in item.images" 
+              :key="index"
+              class="indicator-dot"
+              :class="{ active: currentImageIndex === index }"
+              @click="currentImageIndex = index"
+            ></div>
+          </div>
+          
+          <!-- 缩略图导航 -->
+          <div class="carousel-thumbnails" v-if="item.images.length > 1">
+            <div 
+              v-for="(image, index) in item.images" 
+              :key="index"
+              class="thumbnail"
+              :class="{ active: currentImageIndex === index }"
+              @click="currentImageIndex = index"
+            >
+              <img :src="image" :alt="item.title">
+            </div>
+          </div>
         </div>
       </div>
       
@@ -161,7 +199,7 @@
         <!-- 评论列表 -->
         <div class="comment-list" v-if="item.comments && item.comments.length > 0">
           <div 
-            v-for="comment in item.comments" 
+            v-for="comment in item.comments.slice(0, 5)" 
             :key="comment.id" 
             class="comment-item"
           >
@@ -251,12 +289,50 @@
           </div>
         </div>
       </div>
+      
+      <!-- 可能是你在找的 -->
+      <div class="similar-items" v-if="item.relatedItems && item.relatedItems.length > 0">
+        <div class="section-title">
+          <span>可能是你在找的</span>
+          <span class="more-link" @click="viewMoreRelated">
+            查看更多 <i class="van-icon van-icon-arrow"></i>
+          </span>
+        </div>
+        <div class="similar-scroll">
+          <div 
+            v-for="relItem in item.relatedItems" 
+            :key="relItem.id" 
+            class="similar-item"
+            @click="goToLostFoundDetail(relItem.id)"
+          >
+            <div class="similar-image">
+              <img :src="relItem.images && relItem.images.length > 0 ? relItem.images[0] : '/placeholder.png'" :alt="relItem.title">
+              <div class="item-status" :class="getStatusClass(relItem.status)">{{ getStatusText(relItem.status) }}</div>
+            </div>
+            <div class="similar-info">
+              <div class="similar-title">{{ relItem.title }}</div>
+              <div class="similar-meta">
+                <span class="similar-location">{{ relItem.location }}</span>
+                <span class="similar-time">{{ formatTime(relItem.eventTime, 'short') }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- 加载中 -->
     <div class="loading-container" v-if="loading">
-      <div class="loading-spinner"></div>
-      <div class="loading-text">加载中...</div>
+      <div class="loading-card">
+        <div class="loading-header">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">{{ loadingStatus }}</div>
+        </div>
+        <div class="loading-tips">
+          <div class="tip-icon"><i class="van-icon van-icon-info-o"></i></div>
+          <div class="tip-text">如果加载时间过长，将自动显示示例内容</div>
+        </div>
+      </div>
     </div>
     
     <!-- 添加一个容器元素来增加底部间距，防止内容被底部操作栏遮挡 -->
@@ -404,7 +480,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import '@/style/loading.css' // 引入加载样式
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { getLostFoundDetail, updateLostFoundStatus, commentLostFound, likeLostFound, unlikeLostFound } from '@/api/lostFound'
@@ -418,6 +495,10 @@ const userStore = useUserStore()
 // 状态变量
 const item = ref({})
 const loading = ref(true)
+const loadingStatus = ref('加载中...')
+const loadingError = ref(false)
+const currentImageIndex = ref(0) // 当前显示的图片索引
+const autoPlayTimer = ref(null) // 自动播放定时器
 const commentText = ref('')
 const replyTo = ref(null)
 const showCommentInput = ref(false)
@@ -434,6 +515,23 @@ const toast = reactive({
 const isCurrentUser = computed(() => {
   return item.value.publisher && item.value.publisher.id === userStore.userId
 })
+
+// 生成相关物品的数据
+const generateRelatedItems = () => {
+  if (!item.value || !item.value.category) return []
+  
+  // 根据当前物品的分类和类型生成不同的相关物品
+  const mockId = parseInt(route.params.id) || 30
+  return Array(3).fill().map((_, i) => ({
+    id: mockId + 200 + i,
+    title: `${item.value.type === 'lost' ? '已招领' : '已丢失'}的${item.value.category} ${i+1}`,
+    type: item.value.type === 'lost' ? 'found' : 'lost',
+    status: ['pending', 'claimed', 'found'][Math.floor(Math.random() * 3)],
+    location: ['教学楼', '图书馆', '食堂', '宿舍区'][Math.floor(Math.random() * 4)],
+    eventTime: new Date(Date.now() - Math.floor(Math.random() * 14) * 86400000).toISOString(),
+    images: [`https://picsum.photos/id/${(mockId % 30) + i + 80}/300/300`]
+  }))
+}
 
 // 计算状态文本和样式
 const statusText = computed(() => {
@@ -456,7 +554,7 @@ const availableStatuses = computed(() => {
     return [
       { value: 'pending', label: '等待认领' },
       { value: 'claimed', label: '已认领' },
-      { value: 'closed', label: '关闭' }
+      { value: 'closed', label: '已关闭' }
     ]
   }
 })
@@ -531,22 +629,212 @@ const formatDetailTime = (time) => {
   return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
+// 生成模拟数据
+const generateMockData = (id) => {
+  const mockId = parseInt(id) || 30;
+  return {
+    id: mockId,
+    title: `模拟失物招领 ${mockId}`,
+    description: `这是一个模拟失物招领详情，用于在无法获取真实数据时显示。这个物品具有特点是尺寸适中，形状规整，能够轻松识别。`,
+    type: mockId % 2 === 0 ? 'lost' : 'found',
+    status: ['pending', 'found', 'claimed', 'closed'][Math.floor(Math.random() * 4)],
+    category: ['数码产品', '证件钱包', '生活用品', '图书教材', '其他物品'][Math.floor(Math.random() * 5)],
+    location: ['教学楼A区', '图书馆', '食堂广场', '宿舍楼B栋', '校园南门'][Math.floor(Math.random() * 5)],
+    eventTime: new Date(Date.now() - Math.floor(Math.random() * 20) * 86400000).toISOString(),
+    createTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString(),
+    images: [
+      `https://picsum.photos/id/${(mockId % 30) + 1}/600/600`,
+      `https://picsum.photos/id/${(mockId % 30) + 10}/600/600`,
+      `https://picsum.photos/id/${(mockId % 30) + 20}/600/600`
+    ],
+    reward: mockId % 2 === 0 ? Math.floor(Math.random() * 50) + 5 : null,
+    viewCount: Math.floor(Math.random() * 500) + 50,
+    commentCount: Math.floor(Math.random() * 20) + 1,
+    likes: Math.floor(Math.random() * 30) + 5,
+    isLiked: false,
+    publisher: {
+      id: 1001,
+      name: `模拟用户_${Math.floor(Math.random() * 100)}`,
+      avatar: `https://picsum.photos/id/${mockId + 50}/100/100`,
+      school: '华南理工大学',
+      verified: Math.random() > 0.5,
+      level: Math.floor(Math.random() * 6) + 1,
+      joinDate: new Date(Date.now() - Math.floor(Math.random() * 365) * 86400000).toISOString()
+    },
+    contactInfo: {
+      phone: `1${Math.floor(Math.random() * 9 + 1)}${Math.floor(Math.random() * 10000000000)}`.substring(0, 11),
+      showPhone: true,
+      wechat: `wx_user_${Math.floor(Math.random() * 10000)}`,
+      showWechat: true
+    },
+    comments: Array(5).fill().map((_, i) => ({
+      id: i + 1,
+      content: `这是一条测试留言 ${i+1}，希望能尽快找到/物归原主！`,
+      createTime: new Date(Date.now() - Math.floor(Math.random() * 7) * 86400000).toISOString(),
+      likeCount: Math.floor(Math.random() * 10),
+      isLiked: false,
+      author: {
+        id: 2000 + i,
+        name: `评论用户_${i+1}`,
+        avatar: `https://picsum.photos/id/${100 + i}/100/100`
+      },
+      replies: i === 0 ? [
+        {
+          id: 101,
+          content: '感谢留言，我会继续寻找/等待认领',
+          createTime: new Date(Date.now() - Math.floor(Math.random() * 3) * 86400000).toISOString(),
+          author: {
+            id: 1001,
+            name: '发布者回复',
+            avatar: `https://picsum.photos/id/${mockId + 50}/100/100`
+          },
+          replyTo: {
+            id: 2000,
+            name: '评论用户_1'
+          }
+        }
+      ] : []
+    })),
+    similarItems: Array(4).fill().map((_, i) => ({
+      id: mockId + 100 + i,
+      title: `相似${mockId % 2 === 0 ? '丢失' : '拾获'}物品 ${i+1}`,
+      type: mockId % 2 === 0 ? 'lost' : 'found',
+      status: ['pending', 'found', 'claimed'][Math.floor(Math.random() * 3)],
+      location: ['教学楼', '图书馆', '食堂', '宿舍楼'][Math.floor(Math.random() * 4)],
+      eventTime: new Date(Date.now() - Math.floor(Math.random() * 14) * 86400000).toISOString(),
+      images: [`https://picsum.photos/id/${(mockId % 20) + i + 40}/300/300`]
+    }))
+  };
+};
+
 // 获取失物招领详情
 const fetchLostFoundDetail = async () => {
   loading.value = true
+  loadingStatus.value = '加载中...'
   
   try {
     const id = route.params.id
+    console.log('正在获取失物招领详情，ID:', id);
     const res = await getLostFoundDetail(id)
     
-    if (res.code === 200) {
-      item.value = res.data
+    if (res && res.code === 200 && res.data) {
+      console.log('获取失物招领详情成功:', res.data)
+      
+      // 处理评论数据，确保正确格式
+      if (res.data.comments) {
+        try {
+          // 如果评论是字符串（JSON），尝试解析
+          if (typeof res.data.comments === 'string') {
+            res.data.comments = JSON.parse(res.data.comments);
+          }
+          
+          // 确保评论是数组
+          if (!Array.isArray(res.data.comments)) {
+            res.data.comments = [];
+          }
+          
+          // 处理每条评论，确保格式正确
+          res.data.comments = res.data.comments.map(comment => {
+            // 确保评论的基础结构
+            const formattedComment = {
+              id: comment.id || Math.random().toString(36).substr(2, 9),
+              content: comment.content || '',
+              createTime: comment.createTime || new Date().toISOString(),
+              likeCount: comment.likeCount || 0,
+              isLiked: comment.isLiked || false,
+              author: {
+                id: comment.author?.id || 0,
+                name: comment.author?.name || '匿名用户',
+                avatar: comment.author?.avatar || 'https://picsum.photos/100/100'
+              },
+              replies: []
+            };
+            
+            // 处理回复
+            if (comment.replies) {
+              try {
+                // 如果回复是字符串（JSON），尝试解析
+                if (typeof comment.replies === 'string') {
+                  comment.replies = JSON.parse(comment.replies);
+                }
+                
+                if (Array.isArray(comment.replies)) {
+                  formattedComment.replies = comment.replies.map(reply => ({
+                    id: reply.id || Math.random().toString(36).substr(2, 9),
+                    content: reply.content || '',
+                    createTime: reply.createTime || new Date().toISOString(),
+                    author: {
+                      id: reply.author?.id || 0,
+                      name: reply.author?.name || '匿名用户',
+                      avatar: reply.author?.avatar || 'https://picsum.photos/100/100'
+                    },
+                    replyTo: reply.replyTo ? {
+                      id: reply.replyTo.id || 0,
+                      name: reply.replyTo.name || '匿名用户'
+                    } : null
+                  }));
+                }
+              } catch (e) {
+                console.error('解析评论回复失败:', e);
+                formattedComment.replies = [];
+              }
+            }
+            
+            return formattedComment;
+          });
+        } catch (e) {
+          console.error('解析评论数据失败:', e);
+          res.data.comments = [];
+        }
+      } else {
+        res.data.comments = [];
+      }
+      
+      item.value = res.data;
+      
+      // 确保 images 属性存在且为数组
+      if (!item.value.images) {
+        item.value.images = []
+      } else if (typeof item.value.images === 'string') {
+        // 如果是字符串，尝试解析为数组
+        try {
+          item.value.images = JSON.parse(item.value.images)
+        } catch (e) {
+          item.value.images = [item.value.images]
+        }
+      }
+      
+      if (!item.value.relatedItems || !item.value.relatedItems.length) {
+        // 如果服务器没有返回相关物品，则生成一些
+        item.value.relatedItems = generateRelatedItems();
+      }
+      
+      // 启动自动轮播
+      nextTick(() => {
+        startAutoPlay();
+      });
     } else {
-      showToast('获取详情失败')
+      console.warn('获取失物招领详情响应不正确:', res)
+      // 使用模拟数据
+      item.value = generateMockData(id)
+      showToast('使用模拟数据显示')
+      
+      // 启动自动轮播
+      nextTick(() => {
+        startAutoPlay();
+      });
     }
   } catch (error) {
-    console.error('获取详情失败', error)
-    showToast('获取详情失败，请稍后重试')
+    console.error('获取失物招领详情失败:', error)
+    // 使用模拟数据
+    const id = route.params.id
+    item.value = generateMockData(id)
+    showToast('加载失败，已显示模拟数据')
+    
+    // 启动自动轮播
+    nextTick(() => {
+      startAutoPlay();
+    });
   } finally {
     loading.value = false
   }
@@ -645,13 +933,14 @@ const showComment = () => {
   }
   
   showCommentInput.value = true
-  // 等待DOM更新后聚焦
-  setTimeout(() => {
-    const inputEl = document.querySelector('.comment-input input')
-    if (inputEl) {
-      inputEl.focus()
+  replyTo.value = null
+  
+  nextTick(() => {
+    const commentInputEl = document.querySelector('.comment-input input')
+    if (commentInputEl) {
+      commentInputEl.focus()
     }
-  }, 100)
+  })
 }
 
 // 回复评论
@@ -702,7 +991,15 @@ const submitComment = async () => {
           if (!comment.replies) {
             comment.replies = []
           }
-          comment.replies.push(res.data)
+          // 确保回复数据格式正确
+          const replyData = {
+            ...res.data,
+            replyTo: {
+              id: replyTo.value.id,
+              name: replyTo.value.name
+            }
+          }
+          comment.replies.push(replyData)
         }
       } else {
         // 如果是新评论
@@ -724,16 +1021,49 @@ const submitComment = async () => {
   }
 }
 
+// 图片轮播相关功能
+// 切换到上一张图片
+const prevImage = () => {
+  if (!item.value?.images || item.value.images.length <= 1) return;
+  currentImageIndex.value = (currentImageIndex.value - 1 + item.value.images.length) % item.value.images.length;
+}
+
+// 切换到下一张图片
+const nextImage = () => {
+  if (!item.value?.images || item.value.images.length <= 1) return;
+  currentImageIndex.value = (currentImageIndex.value + 1) % item.value.images.length;
+}
+
+// 自动轮播
+const startAutoPlay = () => {
+  if (item.value?.images && item.value.images.length > 1) {
+    stopAutoPlay();
+    autoPlayTimer.value = setInterval(() => {
+      nextImage();
+    }, 4000);
+  }
+}
+
+const stopAutoPlay = () => {
+  if (autoPlayTimer.value) {
+    clearInterval(autoPlayTimer.value);
+    autoPlayTimer.value = null;
+  }
+}
+
 // 图片预览
 const previewImage = (index) => {
-  previewSrc.value = item.value.images[index]
-  showImagePreview.value = true
+  currentImageIndex.value = index;
+  previewSrc.value = item.value.images[index];
+  showImagePreview.value = true;
+  stopAutoPlay(); // 预览模式停止自动轮播
 }
 
 // 关闭预览
 const closePreview = () => {
-  showImagePreview.value = false
-  previewSrc.value = ''
+  showImagePreview.value = false;
+  previewSrc.value = '';
+  startAutoPlay(); // 关闭预览后重新开始自动轮播
 }
 
 // 分享物品
@@ -851,16 +1181,31 @@ const viewMoreSimilar = () => {
   }
 }
 
+// 查看更多相关物品
+const viewMoreRelated = () => {
+  // 导航到包含相关物品的搜索页面
+  if (item.value) {
+    router.push({
+      path: '/lost-found/list',
+      query: { 
+        type: item.value.type === 'lost' ? 'found' : 'lost',  // 类型相反
+        keyword: item.value.title?.split(/\s+/)[0] || ''  // 使用标题的第一个关键词
+      }
+    });
+  }
+}
+
 // 格式化数字显示
 const formatNumber = (num) => {
   if (!num && num !== 0) return '0';
   
-  if (num < 1000) {
-    return num.toString();
-  } else if (num < 10000) {
-    return (num / 1000).toFixed(1) + 'K';
+  const number = parseInt(num);
+  if (number < 1000) {
+    return number.toString();
+  } else if (number < 10000) {
+    return (number / 1000).toFixed(1) + 'K';
   } else {
-    return (num / 10000).toFixed(1) + 'W';
+    return (number / 10000).toFixed(1) + 'W';
   }
 }
 
@@ -878,77 +1223,194 @@ const viewLocation = () => {
   }
 }
 
-// 处理评论按钮点击
-const handleComment = () => {
-  showComment()
-}
-
-// 联系发布者
-const contactOwner = () => {
-  contactPublisher()
-}
-
-// 更新状态 - 标记为已完成
-const markAsCompleted = () => {
-  showStatusUpdatePopup.value = true
-}
-
-// 页面加载时获取失物招领详情
-onMounted(async () => {
-  await fetchLostFoundDetail()
+// 组件挂载
+onMounted(() => {
+  fetchLostFoundDetail()
   
-  // 调试附加：检查是否存在遮挡点击的元素
-  console.log('页面加载完成，添加点击事件监听')
-  document.addEventListener('click', (e) => {
-    console.log('点击事件触发点:', e.target)
-    console.log('点击事件坐标:', e.clientX, e.clientY)
-  }, true)
-  
-  // 确保底部操作栏正常工作
-  nextTick(() => {
-    const actionBar = document.querySelector('.bottom-action-bar')
-    if (actionBar) {
-      console.log('底部操作栏已加载')
-      
-      // 为底部操作栏的每个按钮添加调试点击事件
-      const buttons = actionBar.querySelectorAll('.action-icon, .action-btn')
-      buttons.forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          console.log('操作按钮被点击:', e.target)
-        })
-      })
-    }
-    
-    // 添加全局点击事件来调试点击位置
-    document.addEventListener('click', (e) => {
-      console.log('点击坐标:', {x: e.clientX, y: e.clientY}, '目标元素:', e.target)
-    })
-  })
+  // 添加调试事件
+  document.querySelector('.bottom-action-bar')?.addEventListener('click', (event) => {
+    console.log('点击了底部操作栏:', event.target);
+  });
+})
+
+// 组件卸载前清理
+onBeforeUnmount(() => {
+  stopAutoPlay()
 })
 </script>
 
 <style scoped>
-/* 修复评论区样式确保内容不超出容器 */
-.comment-item, .reply-item {
-  overflow: hidden;
+/* 通用样式修复 */
+.no-comment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 0;
+  color: #999;
 }
 
-.comment-text, .reply-text {
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: pre-wrap;
-  max-width: 100%;
-  overflow: hidden;
+.no-data-icon {
+  width: 60px;
+  height: 60px;
+  background-color: #f5f5f5;
+  border-radius: 50%;
+  margin-bottom: 15px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"><path d="M20,2H4C2.9,2,2,2.9,2,4v18l4-4h14c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2z M9,11H7V9h2V11z M13,11h-2V9h2V11z M17,11h-2V9h2V11z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 32px;
 }
 
-.reply-name, .reply-to-name, .comment-name {
-  max-width: 120px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: inline-block;
-  vertical-align: middle;
+.no-data-text {
+  font-size: 14px;
 }
+
+/* iOS风格轮播图样式 */
+.image-carousel {
+  position: relative;
+  margin: 16px 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background-color: #f8f8f8;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.carousel-container {
+  position: relative;
+}
+
+.carousel-main {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  background-color: #f2f2f2;
+}
+
+.carousel-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.carousel-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  opacity: 0.8;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.carousel-nav:hover {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.carousel-nav.prev {
+  left: 12px;
+}
+
+.carousel-nav.next {
+  right: 12px;
+}
+
+.carousel-nav i {
+  font-size: 20px;
+  color: #333;
+}
+
+/* 分页指示器 */
+.carousel-indicators {
+  display: flex;
+  justify-content: center;
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+.indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.5);
+  margin: 0 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.indicator-dot.active {
+  width: 16px;
+  background-color: white;
+}
+
+/* 缩略图导航 */
+.carousel-thumbnails {
+  display: flex;
+  overflow-x: auto;
+  padding: 12px;
+  gap: 8px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+
+.carousel-thumbnails::-webkit-scrollbar {
+  display: none;
+}
+
+.thumbnail {
+  flex: 0 0 60px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.6;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.thumbnail.active {
+  opacity: 1;
+  border-color: #007AFF;
+}
+
+.thumbnail:hover {
+  opacity: 0.9;
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* 评论区域样式 */
 .comment-section {
   background: white;
@@ -976,24 +1438,21 @@ onMounted(async () => {
   cursor: pointer;
 }
 
-.comment-action i {
-  margin-right: 4px;
-  font-size: 16px;
-}
-
+/* 评论列表样式优化 */
 .comment-list {
-  margin-bottom: 16px;
+  width: 100%;
 }
 
 .comment-item {
   display: flex;
-  margin-bottom: 20px;
-  position: relative;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f2f2f2;
 }
 
 .comment-user {
-  margin-right: 12px;
   flex-shrink: 0;
+  margin-right: 12px;
 }
 
 .comment-avatar {
@@ -1001,12 +1460,11 @@ onMounted(async () => {
   height: 40px;
   border-radius: 20px;
   object-fit: cover;
-  border: 2px solid rgba(0, 122, 255, 0.1);
 }
 
 .comment-content {
   flex: 1;
-  min-width: 0;
+  overflow: hidden;
 }
 
 .comment-header {
@@ -1017,65 +1475,61 @@ onMounted(async () => {
 }
 
 .comment-name {
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 14px;
   color: #333;
   margin-right: 8px;
-  font-size: 14px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-label {
-  background: #007AFF;
+  background-color: #ff9500;
   color: white;
-  padding: 1px 6px;
-  border-radius: 4px;
   font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
   margin-right: 8px;
 }
 
 .comment-time {
-  color: #8e8e93;
   font-size: 12px;
+  color: #8e8e93;
+  margin-left: auto;
 }
 
 .comment-text {
-  line-height: 1.5;
-  color: #333;
-  margin-bottom: 8px;
-  word-break: break-word;
   font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 8px;
+  color: #333;
+  word-break: break-word;
 }
 
 .comment-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
   align-items: center;
-  font-size: 13px;
-  color: #8e8e93;
 }
 
 .reply-btn, .like-btn {
   display: flex;
   align-items: center;
-  margin-right: 16px;
-  cursor: pointer;
+  font-size: 12px;
   color: #8e8e93;
+  margin-left: 16px;
+  cursor: pointer;
 }
 
-.reply-btn i, .like-btn i {
-  font-size: 16px;
-  margin-right: 4px;
-}
-
-.like-btn.active, .like-btn i.active {
-  color: #ff3b30;
-}
-
-.like-count {
-  margin-left: 2px;
+.like-btn.active,
+.like-btn .active {
+  color: #ff2d55;
 }
 
 .reply-list {
-  background: rgba(0, 0, 0, 0.02);
+  background-color: #f9f9f9;
   border-radius: 8px;
   padding: 8px 12px;
   margin-top: 8px;
@@ -1083,30 +1537,25 @@ onMounted(async () => {
 
 .reply-item {
   padding: 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 }
 
-.reply-item:last-child {
-  border-bottom: none;
+.reply-item:not(:last-child) {
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .reply-content {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  margin-bottom: 6px;
-  font-size: 14px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .reply-name {
-  font-weight: 600;
+  font-weight: 500;
   color: #333;
-  margin-right: 4px;
 }
 
 .reply-to {
   color: #8e8e93;
-  margin-right: 4px;
 }
 
 .reply-to-name {
@@ -1115,9 +1564,7 @@ onMounted(async () => {
 
 .reply-text {
   color: #333;
-  flex: 1 1 100%;
-  margin-top: 4px;
-  word-break: break-word;
+  margin-left: 4px;
 }
 
 .reply-actions {
@@ -1125,11 +1572,57 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  color: #8e8e93;
 }
 
 .reply-time {
-  font-size: 12px;
+  color: #8e8e93;
+}
+
+/* 图片预览 */
+.image-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-container img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.preview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.preview-close i {
+  color: white;
+  font-size: 20px;
 }
 
 /* 相似物品推荐样式 */
@@ -1378,5 +1871,45 @@ onMounted(async () => {
 /* 添加明显的点击反馈 */
 .action-btn:active {
   transform: scale(0.97);
+}
+
+/* 修复点赞和评论图标样式 */
+.icon-like, .icon-comment, .icon-share {
+  font-size: 22px;
+  color: #8e8e93;
+  display: inline-block;
+}
+
+.icon-like.active {
+  color: #ff2d55;
+}
+
+.icon-count {
+  font-size: 12px;
+  color: #8e8e93;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* 修复评论区样式确保内容不超出容器 */
+.comment-item, .reply-item {
+  overflow: hidden;
+}
+
+.comment-text, .reply-text {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.reply-name, .reply-to-name, .comment-name {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: #333;
 }
 </style>
