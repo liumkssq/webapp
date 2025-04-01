@@ -3,15 +3,15 @@ import './setup'
 import mockAdapterInstance, { setupMockInterceptor, resetMockAdapter, restoreMockAdapter, getMockAdapter } from './interceptor'
 
 // 导入各个模块的mock数据
-import './modules/user'
-// import './modules/auth' // 移除不存在的模块导入
-import './modules/article'
-import './modules/product'
-import './modules/search'
-import './modules/common'
-import './modules/im'
-import './modules/map'
-import './modules/lostFound'
+// 注释掉所有模块导入，确保不会导入mock数据
+// import './modules/user'
+// import './modules/article'
+// import './modules/product'
+// import './modules/search'
+// import './modules/common'
+// import './modules/im'
+// import './modules/map'
+// import './modules/lostFound'
 
 // 引入模拟数据相关依赖
 import Mock from 'mockjs'
@@ -77,9 +77,9 @@ const importModules = () => {
   console.log('[Mock] 所有模块加载完成')
 }
 
-// 初始化
-initMockModules()
-importModules()
+// 确保不初始化任何模块
+// initMockModules()
+// importModules()
 
 // 判断是否启用Mock
 if (enableMock) {
@@ -90,6 +90,10 @@ if (enableMock) {
   restoreMockAdapter()
   console.log('Mock 服务已禁用，使用真实API请求')
 }
+
+// 强制禁用所有模拟拦截器
+restoreMockAdapter()
+console.log('已强制恢复所有真实API请求')
 
 // 获取mockAdapter实例
 const mockAdapter = getMockAdapter()
