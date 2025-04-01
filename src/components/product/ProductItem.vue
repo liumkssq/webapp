@@ -164,7 +164,7 @@ const handleClick = () => {
 </script>
 
 <template>
-  <div class="product-item" @click="handleClick">
+  <div class="product-item" @click.stop="handleClick">
     <div class="product-image">
       <img :src="getProductImage(product)" :alt="product.title" @error="handleImageError" />
     </div>

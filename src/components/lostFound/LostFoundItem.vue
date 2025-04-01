@@ -1,7 +1,8 @@
 <script setup>
-import { defineProps } from 'vue'
+import { useRouter } from 'vue-router';
 
-defineProps({
+const router = useRouter();
+const props = defineProps({
   item: {
     type: Object,
     required: true
@@ -10,13 +11,77 @@ defineProps({
     type: Boolean,
     default: true
   }
-})
+});
+
+// 处理图片显示
+const getImageUrl = (item) => {
+  if (!item) return 'https://via.placeholder.com/300';
+  
+  // 直接使用imageUrl字段
+  if (item.imageUrl) return item.imageUrl;
+  
+  // 使用images数组第一张图
+  if (item.images) {
+    if (Array.isArray(item.images) && item.images.length > 0) {
+      const firstImage = item.images[0];
+      if (typeof firstImage === 'string') {
+        // 处理可能的JSON字符串
+        if (firstImage.startsWith('[')) {
+          try {
+            const parsedImages = JSON.parse(firstImage);
+            return Array.isArray(parsedImages) && parsedImages.length > 0 
+              ? parsedImages[0] 
+              : 'https://via.placeholder.com/300';
+          } catch (e) {
+            console.error('解析失物招领图片JSON失败:', e);
+            return firstImage;
+          }
+        }
+        return firstImage;
+      }
+      return firstImage;
+    }
+    
+    // 处理字符串格式的images
+    if (typeof item.images === 'string') {
+      if (item.images.startsWith('[')) {
+        try {
+          const parsedImages = JSON.parse(item.images);
+          return Array.isArray(parsedImages) && parsedImages.length > 0 
+            ? parsedImages[0] 
+            : 'https://via.placeholder.com/300';
+        } catch (e) {
+          console.error('解析失物招领图片字符串失败:', e);
+          return item.images;
+        }
+      }
+      return item.images;
+    }
+  }
+  
+  // 默认返回占位图
+  return 'https://via.placeholder.com/300';
+};
+
+// 图片加载错误处理
+const handleImageError = (event) => {
+  console.warn('失物招领图片加载失败，使用占位图替换');
+  event.target.src = 'https://via.placeholder.com/300';
+};
+
+// 处理点击事件
+const handleClick = () => {
+  if (props.item && props.item.id) {
+    console.log('导航到失物招领详情页:', props.item.id);
+    router.push(`/lost-found/detail/${props.item.id}`);
+  }
+};
 </script>
 
 <template>
-  <div class="lost-found-item" :class="item.type">
-    <div class="item-image" v-if="item.imageUrl">
-      <img :src="item.imageUrl" :alt="item.title" />
+  <div class="lost-found-item" :class="item.type" @click.stop="handleClick">
+    <div class="item-image" v-if="item.imageUrl || item.images">
+      <img :src="getImageUrl(item)" :alt="item.title" @error="handleImageError" />
     </div>
     <div class="item-info">
       <div class="item-badge">{{ item.type === 'lost' ? '寻物启事' : '招领启事' }}</div>
@@ -25,15 +90,15 @@ defineProps({
       <div class="item-detail">
         <div class="location">
           <svg-icon name="location" size="14" />
-          {{ item.location }}
+          {{ item.location || '未知位置' }}
         </div>
         <div class="time">
           <svg-icon name="time" size="14" />
-          {{ item.time }}
+          {{ item.time || '未知时间' }}
         </div>
       </div>
       <div class="item-meta">
-        <div class="publisher">{{ item.publisher?.nickname }}</div>
+        <div class="publisher">{{ item.publisher?.nickname || '未知用户' }}</div>
         <div class="status" :class="item.status">{{ 
           item.status === 'open' ? '进行中' : 
           item.status === 'pending' ? '确认中' : '已完成' 

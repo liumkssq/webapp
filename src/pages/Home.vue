@@ -106,16 +106,20 @@
           </div>
           
           <!-- 商品列表 -->
-          <div v-else-if="hotProducts.length > 0" class="product-list">
+<div v-else-if="hotProducts.length > 0" class="product-list">
+          <div 
+          v-for="product in hotProducts"
+          :key="product.id"
+          class="product-card-wrapper"
+          @click="goToProductDetail(product.id)"
+          >
             <product-item
-                v-for="product in hotProducts"
-                :key="product.id"
                 :product="product"
                 :show-description="false"
-                class="product-card"
-                @click="navigateToProductDetail(product.id)"
+        class="product-card"
             ></product-item>
-          </div>
+  </div>
+</div>
           
           <!-- 空状态 -->
           <div v-else class="empty-placeholder">
@@ -147,7 +151,6 @@
                 :key="item.id"
                 :item="item"
                 :show-description="false"
-                @click="router.push(`/lost-found/detail/${item.id}`)"
             ></lost-found-item>
           </div>
           
@@ -219,6 +222,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave } from 'vue-router'
 import { useMessageStore } from '@/store/message'
 import ProductItem from '@/components/product/ProductItem.vue'
 import LostFoundItem from '@/components/lostFound/LostFoundItem.vue'
@@ -353,7 +357,7 @@ const fetchHomeData = async () => {
     
     // 使用fetch直接请求后端API获取热门商品
     try {
-      const response = await fetch('http://localhost:5175/api/product/list?sort=hot&limit=4');
+      const response = await fetch('/api/product/list?sort=hot&limit=4');
       if (response.ok) {
         const data = await response.json();
         console.log('直接获取热门商品数据:', data);
@@ -407,15 +411,103 @@ const fetchHomeData = async () => {
     
     // 其他数据获取保持不变
     // 获取最新失物招领
-    const lostFoundRes = await api.lostFound.getLostFoundList({ sort: 'latest', limit: 3 });
-    console.log('失物招领API响应:', lostFoundRes);
-    
-    if (lostFoundRes && lostFoundRes.code === 200 && lostFoundRes.data) {
-      latestLostFound.value = lostFoundRes.data.list || [];
-      console.log('最新失物招领数据:', latestLostFound.value);
-    } else {
-      console.error('失物招领数据异常:', lostFoundRes);
-      latestLostFound.value = [];
+    try {
+      console.log('开始获取失物招领数据...');
+      const response = await fetch('/api/lost-found/list?sort=latest&limit=3');
+      if (response.ok) {
+        const data = await response.json();
+        console.log('直接获取失物招领数据:', data);
+        
+        // 直接使用响应数据
+        if (data && data.list && Array.isArray(data.list)) {
+          // 处理数据
+          latestLostFound.value = data.list.map(item => {
+            const processedItem = { ...item };
+            
+            // 处理图片字段
+            if (processedItem.images) {
+              if (typeof processedItem.images === 'string' && processedItem.images.startsWith('[')) {
+                try {
+                  processedItem.images = JSON.parse(processedItem.images);
+                } catch (e) {
+                  console.error('解析图片JSON失败:', e);
+                  processedItem.images = [processedItem.images];
+                }
+              }
+            }
+            
+            // 确保有imageUrl字段
+            if (processedItem.images && Array.isArray(processedItem.images) && processedItem.images.length > 0) {
+              processedItem.imageUrl = processedItem.images[0];
+            } else if (processedItem.imageUrl) {
+              // 已有imageUrl，不做处理
+            } else {
+              processedItem.imageUrl = 'https://via.placeholder.com/300';
+            }
+            
+            // 确保类型字段存在
+            if (!processedItem.type) {
+              processedItem.type = 'lost'; // 默认为寻物启事
+            }
+            
+            // 确保状态字段存在
+            if (!processedItem.status) {
+              processedItem.status = 'open'; // 默认为进行中
+            }
+            
+            // 处理时间字段
+            if (processedItem.createdAt && !processedItem.time) {
+              processedItem.time = formatTime(new Date(processedItem.createdAt));
+            } else if (!processedItem.time) {
+              processedItem.time = '未知时间';
+            }
+            
+            // 确保位置字段存在
+            if (!processedItem.location) {
+              processedItem.location = '未知位置';
+            }
+            
+            // 确保发布者信息存在
+            if (!processedItem.publisher && processedItem.publisherName) {
+              processedItem.publisher = {
+                id: processedItem.publisherId || 0,
+                nickname: processedItem.publisherName || '未知用户',
+                avatar: processedItem.publisherAvatar || ''
+              };
+            } else if (!processedItem.publisher) {
+              processedItem.publisher = {
+                id: 0,
+                nickname: '未知用户',
+                avatar: ''
+              };
+            }
+            
+            return processedItem;
+          });
+          
+          console.log('处理后的失物招领数据:', latestLostFound.value);
+        } else {
+          console.error('失物招领数据格式异常:', data);
+          latestLostFound.value = [];
+        }
+      } else {
+        console.error('获取失物招领失败，HTTP状态:', response.status);
+        latestLostFound.value = [];
+      }
+    } catch (error) {
+      console.error('直接获取失物招领异常:', error);
+      
+      // 如果直接请求失败，回退到API模块
+      const lostFoundRes = await api.lostFound.getLostFoundList({ sort: 'latest', limit: 3 });
+      console.log('回退API响应:', lostFoundRes);
+      
+      if (lostFoundRes && lostFoundRes.code === 200 && lostFoundRes.data) {
+        latestLostFound.value = lostFoundRes.data.list || [];
+        console.log('最新失物招领数据:', latestLostFound.value);
+      } else {
+        console.error('失物招领数据异常:', lostFoundRes);
+        latestLostFound.value = [];
+      }
     }
     
     // 获取热门文章
@@ -590,10 +682,15 @@ const refreshArticles = async () => {
 }
 
 // 导航到商品详情页
-const navigateToProductDetail = (productId) => {
+const goToProductDetail = (productId) => {
   console.log('导航到商品详情页:', productId);
   router.push(`/product/detail/${productId}`);
 }
+
+// 页面节点间导航处理
+onBeforeRouteLeave((to, from) => {
+  console.log('离开首页，目标页面:', to.path);
+});
 
 onMounted(async () => {
   console.log('Home页面加载，当前路径:', window.location.pathname);

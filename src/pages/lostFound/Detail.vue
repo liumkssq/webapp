@@ -14,8 +14,15 @@
       <div class="item-header">
         <div class="item-title">{{ item.title }}</div>
         <div class="item-meta">
-          <span class="item-category">{{ item.category }}</span>
-          <span class="item-time">{{ formatTime(item.eventTime) }}</span>
+          <span class="item-category">
+            <i class="van-icon van-icon-label"></i> {{ item.category }}
+          </span>
+          <span class="item-time">
+            <i class="van-icon van-icon-clock-o"></i> {{ formatTime(item.eventTime, 'short') }}
+          </span>
+          <span class="item-views" v-if="item.viewCount">
+            <i class="van-icon van-icon-eye-o"></i> {{ formatNumber(item.viewCount) }}
+          </span>
         </div>
       </div>
       
@@ -33,76 +40,111 @@
       
       <!-- 详情信息 -->
       <div class="detail-section">
-        <div class="section-title">详情信息</div>
-        
-        <div class="detail-item">
-          <div class="detail-label">物品描述</div>
-          <div class="detail-content">{{ item.description }}</div>
+        <div class="section-title">
+          <i class="van-icon van-icon-info-o"></i> 详情信息
         </div>
         
-        <div class="detail-item">
-          <div class="detail-label">{{ item.type === 'lost' ? '丢失地点' : '拾获地点' }}</div>
-          <div class="detail-content">{{ item.location }}</div>
-        </div>
-        
-        <div class="detail-item">
-          <div class="detail-label">{{ item.type === 'lost' ? '丢失时间' : '拾获时间' }}</div>
-          <div class="detail-content">{{ formatDetailTime(item.eventTime) }}</div>
-        </div>
-        
-        <div class="detail-item">
-          <div class="detail-label">发布时间</div>
-          <div class="detail-content">{{ formatDetailTime(item.createTime) }}</div>
-        </div>
-        
-        <div class="detail-item" v-if="item.reward && item.type === 'lost'">
-          <div class="detail-label">悬赏金额</div>
-          <div class="detail-content reward">¥{{ item.reward }}</div>
+        <div class="detail-card">
+          <div class="description-block">
+            <div class="description-label">物品描述</div>
+            <div class="description-content">{{ item.description || '暂无描述' }}</div>
+          </div>
+          
+          <div class="detail-items">
+            <div class="detail-item">
+              <div class="detail-label">
+                <i class="van-icon van-icon-location-o"></i>
+                {{ item.type === 'lost' ? '丢失地点' : '拾获地点' }}
+              </div>
+              <div class="detail-content location-value">
+                <span>{{ item.location }}</span>
+                <i class="van-icon van-icon-map-marked" @click="viewLocation"></i>
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">
+                <i class="van-icon van-icon-clock-o"></i>
+                {{ item.type === 'lost' ? '丢失时间' : '拾获时间' }}
+              </div>
+              <div class="detail-content">{{ formatDetailTime(item.eventTime) }}</div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">
+                <i class="van-icon van-icon-calendar-o"></i>
+                发布时间
+              </div>
+              <div class="detail-content">{{ formatDetailTime(item.createTime) }}</div>
+            </div>
+            
+            <div class="detail-item" v-if="item.reward && item.type === 'lost'">
+              <div class="detail-label">
+                <i class="van-icon van-icon-gold-coin-o"></i>
+                悬赏金额
+              </div>
+              <div class="detail-content reward">¥{{ item.reward }}</div>
+            </div>
+          </div>
         </div>
       </div>
       
       <!-- 联系信息 -->
       <div class="contact-section">
-        <div class="section-title">联系信息</div>
+        <div class="section-title">
+          <i class="van-icon van-icon-friends-o"></i> 联系信息
+        </div>
         
         <div class="user-info" @click="goToUserProfile(item.publisher.id)">
           <img :src="item.publisher.avatar" class="user-avatar" :alt="item.publisher.name">
           <div class="user-meta">
             <div class="user-name">
               {{ item.publisher.name }}
-              <i class="icon-verified" v-if="item.publisher.verified"></i>
+              <i class="van-icon van-icon-certificate" v-if="item.publisher.verified"></i>
+              <span class="user-badge" v-if="item.publisher.level">
+                <i class="van-icon van-icon-gem-o"></i> Lv{{ item.publisher.level }}
+              </span>
             </div>
-            <div class="user-school">{{ item.publisher.school }}</div>
+            <div class="user-details">
+              <span class="user-school">{{ item.publisher.school }}</span>
+              <span class="user-join" v-if="item.publisher.joinDate">加入于 {{formatTime(item.publisher.joinDate, 'date')}}</span>
+            </div>
           </div>
           <div class="contact-btn" v-if="!isCurrentUser">联系Ta</div>
         </div>
         
         <div class="contact-methods" v-if="item.contactInfo">
           <div class="contact-item" v-if="item.contactInfo.phone && (isCurrentUser || item.contactInfo.showPhone)">
-            <i class="icon-phone"></i>
+            <div class="contact-icon phone">
+              <i class="van-icon van-icon-phone-o"></i>
+            </div>
             <div class="contact-info">
               <div class="contact-label">电话</div>
               <div class="contact-value">{{ item.contactInfo.phone }}</div>
             </div>
-            <div class="action-btn" v-if="!isCurrentUser" @click="callPhone(item.contactInfo.phone)">拨打</div>
+            <div class="action-btn phone-action" v-if="!isCurrentUser" @click="callPhone(item.contactInfo.phone)">拨打</div>
           </div>
           
           <div class="contact-item" v-if="item.contactInfo.wechat && (isCurrentUser || item.contactInfo.showWechat)">
-            <i class="icon-wechat"></i>
+            <div class="contact-icon wechat">
+              <i class="van-icon van-icon-wechat"></i>
+            </div>
             <div class="contact-info">
               <div class="contact-label">微信</div>
               <div class="contact-value">{{ item.contactInfo.wechat }}</div>
             </div>
-            <div class="action-btn" v-if="!isCurrentUser" @click="copyWechat(item.contactInfo.wechat)">复制</div>
+            <div class="action-btn wechat-action" v-if="!isCurrentUser" @click="copyWechat(item.contactInfo.wechat)">复制</div>
           </div>
           
           <div class="contact-item" v-if="!isCurrentUser">
-            <i class="icon-chat"></i>
+            <div class="contact-icon chat">
+              <i class="van-icon van-icon-chat-o"></i>
+            </div>
             <div class="contact-info">
               <div class="contact-label">站内聊天</div>
               <div class="contact-value">在线交流更方便</div>
             </div>
-            <div class="action-btn" @click="goToChat(item.publisher.id)">聊天</div>
+            <div class="action-btn chat-action" @click="goToChat(item.publisher.id)">聊天</div>
           </div>
         </div>
       </div>
@@ -111,7 +153,9 @@
       <div class="comment-section">
         <div class="section-title">
           <span>留言 {{ item.commentCount || 0 }}</span>
-          <span class="comment-btn" @click="showComment">我要留言</span>
+          <span class="comment-action" @click="showComment">
+            <i class="van-icon van-icon-edit"></i> 我要留言
+          </span>
         </div>
         
         <!-- 评论列表 -->
@@ -128,7 +172,8 @@
             <div class="comment-content">
               <div class="comment-header">
                 <span class="comment-name">{{ comment.author.name }}</span>
-                <span class="comment-time">{{ formatTime(comment.createTime) }}</span>
+                <span class="user-label" v-if="comment.author.id === item.publisher.id">发布者</span>
+                <span class="comment-time">{{ formatTime(comment.createTime, 'short') }}</span>
               </div>
               <div class="comment-text">
                 {{ comment.content }}
@@ -136,10 +181,12 @@
               
               <!-- 评论操作 -->
               <div class="comment-actions">
-                <span class="reply-btn" @click="replyComment(comment)">回复</span>
-                <span class="like-btn">
-                  <i :class="['icon-like-small', {'active': comment.isLiked}]"></i>
-                  {{ comment.likeCount > 0 ? comment.likeCount : '点赞' }}
+                <span class="reply-btn" @click="replyComment(comment)">
+                  <i class="van-icon van-icon-chat-o"></i> 回复
+                </span>
+                <span class="like-btn" @click="likeComment(comment)">
+                  <i :class="['van-icon', comment.isLiked ? 'van-icon-like-fill active' : 'van-icon-like-o']"></i>
+                  <span class="like-count">{{ comment.likeCount > 0 ? comment.likeCount : '' }}</span>
                 </span>
               </div>
               
@@ -152,12 +199,15 @@
                 >
                   <div class="reply-content">
                     <span class="reply-name">{{ reply.author.name }}</span>
-                    <span class="reply-to" v-if="reply.replyTo">回复 {{ reply.replyTo.name }}</span>
+                    <span class="user-label" v-if="reply.author.id === item.publisher.id">发布者</span>
+                    <span class="reply-to" v-if="reply.replyTo">回复 <span class="reply-to-name">{{ reply.replyTo.name }}</span></span>
                     <span class="reply-text">{{ reply.content }}</span>
                   </div>
                   <div class="reply-actions">
-                    <span class="reply-time">{{ formatTime(reply.createTime) }}</span>
-                    <span class="reply-btn" @click="replyComment(comment, reply)">回复</span>
+                    <span class="reply-time">{{ formatTime(reply.createTime, 'short') }}</span>
+                    <span class="reply-btn" @click="replyComment(comment, reply)">
+                      <i class="van-icon van-icon-chat-o"></i> 回复
+                    </span>
                   </div>
                 </div>
               </div>
@@ -174,23 +224,28 @@
       
       <!-- 相似物品推荐 -->
       <div class="similar-items" v-if="item.similarItems && item.similarItems.length > 0">
-        <div class="section-title">相似{{ item.type === 'lost' ? '丢失物品' : '招领物品' }}</div>
-        <div class="item-scroll">
+        <div class="section-title">
+          <span>相似{{ item.type === 'lost' ? '丢失物品' : '招领物品' }}</span>
+          <span class="more-link" @click="viewMoreSimilar">
+            查看更多 <i class="van-icon van-icon-arrow"></i>
+          </span>
+        </div>
+        <div class="similar-scroll">
           <div 
             v-for="simItem in item.similarItems" 
             :key="simItem.id" 
             class="similar-item"
             @click="goToLostFoundDetail(simItem.id)"
           >
-            <div class="item-image">
+            <div class="similar-image">
               <img :src="simItem.images && simItem.images.length > 0 ? simItem.images[0] : '/placeholder.png'" :alt="simItem.title">
               <div class="item-status" :class="getStatusClass(simItem.status)">{{ getStatusText(simItem.status) }}</div>
             </div>
-            <div class="item-info">
-              <div class="item-title">{{ simItem.title }}</div>
-              <div class="item-meta">
-                <span class="item-location">{{ simItem.location }}</span>
-                <span class="item-time">{{ formatTime(simItem.eventTime) }}</span>
+            <div class="similar-info">
+              <div class="similar-title">{{ simItem.title }}</div>
+              <div class="similar-meta">
+                <span class="similar-location">{{ simItem.location }}</span>
+                <span class="similar-time">{{ formatTime(simItem.eventTime, 'short') }}</span>
               </div>
             </div>
           </div>
@@ -759,6 +814,70 @@ const likeItem = async () => {
   }
 }
 
+// 评论点赞功能
+const likeComment = async (comment) => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath)
+    return
+  }
+  
+  console.log('点赞评论:', comment.id);
+  // 在实际项目中，调用评论点赞API
+  try {
+    // 如果有API可以调用实际API：
+    // const res = await api.lostFound.likeComment(comment.id);
+    
+    // 前端模拟点赞效果
+    comment.isLiked = !comment.isLiked;
+    comment.likeCount = comment.isLiked ? (comment.likeCount || 0) + 1 : Math.max(0, (comment.likeCount || 1) - 1);
+    showToast(comment.isLiked ? '点赞成功' : '已取消点赞');
+  } catch (error) {
+    console.error('点赞评论失败', error);
+    showToast('操作失败，请稍后重试');
+  }
+}
+
+// 查看更多相似物品
+const viewMoreSimilar = () => {
+  // 导航到包含类似物品的搜索页面
+  if (item.value && item.value.category) {
+    router.push({
+      path: '/lost-found/list',
+      query: { 
+        category: item.value.category,
+        type: item.value.type 
+      }
+    });
+  }
+}
+
+// 格式化数字显示
+const formatNumber = (num) => {
+  if (!num && num !== 0) return '0';
+  
+  if (num < 1000) {
+    return num.toString();
+  } else if (num < 10000) {
+    return (num / 1000).toFixed(1) + 'K';
+  } else {
+    return (num / 10000).toFixed(1) + 'W';
+  }
+}
+
+// 查看位置
+const viewLocation = () => {
+  if (item.value && item.value.location) {
+    if (item.value.coordinates) {
+      const { latitude, longitude } = item.value.coordinates
+      window.open(`https://maps.google.com/maps?q=${latitude},${longitude}`, '_blank')
+    } else {
+      window.open(`https://maps.google.com/maps?q=${encodeURIComponent(item.value.location)}`, '_blank')
+    }
+  } else {
+    showToast('暂无地理位置信息')
+  }
+}
+
 // 处理评论按钮点击
 const handleComment = () => {
   showComment()
@@ -809,6 +928,387 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 修复评论区样式确保内容不超出容器 */
+.comment-item, .reply-item {
+  overflow: hidden;
+}
+
+.comment-text, .reply-text {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.reply-name, .reply-to-name, .comment-name {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: middle;
+}
+/* 评论区域样式 */
+.comment-section {
+  background: white;
+  border-radius: 16px;
+  margin: 16px 0;
+  padding: 20px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+}
+
+.comment-action {
+  color: #007AFF;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.comment-action i {
+  margin-right: 4px;
+  font-size: 16px;
+}
+
+.comment-list {
+  margin-bottom: 16px;
+}
+
+.comment-item {
+  display: flex;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.comment-user {
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.comment-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  object-fit: cover;
+  border: 2px solid rgba(0, 122, 255, 0.1);
+}
+
+.comment-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.comment-name {
+  font-weight: 600;
+  color: #333;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.user-label {
+  background: #007AFF;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-right: 8px;
+}
+
+.comment-time {
+  color: #8e8e93;
+  font-size: 12px;
+}
+
+.comment-text {
+  line-height: 1.5;
+  color: #333;
+  margin-bottom: 8px;
+  word-break: break-word;
+  font-size: 14px;
+}
+
+.comment-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+.reply-btn, .like-btn {
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+  cursor: pointer;
+  color: #8e8e93;
+}
+
+.reply-btn i, .like-btn i {
+  font-size: 16px;
+  margin-right: 4px;
+}
+
+.like-btn.active, .like-btn i.active {
+  color: #ff3b30;
+}
+
+.like-count {
+  margin-left: 2px;
+}
+
+.reply-list {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+.reply-item {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.reply-item:last-child {
+  border-bottom: none;
+}
+
+.reply-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.reply-name {
+  font-weight: 600;
+  color: #333;
+  margin-right: 4px;
+}
+
+.reply-to {
+  color: #8e8e93;
+  margin-right: 4px;
+}
+
+.reply-to-name {
+  color: #007AFF;
+}
+
+.reply-text {
+  color: #333;
+  flex: 1 1 100%;
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+.reply-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #8e8e93;
+}
+
+.reply-time {
+  font-size: 12px;
+}
+
+/* 相似物品推荐样式 */
+.similar-items {
+  background: white;
+  border-radius: 16px;
+  margin: 16px 0;
+  padding: 16px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
+}
+
+.more-link {
+  color: #8e8e93;
+  font-size: 14px;
+  font-weight: normal;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.more-link i {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.similar-scroll {
+  display: flex;
+  overflow-x: auto;
+  padding: 8px 0;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  gap: 12px;
+}
+
+.similar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.similar-item {
+  flex: 0 0 140px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.similar-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.similar-image {
+  height: 140px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.similar-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.similar-item:hover .similar-image img {
+  transform: scale(1.05);
+}
+
+.item-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.status-pending {
+  background: rgba(255, 149, 0, 0.8);
+}
+
+.status-success {
+  background: rgba(52, 199, 89, 0.8);
+}
+
+.status-closed {
+  background: rgba(142, 142, 147, 0.8);
+}
+
+.similar-info {
+  padding: 8px 10px;
+}
+
+.similar-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.similar-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #8e8e93;
+}
+
+.similar-location {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 4px;
+}
+
+.similar-time {
+  font-size: 11px;
+  color: #8e8e93;
+}
+
+/* 底部添加留言按钮样式 */
+.comment-input-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 12px;
+  background: white;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 999;
+  transition: transform 0.3s ease;
+}
+
+.comment-input {
+  display: flex;
+  align-items: center;
+  background: #f2f2f7;
+  border-radius: 20px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.comment-input input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+  font-size: 15px;
+  outline: none;
+}
+
+.comment-submit {
+  background: #007AFF;
+  color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-left: 10px;
+  cursor: pointer;
+}
+
+.comment-submit:disabled {
+  background: #c7c7cc;
+  cursor: not-allowed;
+}
+
+/* 底部操作栏样式 */
 .bottom-action-bar {
   position: fixed;
   bottom: 0;
@@ -871,7 +1371,7 @@ onMounted(async () => {
 }
 
 .action-primary {
-  background-color: var(--primary-color, #3498db);
+  background-color: var(--primary-color, #007AFF);
   color: white;
 }
 
@@ -879,6 +1379,4 @@ onMounted(async () => {
 .action-btn:active {
   transform: scale(0.97);
 }
-
-/* 其他样式保持不变 */
 </style>

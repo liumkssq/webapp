@@ -12,11 +12,122 @@ import request from '@/utils/request'
  * @returns {Promise} Promise对象
  */
 export function getLostFoundList(params) {
+  console.log('调用getLostFoundList API，参数:', params);
+  
+  // 使用相对路径，让Vite代理生效
+  const apiUrl = `/api/lost-found/list`;
+  console.log('请求API:', apiUrl);
+  
   return request({
-    url: '/api/lost-found/list',
+    url: apiUrl,
     method: 'get',
     params
   })
+  .then(response => {
+    console.log('getLostFoundList API原始响应:', response);
+    
+    // 处理不同格式的响应
+    let processedResponse = response;
+    
+    // 如果是直接返回了数组
+    if (Array.isArray(response)) {
+      console.log('API直接返回了数组，包装为标准格式');
+      processedResponse = {
+        code: 200,
+        message: 'success',
+        data: {
+          list: response,
+          total: response.length
+        }
+      };
+    } 
+    // 如果response是对象但没有code，可能是直接返回了data对象
+    else if (response && !response.code && (response.list || Array.isArray(response))) {
+      console.log('API返回了data对象，包装为标准格式');
+      processedResponse = {
+        code: 200,
+        message: 'success',
+        data: Array.isArray(response) ? { list: response, total: response.length } : response
+      };
+    }
+    
+    // 确保有效的响应格式
+    if (processedResponse.code === 200 && processedResponse.data) {
+      // 确保data.list存在且是数组
+      if (!processedResponse.data.list && Array.isArray(processedResponse.data)) {
+        processedResponse.data = {
+          list: processedResponse.data,
+          total: processedResponse.data.length
+        };
+      }
+      
+      // 处理列表项
+      if (processedResponse.data.list && Array.isArray(processedResponse.data.list)) {
+        processedResponse.data.list = processedResponse.data.list.map(item => {
+          // 创建一个新对象，避免直接修改原对象
+          const processedItem = { ...item };
+          
+          // 处理图片字段
+          if (processedItem.images) {
+            // 如果images是字符串，尝试解析JSON
+            if (typeof processedItem.images === 'string') {
+              try {
+                if (processedItem.images.startsWith('[')) {
+                  processedItem.images = JSON.parse(processedItem.images);
+                } else {
+                  processedItem.images = [processedItem.images];
+                }
+              } catch (e) {
+                console.error('解析失物招领图片JSON失败:', e);
+                processedItem.images = [processedItem.images];
+              }
+            }
+            
+            // 设置imageUrl
+            if (Array.isArray(processedItem.images) && processedItem.images.length > 0) {
+              processedItem.imageUrl = processedItem.images[0];
+            }
+          }
+          
+          // 确保类型字段存在
+          if (!processedItem.type) {
+            processedItem.type = 'lost'; // 默认为寻物启事
+          }
+          
+          // 确保状态字段存在
+          if (!processedItem.status) {
+            processedItem.status = 'open'; // 默认为进行中
+          }
+          
+          // 确保发布者信息存在
+          if (!processedItem.publisher && processedItem.publisherName) {
+            processedItem.publisher = {
+              id: processedItem.publisherId || 0,
+              nickname: processedItem.publisherName,
+              avatar: processedItem.publisherAvatar || ''
+            };
+          }
+          
+          return processedItem;
+        });
+      }
+    }
+    
+    console.log('getLostFoundList API处理后的响应:', processedResponse);
+    return processedResponse;
+  })
+  .catch(error => {
+    console.error('获取失物招领列表失败:', error);
+    // 返回一个友好的错误响应
+    return {
+      code: 500,
+      message: error.message || '获取失物招领列表失败',
+      data: {
+        list: [],
+        total: 0
+      }
+    };
+  });
 }
 
 /**

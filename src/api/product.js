@@ -1,5 +1,22 @@
 import request from '@/utils/request'
 
+// 添加商品评论
+export function commentProduct(productId, data) {
+  return request({
+    url: `/api/product/comment/${productId}`,
+    method: 'post',
+    data
+  })
+}
+
+// 取消收藏商品
+export function unfavoriteProduct(id) {
+  return request({
+    url: `/api/product/unfavorite/${id}`,
+    method: 'post'
+  })
+}
+
 // 生成默认商品数据
 const generateDefaultProducts = (count = 4) => {
   const products = [];
@@ -54,9 +71,9 @@ const generateDefaultProducts = (count = 4) => {
 export function getProductList(params) {
   console.log('调用getProductList API，参数:', params);
   
-  // 确保使用正确的端口
-  const apiUrl = `http://localhost:5175/api/product/list`;
-  console.log('请求真实API:', apiUrl);
+  // 使用相对路径，让Vite代理生效
+  const apiUrl = `/api/product/list`;
+  console.log('请求API:', apiUrl);
   
   // 设置超时时间，10秒后自动使用默认数据
   const timeoutPromise = new Promise(resolve => {

@@ -437,6 +437,8 @@ router.afterEach((to, from) => {
   const toDepth = to.path.split('/').length
   const fromDepth = from.path.split('/').length
   
+  console.log(`路由导航完成: ${from.path} -> ${to.path}`);
+  
   // 根据导航方向设置页面过渡名称（用于Vant组件）
   if (to.meta.transition !== false) {
     to.meta.transitionName = toDepth < fromDepth ? 'van-slide-right' : 'van-slide-left'

@@ -267,6 +267,15 @@
   gap: 16px;
 }
 
+.product-card-wrapper {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.product-card-wrapper:active {
+  transform: scale(0.98);
+}
+
 /* 失物招领列表 */
 .lost-found-list {
   display: flex;
