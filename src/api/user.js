@@ -1,4 +1,6 @@
 import request from '@/utils/request'
+import { showToast } from 'vant'
+import { setToken, setUserInfo, getUserInfo as getLocalUserInfo } from '@/utils/auth'
 
 import { defineStore } from 'pinia'
 
@@ -13,7 +15,7 @@ export function loginByPassword(data) {
   console.log('发起密码登录请求，参数:', data);
   
   return request({
-    url: '/api/user/login/password',
+    url: 'http://localhost:8888/api/user/login/password',
     method: 'post',
     data
   })
@@ -75,7 +77,7 @@ export function loginByVerificationCode(data) {
   console.log('发起验证码登录请求，参数:', data);
   
   return request({
-    url: '/api/user/login/sms-code',
+    url: 'http://localhost:8888/api/user/login/sms-code',
     method: 'post',
     data
   })
@@ -133,7 +135,7 @@ export function loginByVerificationCode(data) {
  */
 export function autoLogin() {
   return request({
-    url: '/api/user/login/auto?admin_test=true',
+    url: 'http://localhost:8888/api/user/login/auto?admin_test=true',
     method: 'post',
     data: {}
   })
@@ -197,7 +199,7 @@ export function register(data) {
   console.log('发起注册请求，参数:', data);
   
   return request({
-    url: '/api/user/register',
+    url: '/user/register',
     method: 'post',
     data
   })
@@ -254,64 +256,60 @@ function getErrorMessage(statusCode) {
 
 /**
  * 获取当前用户信息
+ * @param {boolean} [forceRefresh=false] 是否强制从服务器获取最新数据
  * @returns {Promise} Promise对象
  */
-export function getUserInfo() {
-  console.log('调用getUserInfo API获取当前用户信息');
+export function getUserInfo(forceRefresh = false) {
+  console.log('调用getUserInfo API获取当前用户信息', forceRefresh ? '(强制刷新)' : '');
   
-  // 检查是否有缓存的用户信息，在请求失败时可作为备用
-  const cachedUserInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  // 获取缓存的用户信息
+  const cachedUserInfo = getLocalUserInfo();
+  
+  // 如果没有强制刷新且有缓存，直接返回缓存
+  if (!forceRefresh && cachedUserInfo && Object.keys(cachedUserInfo).length > 0) {
+    console.log('使用缓存的用户信息:', cachedUserInfo);
+    return Promise.resolve({
+      code: 200,
+      message: '使用缓存数据',
+      data: cachedUserInfo
+    });
+  }
   
   return request({
-    url: '/api/user/info',
+    url: 'http://localhost:8888/api/user/info',
     method: 'get'
   })
   .then(response => {
-    console.log('getUserInfo API原始响应:', JSON.stringify(response));
+    console.log('getUserInfo API响应:', response);
     
-    // 处理请求取消的情况
-    if (response && response.code === 499) {
-      console.warn('检测到请求被取消，尝试使用缓存数据');
-      if (cachedUserInfo && cachedUserInfo.id) {
-        return {
-          code: 200,
-          message: '使用缓存数据替代已取消的请求',
-          data: cachedUserInfo
-        };
-      }
-    }
-    
-    // 处理后端可能直接返回用户对象的情况
-    if (response && !response.code && response.userId) {
-      console.log('检测到后端直接返回用户对象，进行兼容处理');
-      
-      // 直接使用返回的用户对象作为数据
+    // 处理成功响应
+    if (response && response.code === 200 && response.data) {
+      // 标准化用户信息
       const userData = {
-        id: response.userId || response.id || parseInt(localStorage.getItem('userId')) || 0,
-        username: response.username || '未知用户',
-        nickname: response.nickname || response.username || '未知用户',
-        avatar: response.avatar || '',
-        backgroundImage: response.backgroundImage || '',
-        bio: response.bio || '',
-        school: response.school || '',
-        // 处理字段名称差异
-        followerCount: response.followerCount || response.followersCount || 0,
-        followingCount: response.followingCount || 0,
-        likeCount: response.likeCount || 0,
-        // 新增字段
-        gender: response.gender || '0',
-        phone: response.phone || '',
-        createdAt: response.createdAt || '',
-        productCount: response.productCount || 0,
-        articleCount: response.articleCount || 0,
-        lostFoundCount: response.lostFoundCount || 0,
-        favoriteCount: response.favoriteCount || 0
+        id: response.data.id || response.data.userId || 0,
+        userId: response.data.id || response.data.userId || 0,
+        username: response.data.username || '未知用户',
+        nickname: response.data.nickname || response.data.username || '未知用户',
+        avatar: response.data.avatar || '',
+        backgroundImage: response.data.backgroundImage || '',
+        bio: response.data.bio || '',
+        school: response.data.school || '',
+        gender: response.data.gender || '0',
+        phone: response.data.phone || '',
+        email: response.data.email || '',
+        createdAt: response.data.createdAt || '',
+        productCount: response.data.productCount || 0,
+        articleCount: response.data.articleCount || 0,
+        lostFoundCount: response.data.lostFoundCount || 0,
+        favoriteCount: response.data.favoriteCount || 0,
+        followerCount: response.data.followerCount || response.data.followersCount || 0,
+        followingCount: response.data.followingCount || 0,
+        likeCount: response.data.likeCount || 0,
       };
       
-      // 缓存用户信息
-      localStorage.setItem('userInfo', JSON.stringify(userData));
+      // 保存到本地缓存
+      setUserInfo(userData);
       
-      // 返回标准格式
       return {
         code: 200,
         message: '获取用户信息成功',
@@ -319,75 +317,59 @@ export function getUserInfo() {
       };
     }
     
-    // 标准化响应格式
-    if (response && response.code === 200 && response.data) {
-      // 标准响应格式，确保关键字段存在
-      if (!response.data.id) {
-        console.warn('警告: getUserInfo响应中缺少用户ID');
-      }
-      
-      // 后端与前端字段名称映射
-      const standardizedData = {
-        id: response.data.id || response.data.userId || parseInt(localStorage.getItem('userId')) || 0,
-        username: response.data.username || '未知用户',
-        nickname: response.data.nickname || response.data.username || '未知用户',
-        avatar: response.data.avatar || '',
-        backgroundImage: response.data.backgroundImage || '',
-        bio: response.data.bio || '',
-        school: response.data.school || '',
-        // 处理字段名称差异
-        followerCount: response.data.followerCount || response.data.followersCount || 0,
-        followingCount: response.data.followingCount || 0,
-        likeCount: response.data.likeCount || 0,
-        // 新增字段
-        gender: response.data.gender || '0',
-        phone: response.data.phone || '',
-        createdAt: response.data.createdAt || '',
-        productCount: response.data.productCount || 0,
-        articleCount: response.data.articleCount || 0,
-        lostFoundCount: response.data.lostFoundCount || 0,
-        favoriteCount: response.data.favoriteCount || 0
-      };
-      
-      // 缓存用户信息
-      localStorage.setItem('userInfo', JSON.stringify(standardizedData));
-      
-      response.data = standardizedData;
-      console.log('getUserInfo API标准化后响应:', JSON.stringify(response));
-    } else if (!response || response.code !== 200) {
-      console.error('getUserInfo API响应格式异常:', response);
-      
-      // 如果有缓存的用户信息，在响应异常时使用缓存
-      if (cachedUserInfo && cachedUserInfo.id) {
-        console.warn('使用缓存的用户信息替代异常响应');
+    // 处理响应格式异常的情况
+    if (response && typeof response === 'object' && !response.code) {
+      // 如果直接返回了用户对象
+      if (response.username || response.userId || response.id) {
+        const userData = {
+          id: response.id || response.userId || 0,
+          userId: response.id || response.userId || 0,
+          username: response.username || '未知用户',
+          nickname: response.nickname || response.username || '未知用户',
+          avatar: response.avatar || '',
+          // 其他必要字段...
+        };
+        
+        // 保存到本地缓存
+        setUserInfo(userData);
+        
         return {
           code: 200,
-          message: '使用缓存数据',
-          data: cachedUserInfo
+          message: '获取用户信息成功 (直接对象)',
+          data: userData
         };
       }
     }
     
-    return response;
-  })
-  .catch(error => {
-    console.error('getUserInfo API请求失败:', error);
-    
-    // 如果有缓存的用户信息，在请求失败时使用缓存
-    if (cachedUserInfo && cachedUserInfo.id) {
-      console.warn('使用缓存的用户信息替代请求失败');
+    // 如果响应异常或为空，尝试使用缓存
+    if (cachedUserInfo && Object.keys(cachedUserInfo).length > 0) {
+      console.warn('API响应异常，使用缓存的用户信息:', cachedUserInfo);
       return {
         code: 200,
-        message: '使用缓存数据',
+        message: '使用缓存数据 (API响应异常)',
         data: cachedUserInfo
       };
     }
     
-    return {
-      code: 500,
-      message: error.message || '获取用户信息失败',
-      data: null
-    };
+    // 没有可用的缓存数据，抛出错误
+    console.error('无法获取用户信息，API响应无效且无缓存');
+    return Promise.reject(new Error('获取用户信息失败'));
+  })
+  .catch(error => {
+    console.error('getUserInfo API请求失败:', error);
+    
+    // 如果有缓存，在请求失败时使用缓存
+    if (cachedUserInfo && Object.keys(cachedUserInfo).length > 0) {
+      console.warn('API请求失败，使用缓存的用户信息');
+      return {
+        code: 200,
+        message: '使用缓存数据 (API请求失败)',
+        data: cachedUserInfo
+      };
+    }
+    
+    // 显示具体错误信息
+    return Promise.reject(error);
   });
 }
 
@@ -400,7 +382,7 @@ export function getUserProfile(id) {
   console.log(`调用getUserProfile API获取用户ID=${id}的资料`);
   
   return request({
-    url: `/api/user/profile/${id}`,
+    url: `/user/profile/${id}`,
     method: 'get'
   })
   .then(response => {
@@ -463,7 +445,7 @@ export function getUserProfile(id) {
  */
 export function updateUserInfo(data) {
   return request({
-    url: '/api/user/info',
+    url: '/user/info',
     method: 'put',
     data
   })
@@ -478,7 +460,7 @@ export function updateUserInfo(data) {
  */
 export function changePassword(data) {
   return request({
-    url: '/api/user/password',
+    url: '/user/password',
     method: 'put',
     data
   })
@@ -502,10 +484,10 @@ export function apiSendVerificationCode(data) {
     };
     
     console.log('发送验证码请求数据:', requestData);
-    console.log('请求URL:', '/api/user/send-code');
+    console.log('请求URL:', '/user/send-code');
     
     return request({
-      url: '/api/user/send-code',
+      url: '/user/send-code',
       method: 'post',
       data: requestData
     })
@@ -566,7 +548,7 @@ export function apiSendVerificationCode(data) {
  */
 export function logout() {
   return request({
-    url: '/api/user/logout',
+    url: '/user/logout',
     method: 'post'
   })
 }
@@ -578,7 +560,7 @@ export function logout() {
  */
 export function uploadAvatar(data) {
   return request({
-    url: '/api/user/avatar',
+    url: '/user/avatar',
     method: 'post',
     data,
     headers: {
@@ -593,7 +575,7 @@ export function uploadAvatar(data) {
  */
 export function getNotifications() {
   return request({
-    url: '/api/user/notifications',
+    url: '/user/notifications',
     method: 'get'
   })
 }
@@ -605,7 +587,7 @@ export function getNotifications() {
  */
 export function markNotificationAsRead(id) {
   return request({
-    url: `/api/user/notifications/${id}/read`,
+    url: `/user/notifications/${id}/read`,
     method: 'put'
   })
 }
@@ -620,7 +602,7 @@ export function markNotificationAsRead(id) {
  */
 export function resetPassword(data) {
   return request({
-    url: '/api/user/reset-password',
+    url: '/user/reset-password',
     method: 'post',
     data
   })
@@ -633,7 +615,7 @@ export function resetPassword(data) {
  */
 export function followUser(id) {
   return request({
-    url: `/api/user/follow/${id}`,
+    url: `/user/follow/${id}`,
     method: 'post'
   })
 }
@@ -645,7 +627,7 @@ export function followUser(id) {
  */
 export function unfollowUser(id) {
   return request({
-    url: `/api/user/unfollow/${id}`,
+    url: `/user/unfollow/${id}`,
     method: 'post'
   })
 }
@@ -660,7 +642,7 @@ export function unfollowUser(id) {
  */
 export function verifyCode(data) {
   return request({
-    url: '/api/user/verify-code',
+    url: '/user/verify-code',
     method: 'post',
     data
   })
@@ -710,11 +692,8 @@ export function getUserStats(forceRefresh = true) {
   
   // 正常API调用
   return request({
-    url: '/api/user/stats',
-    method: 'get',
-    params: {
-      _t: forceRefresh ? Date.now() : undefined // 添加时间戳防止缓存
-    }
+    url: '/user/stats',
+    method: 'get'
   })
   .then(response => {
     console.log('getUserStats API响应:', response);
@@ -775,4 +754,22 @@ export function getUserStats(forceRefresh = true) {
       }
     };
   });
+}
+
+export default {
+  login,
+  register,
+  getUserInfo,
+  updateUserInfo,
+  changePassword,
+  apiSendVerificationCode,
+  logout,
+  uploadAvatar,
+  getNotifications,
+  markNotificationAsRead,
+  resetPassword,
+  followUser,
+  unfollowUser,
+  verifyCode,
+  getUserStats
 }

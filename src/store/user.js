@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { getUserInfo } from '@/api/user'
+import { getToken, setToken, removeToken, setUserInfo as setAuthUserInfo, getUserInfo as getAuthUserInfo } from '@/utils/auth'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
-    token: localStorage.getItem('token') || '',
-    userInfo: JSON.parse(localStorage.getItem('userInfo') || '{}'),
+    token: getToken() || '',
+    userInfo: getAuthUserInfo() || {},
     unreadMessageCount: 0,
     unreadNotificationCount: 0
   }),
@@ -22,14 +23,14 @@ export const useUserStore = defineStore('user', {
     async restoreUserSession() {
       console.log('尝试恢复用户会话...');
       
-      // 检查localStorage中是否有token
-      const storedToken = localStorage.getItem('token');
+      // 检查是否有token
+      const storedToken = getToken();
       if (!storedToken) {
-        console.log('无法恢复会话：localStorage中没有token');
+        console.log('无法恢复会话：没有有效token');
         return null;
       }
       
-      // 确保store中的token与localStorage同步
+      // 确保store中的token与auth.js同步
       this.token = storedToken;
       
       try {
@@ -42,7 +43,6 @@ export const useUserStore = defineStore('user', {
           return userData;
         } else {
           console.warn('token可能已失效，无法获取用户信息');
-          // 不要在这里自动清除token，让用户知道需要重新登录
           return null;
         }
       } catch (error) {
@@ -60,10 +60,9 @@ export const useUserStore = defineStore('user', {
         return;
       }
       
-      // 保存token到store和localStorage
+      // 使用auth.js中的方法保存token
+      setToken(token);
       this.token = token;
-      localStorage.setItem('token', token);
-      localStorage.setItem('isLoggedIn', 'true');
       
       // 如果同时提供了用户信息，也保存它
       if (userInfo) {
@@ -74,8 +73,8 @@ export const useUserStore = defineStore('user', {
     },
     
     setToken(token) {
-      this.token = token
-      // 不重复写入localStorage，因为Login.vue已经处理了
+      this.token = token;
+      setToken(token);
     },
     
     setUserInfo(userInfo) {
@@ -105,26 +104,25 @@ export const useUserStore = defineStore('user', {
       // 更新用户信息
       this.userInfo = userInfo;
       
-      // 将用户信息保存到localStorage，作为备份
-      try {
-        localStorage.setItem('userInfo', JSON.stringify(userInfo));
-      } catch (error) {
-        console.error('将用户信息保存到localStorage时出错:', error);
-      }
+      // 使用auth.js中的方法保存用户信息
+      setAuthUserInfo(userInfo);
       
       console.log('用户信息更新完成，当前状态:', this.userInfo);
     },
     
     logout() {
-      this.token = ''
-      this.userInfo = {}
-      localStorage.removeItem('token')
-      localStorage.removeItem('userInfo')
-      localStorage.removeItem('isLoggedIn')
-      localStorage.removeItem('tokenExpire')
-      localStorage.removeItem('refreshAfter')
-      localStorage.removeItem('userId')
-      localStorage.removeItem('username')
+      this.token = '';
+      this.userInfo = {};
+      
+      // 使用auth.js中的方法移除token
+      removeToken();
+      
+      // 兼容性清理其他可能存在的本地存储信息
+      localStorage.removeItem('userId');
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('tokenExpire');
+      localStorage.removeItem('refreshAfter');
+      localStorage.removeItem('username');
     },
     
     setLoggedIn(status) {
@@ -144,8 +142,8 @@ export const useUserStore = defineStore('user', {
     },
     
     updateUserInfo(userInfo) {
-      this.userInfo = { ...this.userInfo, ...userInfo }
-      localStorage.setItem('userInfo', JSON.stringify(this.userInfo))
+      this.userInfo = { ...this.userInfo, ...userInfo };
+      setAuthUserInfo(this.userInfo);
     },
     
     updateUnreadMessageCount(count) {

@@ -11,7 +11,9 @@
         @leave="onLeave"
         @after-leave="afterLeave"
       >
-        <component :is="Component" class="page-component" />
+        <keep-alive :include="cachedViews">
+          <component :is="Component" class="page-component" />
+        </keep-alive>
       </transition>
     </router-view>
     <AppMessage />
@@ -21,14 +23,26 @@
 <script setup>
 import { ConfigProvider as VanConfigProvider } from 'vant'
 import AppMessage from '@/components/AppMessage.vue'
-import { onMounted, nextTick, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, nextTick, ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useEdgeSwipeGesture } from './composables/useGesture'
 import { useUserStore } from '@/store/user'
 import { useMessageStore } from '@/store/message'
 
 // 初始化路由器
 const router = useRouter()
+const route = useRoute()
+
+// 缓存的视图列表
+const cachedViews = computed(() => {
+  const cacheList = []
+  router.getRoutes().forEach(route => {
+    if (route.meta?.keepAlive) {
+      cacheList.push(route.name)
+    }
+  })
+  return cacheList
+})
 
 // 使用优化后的边缘滑动手势
 const { isSwipingBack } = useEdgeSwipeGesture()
@@ -78,11 +92,11 @@ onMounted(async () => {
   // 设置token事件监听
   setupTokenEvents()
   
-  // 检查localStorage中是否有token
-  const token = localStorage.getItem('token')
+  // 使用auth.js获取token，保持一致性
+  const token = userStore.token || localStorage.getItem('token')
   
   if (token) {
-    console.log('Found token in localStorage, attempting to restore session')
+    console.log('Found token, attempting to restore session')
     
     try {
       // 恢复用户状态
@@ -90,8 +104,23 @@ onMounted(async () => {
       
       if (userData) {
         console.log('Session restored successfully:', userData.nickname || userData.username)
+        
+        // 如果恢复成功，主动更新用户信息到localStorage，确保数据同步
+        userStore.setUserInfo(userData)
+        
+        // 触发登录成功事件，让其他组件可以响应
+        window.dispatchEvent(new CustomEvent('user-login-success'))
       } else {
         console.warn('Failed to restore session, token may be invalid')
+        
+        // 清除无效的登录状态
+        userStore.token = ''
+        localStorage.removeItem('token')
+        
+        // 仅在非登录页面显示登录过期提示
+        if (!window.location.pathname.includes('/login')) {
+          messageStore.showWarning('登录已过期，请重新登录')
+        }
       }
     } catch (error) {
       console.error('Error restoring session:', error)

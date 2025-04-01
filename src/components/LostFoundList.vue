@@ -5,7 +5,7 @@
       <div 
         v-for="tab in tabs" 
         :key="tab.value"
-        class="tab-item"
+        class="tab-item" 
         :class="{ active: activeTab === tab.value }"
         @click="switchTab(tab.value)"
       >

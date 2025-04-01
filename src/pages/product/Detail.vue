@@ -447,6 +447,8 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { useMessageStore } from '@/store/message'
+import { getLoginRedirectUrl } from '@/utils/redirect'
 import { getProductDetail, favoriteProduct } from '@/api/product'
 import api from '@/api'
 import HeaderNav from '@/components/HeaderNav.vue'
@@ -890,7 +892,7 @@ const toggleFavorite = async () => {
   console.log('toggleFavorite clicked!') // 调试日志
   
   if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
+    router.push(getLoginRedirectUrl(route.fullPath))
     return
   }
   
@@ -919,7 +921,7 @@ const contactSeller = () => {
   console.log('contactSeller clicked!') // 调试日志
   
   if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
+    router.push(getLoginRedirectUrl(route.fullPath))
     return
   }
   
@@ -961,7 +963,7 @@ const buyProduct = () => {
   console.log('buyProduct clicked!') // 调试日志
   
   if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
+    router.push(getLoginRedirectUrl(route.fullPath))
     return
   }
   
@@ -986,7 +988,7 @@ const showComment = () => {
 // 回复评论
 const replyComment = (comment, reply = null) => {
   if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
+    router.push(getLoginRedirectUrl(route.fullPath))
     return
   }
   
@@ -1006,7 +1008,7 @@ const replyComment = (comment, reply = null) => {
 // 提交评论
 const submitComment = async () => {
   if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
+    router.push(getLoginRedirectUrl(route.fullPath))
     return
   }
   

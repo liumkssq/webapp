@@ -25,6 +25,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { getUnreadCount } from '@/api/im'
+import { getLoginRedirectUrl } from '@/utils/redirect'
 
 const router = useRouter()
 const route = useRoute()
@@ -90,12 +91,12 @@ const navigateTo = (path) => {
   }
   
   if (path === '/publish' && !userStore.isLoggedIn) {
-    router.push('/login?redirect=/publish')
+    router.push(getLoginRedirectUrl('publish'))
     return
   }
   
   if (path === '/im/conversations' && !userStore.isLoggedIn) {
-    router.push('/login?redirect=/im/conversations')
+    router.push(getLoginRedirectUrl('im/conversations'))
     return
   }
   

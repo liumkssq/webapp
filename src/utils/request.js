@@ -1,11 +1,13 @@
 import axios from 'axios'
+import { getToken, removeToken } from './auth'
 import { showToast } from 'vant'
-import router from '../router'
+import { formatRedirectPath } from '@/utils/redirect'
 
 // 创建axios实例
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
-  timeout: 15000,
+  baseURL: '', // 不使用全局baseURL，由各API函数控制完整路径
+  timeout: 10000, // 请求超时时间
+  withCredentials: true, // 跨域请求时发送cookie
   headers: {
     'Content-Type': 'application/json'
   }
@@ -47,38 +49,28 @@ const removePendingRequest = (config) => {
 // 请求拦截器
 service.interceptors.request.use(
   config => {
-    // 从localStorage获取token
-    const token = localStorage.getItem('token')
-    
-    // 检查token是否过期
-    const loginTime = localStorage.getItem('loginTime')
-    const now = new Date().getTime()
-    const tokenMaxAge = 24 * 60 * 60 * 1000 // 设置token最大有效期为24小时
-    
-    // 如果token已过期，清除本地存储并重定向到登录页
-    if (token && loginTime && now - parseInt(loginTime) > tokenMaxAge) {
-      console.warn('Token已过期，需要重新登录')
-      
-      // 只在非登录相关页面才显示提示
-      if (!config.url.includes('/login') && !config.url.includes('/register')) {
-        // 使用事件总线触发全局通知
-        window.dispatchEvent(new CustomEvent('token-expired'))
-      }
-      
-      // 不自动清除token，让用户在提示后自行登录
-    }
-    
-    // 如果有token，添加到请求头
+    // 设置token
+    const token = getToken()
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
     
-    // 打印请求信息
-    console.log(`[API请求] ${config.method.toUpperCase()} ${config.url}`, {
-      params: config.params,
-      data: config.data,
-      headers: config.headers
-    });
+    // URL处理策略：
+    // 1. 如果URL是完整的http/https URL，不使用baseURL
+    // 2. 如果URL不是以'/'开头，添加'/'
+    if (config.url.startsWith('http://') || config.url.startsWith('https://')) {
+      config.baseURL = ''
+    } else if (!config.url.startsWith('/')) {
+      config.url = '/' + config.url
+    }
+    
+    // 调试信息
+    const fullUrl = config.baseURL 
+      ? (config.baseURL + (config.url.startsWith('/') ? config.url : '/' + config.url))
+      : config.url
+    
+    console.log(`发起${config.method.toUpperCase()}请求: ${fullUrl}`, 
+      config.params || config.data || {})
     
     // 处理重复请求
     config = addPendingRequest(config)
@@ -86,7 +78,7 @@ service.interceptors.request.use(
     return config
   },
   error => {
-    console.error('Request error:', error)
+    console.error('请求错误:', error)
     return Promise.reject(error)
   }
 )
@@ -99,134 +91,116 @@ service.interceptors.response.use(
     
     const res = response.data
     
-    // 确保res存在
-    if (!res) {
-      showToast('服务器返回了空响应');
+    // 处理不同格式的成功响应
+    // 1. 如果响应是数组，包装为标准格式
+    if (Array.isArray(res)) {
       return {
-        code: 500,
-        message: '服务器返回了空响应',
-        data: null
-      };
-    }
-    
-    // 如果接口返回的状态码不是200，认为请求出错
-    if (res.code !== 200) {
-      // 显示错误信息
-      showToast(res.message || '请求失败')
-      
-      // 处理特定错误码
-      if (res.code === 401) {
-        // 清除token并跳转到登录页
-        localStorage.removeItem('token')
-        router.push({
-          path: '/login',
-          query: { redirect: router.currentRoute.value.fullPath }
-        })
+        code: 200,
+        message: '操作成功',
+        data: res
       }
-      
-      // 返回标准格式的错误响应，而不是抛出异常
-      return res;
     }
     
-    return res
+    // 2. 如果响应是对象但没有标准code/status字段
+    if (typeof res === 'object' && res !== null && res.code === undefined && res.status === undefined) {
+      return {
+        code: 200,
+        message: '操作成功',
+        data: res
+      }
+    }
+    
+    // 3. 标准响应处理
+    if (res.code === 200 || res.status === 200 || res.success === true) {
+      return res
+    }
+
+    // 处理错误响应
+    let errorMessage = res.message || '请求失败'
+    showToast({
+      message: errorMessage,
+      type: 'fail',
+      duration: 3000
+    })
+
+    // 特殊处理401未授权
+    if (res.code === 401 || res.status === 401) {
+      console.warn('检测到401未授权状态，清除token')
+      removeToken()
+      
+      // 避免在登录页面触发重定向
+      const currentPath = window.location.pathname
+      if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
+        setTimeout(() => {
+          console.log('重定向到登录页面')
+          // 使用工具函数处理重定向参数，避免双问号问题
+          const redirectParam = formatRedirectPath(currentPath);
+          console.log('重定向参数:', redirectParam);
+          window.location.href = `/login?redirect=${redirectParam}`;
+        }, 1500)
+      }
+    }
+    
+    return Promise.reject(new Error(errorMessage))
   },
   error => {
-    // 请求被取消，直接返回
-    if (axios.isCancel(error)) {
-      console.log('请求被取消:', error.message)
-      return {
-        code: 499, // 自定义错误码
-        message: '请求已取消',
-        data: null
-      };
-    }
-    
     // 移除请求标记
     if (error.config) {
       removePendingRequest(error.config)
     }
     
-    console.error('Response error:', error)
+    console.error('响应错误:', error)
     
-    let message = '网络错误'
-    let statusCode = 500;
-    
+    // 处理网络错误或服务器错误
+    let message = '请求失败'
     if (error.response) {
-      statusCode = error.response.status;
-      
-      // 尝试从响应中获取详细错误信息
-      let errorData = null;
-      try {
-        errorData = error.response.data;
-      } catch (e) {
-        console.error('解析错误响应数据失败:', e);
+      // 服务器返回错误状态码
+      switch (error.response.status) {
+        case 400:
+          message = '请求参数错误'
+          break
+        case 401:
+          message = '未授权，请重新登录'
+          removeToken()
+          // 避免在登录页面触发重定向
+          if (!window.location.pathname.includes('/login')) {
+            setTimeout(() => {
+              window.location.href = '/login'
+            }, 1500)
+          }
+          break
+        case 403:
+          message = '拒绝访问'
+          break
+        case 404:
+          message = '请求的资源不存在'
+          break
+        case 500:
+          message = '服务器内部错误'
+          break
+        default:
+          message = `请求失败(${error.response.status})`
       }
       
-      if (errorData && errorData.message) {
-        message = errorData.message;
-      } else {
-        switch (error.response.status) {
-          case 400:
-            message = '请求参数错误，请检查输入信息';
-            break;
-          case 401:
-            message = '未授权，请登录';
-            // 清除token并跳转到登录页
-            localStorage.removeItem('token');
-            router.push({
-              path: '/login',
-              query: { redirect: router.currentRoute.value.fullPath }
-            });
-            break;
-          case 403:
-            message = '拒绝访问';
-            break;
-          case 404:
-            message = '请求的资源不存在';
-            break;
-          case 409:
-            message = '资源冲突，可能是用户名或手机号已存在';
-            break;
-          case 422:
-            message = '请求数据验证失败，可能是验证码错误';
-            break;
-          case 500:
-            message = '服务器错误';
-            break;
-          default:
-            message = `请求失败 (${error.response.status})`;
-        }
-      }
-      
-      // 处理认证错误（token无效或过期）
-      if (error.response.status === 401) {
-        console.warn('认证失败，token可能无效或已过期')
-        
-        // 使用事件总线触发全局通知
-        window.dispatchEvent(new CustomEvent('token-invalid'))
-        
-        // 不自动清除token和重定向，让错误处理逻辑或组件自行处理
+      // 如果响应中包含详细错误信息
+      if (error.response.data && error.response.data.message) {
+        message = error.response.data.message
       }
     } else if (error.request) {
-      message = '服务器无响应';
+      // 请求已发送但没有收到响应
+      message = '服务器无响应'
     } else {
-      message = error.message;
+      // 请求设置有问题
+      message = '请求配置错误'
     }
     
-    // 显示错误信息
-    showToast(message);
+    showToast({
+      message,
+      type: 'fail',
+      duration: 3000
+    })
     
-    // 返回标准格式的错误响应，带上原始错误数据
-    return {
-      code: statusCode,
-      message: message,
-      data: error.response?.data || null,
-      originalError: error.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        headers: error.response.headers
-      } : null
-    };
+    return Promise.reject(error)
   }
 )
 

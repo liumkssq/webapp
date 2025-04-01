@@ -220,10 +220,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick, reactive } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, reactive, watch, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useMessageStore } from '@/store/message'
+import { useUserStore } from '@/store/user'
 import ProductItem from '@/components/product/ProductItem.vue'
 import LostFoundItem from '@/components/lostFound/LostFoundItem.vue'
 import FooterNavigation from '@/components/common/FooterNavigation.vue'
@@ -348,261 +349,341 @@ const startBannerAutoPlay = () => {
   }, 3000)
 }
 
-const fetchHomeData = async () => {
-  loadingStates.products = true;
-  loadingStates.lostFound = true;
-  loadingStates.articles = true;
+// 首页数据缓存和时间戳
+const cacheData = reactive({
+  products: {
+    data: [],
+    timestamp: 0
+  },
+  lostFound: {
+    data: [],
+    timestamp: 0
+  },
+  articles: {
+    data: [],
+    timestamp: 0
+  }
+})
+
+// 数据是否过期（超过5分钟）
+const isDataExpired = (timestamp) => {
+  const now = Date.now()
+  const cacheTime = 5 * 60 * 1000 // 5分钟
+  return now - timestamp > cacheTime
+}
+
+// 页面是否已加载过
+const hasLoaded = ref(false)
+
+// 获取用户状态
+const userStore = useUserStore()
+
+const fetchHomeData = async (forceFresh = false) => {
+  // 如果已经有缓存数据且不需要强制刷新，直接使用缓存
+  if (!forceFresh && hasLoaded.value) {
+    if (cacheData.products.data.length > 0 && !isDataExpired(cacheData.products.timestamp)) {
+      console.log('使用缓存的热门商品数据')
+      hotProducts.value = [...cacheData.products.data]
+      loadingStates.products = false
+    }
+    
+    if (cacheData.lostFound.data.length > 0 && !isDataExpired(cacheData.lostFound.timestamp)) {
+      console.log('使用缓存的失物招领数据')
+      latestLostFound.value = [...cacheData.lostFound.data]
+      loadingStates.lostFound = false
+    }
+    
+    if (cacheData.articles.data.length > 0 && !isDataExpired(cacheData.articles.timestamp)) {
+      console.log('使用缓存的热门文章数据')
+      hotArticles.value = [...cacheData.articles.data]
+      loadingStates.articles = false
+    }
+    
+    // 如果所有数据都有缓存，则返回
+    if (!loadingStates.products && !loadingStates.lostFound && !loadingStates.articles) {
+      console.log('所有数据都使用缓存，无需请求API')
+      return
+    }
+  }
+  
+  // 否则请求新数据
+  if (forceFresh || loadingStates.products) {
+    loadingStates.products = true
+  }
+  if (forceFresh || loadingStates.lostFound) {
+    loadingStates.lostFound = true
+  }
+  if (forceFresh || loadingStates.articles) {
+    loadingStates.articles = true
+  }
+  
   try {
     console.log('开始获取首页数据...');
     
-    // 使用fetch直接请求后端API获取热门商品
-    try {
-      const response = await fetch('/api/product/list?sort=hot&limit=4');
-      if (response.ok) {
-        const data = await response.json();
-        console.log('直接获取热门商品数据:', data);
-        
-        // 直接使用响应数据
-        if (data && data.list && Array.isArray(data.list)) {
-          // 处理图片数据
-          hotProducts.value = data.list.map(product => {
-            const processedProduct = { ...product };
-            
-            // 处理图片JSON字符串
-            if (processedProduct.images && Array.isArray(processedProduct.images)) {
-              processedProduct.images = processedProduct.images.map(img => {
-                if (typeof img === 'string' && img.startsWith('[')) {
-                  try {
-                    return JSON.parse(img);
-                  } catch (e) {
-                    console.error('解析图片JSON失败:', e);
-                    return [img];
-                  }
-                }
-                return img;
-              }).flat();
-            }
-            
-            return processedProduct;
-          });
+    // 获取热门商品
+    if (forceFresh || loadingStates.products) {
+      try {
+        const response = await fetch('/api/product/list?sort=hot&limit=4');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('直接获取热门商品数据:', data);
           
-          console.log('处理后的热门商品数据:', hotProducts.value);
+          // 直接使用响应数据
+          if (data && data.list && Array.isArray(data.list)) {
+            // 处理图片数据
+            const processedProducts = data.list.map(product => {
+              const processedProduct = { ...product };
+              
+              // 处理图片JSON字符串
+              if (processedProduct.images && Array.isArray(processedProduct.images)) {
+                processedProduct.images = processedProduct.images.map(img => {
+                  if (typeof img === 'string' && img.startsWith('[')) {
+                    try {
+                      return JSON.parse(img);
+                    } catch (e) {
+                      console.error('解析图片JSON失败:', e);
+                      return [img];
+                    }
+                  }
+                  return img;
+                }).flat();
+              }
+              
+              return processedProduct;
+            });
+            
+            // 更新数据和缓存
+            hotProducts.value = processedProducts;
+            cacheData.products.data = [...processedProducts];
+            cacheData.products.timestamp = Date.now();
+            
+            console.log('处理后的热门商品数据:', hotProducts.value);
+          } else {
+            console.error('热门商品数据格式异常:', data);
+            hotProducts.value = [];
+          }
         } else {
-          console.error('热门商品数据格式异常:', data);
+          console.error('获取热门商品失败，HTTP状态:', response.status);
           hotProducts.value = [];
         }
-      } else {
-        console.error('获取热门商品失败，HTTP状态:', response.status);
-        hotProducts.value = [];
-      }
-    } catch (error) {
-      console.error('直接获取热门商品异常:', error);
-      
-      // 如果直接请求失败，回退到API模块
-      const hotProductsRes = await api.product.getProductList({ sort: 'hot', limit: 4 });
-      console.log('回退API响应:', hotProductsRes);
-      
-      if (hotProductsRes && hotProductsRes.code === 200 && hotProductsRes.data) {
-        hotProducts.value = hotProductsRes.data.list || [];
-      } else {
-        hotProducts.value = [];
+      } catch (error) {
+        console.error('直接获取热门商品异常:', error);
+        
+        // 如果直接请求失败，回退到API模块
+        try {
+          const hotProductsRes = await api.product.getProductList({ sort: 'hot', limit: 4 });
+          console.log('回退API响应:', hotProductsRes);
+          
+          if (hotProductsRes && hotProductsRes.code === 200 && hotProductsRes.data) {
+            hotProducts.value = hotProductsRes.data.list || [];
+            // 更新缓存
+            cacheData.products.data = [...hotProducts.value];
+            cacheData.products.timestamp = Date.now();
+          } else {
+            hotProducts.value = [];
+          }
+        } catch (apiError) {
+          console.error('API模块获取热门商品失败:', apiError);
+          hotProducts.value = [];
+        }
+      } finally {
+        loadingStates.products = false;
       }
     }
     
-    // 其他数据获取保持不变
     // 获取最新失物招领
-    try {
-      console.log('开始获取失物招领数据...');
-      const response = await fetch('/api/lost-found/list?sort=latest&limit=3');
-      if (response.ok) {
-        const data = await response.json();
-        console.log('直接获取失物招领数据:', data);
-        
-        // 直接使用响应数据
-        if (data && data.list && Array.isArray(data.list)) {
-          // 处理数据
-          latestLostFound.value = data.list.map(item => {
-            const processedItem = { ...item };
-            
-            // 处理图片字段
-            if (processedItem.images) {
-              if (typeof processedItem.images === 'string' && processedItem.images.startsWith('[')) {
-                try {
-                  processedItem.images = JSON.parse(processedItem.images);
-                } catch (e) {
-                  console.error('解析图片JSON失败:', e);
-                  processedItem.images = [processedItem.images];
+    if (forceFresh || loadingStates.lostFound) {
+      try {
+        console.log('开始获取失物招领数据...');
+        const response = await fetch('/api/lost-found/list?sort=latest&limit=3');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('直接获取失物招领数据:', data);
+          
+          // 直接使用响应数据
+          if (data && data.list && Array.isArray(data.list)) {
+            // 处理数据
+            const processedItems = data.list.map(item => {
+              const processedItem = { ...item };
+              
+              // 处理图片字段
+              if (processedItem.images) {
+                if (typeof processedItem.images === 'string' && processedItem.images.startsWith('[')) {
+                  try {
+                    processedItem.images = JSON.parse(processedItem.images);
+                  } catch (e) {
+                    console.error('解析图片JSON失败:', e);
+                    processedItem.images = [processedItem.images];
+                  }
                 }
               }
-            }
+              
+              // 确保有imageUrl字段
+              if (processedItem.images && Array.isArray(processedItem.images) && processedItem.images.length > 0) {
+                processedItem.imageUrl = processedItem.images[0];
+              } else if (processedItem.imageUrl) {
+                // 已有imageUrl，不做处理
+              } else {
+                // 使用picsum.photos代替via.placeholder.com
+                processedItem.imageUrl = `https://picsum.photos/id/${(processedItem.id % 30) + 1}/300/300`;
+              }
+              
+              // 确保类型字段存在
+              if (!processedItem.type) {
+                processedItem.type = 'lost'; // 默认为寻物启事
+              }
+              
+              // 确保状态字段存在
+              if (!processedItem.status) {
+                processedItem.status = 'open'; // 默认为进行中
+              }
+              
+              // 处理时间字段
+              if (processedItem.createdAt && !processedItem.time) {
+                processedItem.time = formatTime(new Date(processedItem.createdAt));
+              } else if (!processedItem.time) {
+                processedItem.time = '未知时间';
+              }
+              
+              // 确保位置字段存在
+              if (!processedItem.location) {
+                processedItem.location = '未知位置';
+              }
+              
+              // 确保发布者信息存在
+              if (!processedItem.publisher && processedItem.publisherName) {
+                processedItem.publisher = {
+                  id: processedItem.publisherId || 0,
+                  nickname: processedItem.publisherName || '未知用户',
+                  avatar: processedItem.publisherAvatar || ''
+                };
+              } else if (!processedItem.publisher) {
+                processedItem.publisher = {
+                  id: 0,
+                  nickname: '未知用户',
+                  avatar: ''
+                };
+              }
+              
+              return processedItem;
+            });
             
-            // 确保有imageUrl字段
-            if (processedItem.images && Array.isArray(processedItem.images) && processedItem.images.length > 0) {
-              processedItem.imageUrl = processedItem.images[0];
-            } else if (processedItem.imageUrl) {
-              // 已有imageUrl，不做处理
-            } else {
-              // 使用picsum.photos代替via.placeholder.com
-              processedItem.imageUrl = `https://picsum.photos/id/${(processedItem.id % 30) + 1}/300/300`;
-            }
+            // 更新数据和缓存
+            latestLostFound.value = processedItems;
+            cacheData.lostFound.data = [...processedItems];
+            cacheData.lostFound.timestamp = Date.now();
             
-            // 确保类型字段存在
-            if (!processedItem.type) {
-              processedItem.type = 'lost'; // 默认为寻物启事
-            }
-            
-            // 确保状态字段存在
-            if (!processedItem.status) {
-              processedItem.status = 'open'; // 默认为进行中
-            }
-            
-            // 处理时间字段
-            if (processedItem.createdAt && !processedItem.time) {
-              processedItem.time = formatTime(new Date(processedItem.createdAt));
-            } else if (!processedItem.time) {
-              processedItem.time = '未知时间';
-            }
-            
-            // 确保位置字段存在
-            if (!processedItem.location) {
-              processedItem.location = '未知位置';
-            }
-            
-            // 确保发布者信息存在
-            if (!processedItem.publisher && processedItem.publisherName) {
-              processedItem.publisher = {
-                id: processedItem.publisherId || 0,
-                nickname: processedItem.publisherName || '未知用户',
-                avatar: processedItem.publisherAvatar || ''
-              };
-            } else if (!processedItem.publisher) {
-              processedItem.publisher = {
-                id: 0,
-                nickname: '未知用户',
-                avatar: ''
-              };
-            }
-            
-            return processedItem;
-          });
-          
-          console.log('处理后的失物招领数据:', latestLostFound.value);
+            console.log('处理后的失物招领数据:', latestLostFound.value);
+          } else {
+            console.error('失物招领数据格式异常:', data);
+            latestLostFound.value = [];
+          }
         } else {
-          console.error('失物招领数据格式异常:', data);
+          console.error('获取失物招领失败，HTTP状态:', response.status);
           latestLostFound.value = [];
         }
-      } else {
-        console.error('获取失物招领失败，HTTP状态:', response.status);
-        latestLostFound.value = [];
-      }
-    } catch (error) {
-      console.error('直接获取失物招领异常:', error);
-      
-      // 如果直接请求失败，回退到API模块
-      const lostFoundRes = await api.lostFound.getLostFoundList({ sort: 'latest', limit: 3 });
-      console.log('回退API响应:', lostFoundRes);
-      
-      if (lostFoundRes && lostFoundRes.code === 200 && lostFoundRes.data) {
-        latestLostFound.value = lostFoundRes.data.list || [];
-        console.log('最新失物招领数据:', latestLostFound.value);
-      } else {
-        console.error('失物招领数据异常:', lostFoundRes);
-        latestLostFound.value = [];
+      } catch (error) {
+        console.error('直接获取失物招领异常:', error);
+        
+        // 如果直接请求失败，回退到API模块
+        try {
+          const lostFoundRes = await api.lostFound.getLostFoundList({ sort: 'latest', limit: 3 });
+          console.log('回退API响应:', lostFoundRes);
+          
+          if (lostFoundRes && lostFoundRes.code === 200 && lostFoundRes.data) {
+            latestLostFound.value = lostFoundRes.data.list || [];
+            // 更新缓存
+            cacheData.lostFound.data = [...latestLostFound.value];
+            cacheData.lostFound.timestamp = Date.now();
+            
+            console.log('最新失物招领数据:', latestLostFound.value);
+          } else {
+            console.error('失物招领数据异常:', lostFoundRes);
+            latestLostFound.value = [];
+          }
+        } catch (apiError) {
+          console.error('API模块获取失物招领失败:', apiError);
+          latestLostFound.value = [];
+        }
+      } finally {
+        loadingStates.lostFound = false;
       }
     }
     
     // 获取热门文章
-    const articlesRes = await api.article.getArticleList({ sort: 'hot', limit: 3 });
-    console.log('热门文章API响应:', articlesRes);
-    
-    if (articlesRes && articlesRes.code === 200 && articlesRes.data) {
-      hotArticles.value = articlesRes.data.list || [];
-      console.log('热门文章数据:', hotArticles.value);
-    } else {
-      console.error('热门文章数据异常:', articlesRes);
-      hotArticles.value = [];
+    if (forceFresh || loadingStates.articles) {
+      try {
+        const articlesRes = await api.article.getArticleList({ sort: 'hot', limit: 3 });
+        console.log('热门文章API响应:', articlesRes);
+        
+        if (articlesRes && articlesRes.code === 200 && articlesRes.data) {
+          hotArticles.value = articlesRes.data.list || [];
+          // 更新缓存
+          cacheData.articles.data = [...hotArticles.value];
+          cacheData.articles.timestamp = Date.now();
+          
+          console.log('热门文章数据:', hotArticles.value);
+        } else {
+          console.error('热门文章数据异常:', articlesRes);
+          hotArticles.value = [];
+        }
+      } catch (error) {
+        console.error('获取热门文章失败:', error);
+        hotArticles.value = [];
+      } finally {
+        loadingStates.articles = false;
+      }
     }
+    
+    // 标记已加载
+    hasLoaded.value = true;
   } catch (error) {
     console.error('获取首页数据失败:', error);
     // 出错时使用空数组
-    hotProducts.value = [];
-    latestLostFound.value = [];
-    hotArticles.value = [];
+    if (forceFresh || loadingStates.products) {
+      hotProducts.value = [];
+      loadingStates.products = false;
+    }
+    if (forceFresh || loadingStates.lostFound) {
+      latestLostFound.value = [];
+      loadingStates.lostFound = false;
+    }
+    if (forceFresh || loadingStates.articles) {
+      hotArticles.value = [];
+      loadingStates.articles = false;
+    }
     
     // 显示错误提示
     messageStore.showError('获取首页数据失败，请稍后重试');
-  } finally {
-    loadingStates.products = false;
-    loadingStates.lostFound = false;
-    loadingStates.articles = false;
   }
 }
 
-// 下拉刷新相关
-const isRefreshing = ref(false)
-const refreshDistance = ref(0)
-const maxRefreshDistance = 80
-const startY = ref(0)
-
-// 处理下拉刷新
-const handleTouchStart = (e) => {
-  // 只在页面顶部才能下拉刷新
-  if (window.scrollY > 0) return
-  
-  startY.value = e.touches[0].clientY
-  document.addEventListener('touchmove', handleTouchMove, { passive: false })
-  document.addEventListener('touchend', handleTouchEnd)
-}
-
-const handleTouchMove = (e) => {
-  // 如果不是从顶部开始，则不处理
-  if (window.scrollY > 0) return
-  
-  const currentY = e.touches[0].clientY
-  const diff = currentY - startY.value
-  
-  // 只处理下拉操作
-  if (diff <= 0) return
-  
-  // 阻止默认滚动行为
-  e.preventDefault()
-  
-  // 计算拖动距离，添加阻尼效果
-  refreshDistance.value = Math.min(maxRefreshDistance, diff * 0.5)
-  
-  // 更新状态
-  isRefreshing.value = refreshDistance.value >= maxRefreshDistance
-}
-
-const handleTouchEnd = async () => {
-  document.removeEventListener('touchmove', handleTouchMove)
-  document.removeEventListener('touchend', handleTouchEnd)
-  
-  // 如果拖动距离足够，触发刷新
-  if (refreshDistance.value >= maxRefreshDistance) {
-    // 显示刷新状态
-    isRefreshing.value = true
-    
-    try {
-      // 执行刷新操作
-      await fetchHomeData()
-      messageStore.showSuccess('刷新成功')
-    } catch (error) {
-      console.error('刷新失败:', error)
-      messageStore.showError('刷新失败，请重试')
-    } finally {
-      // 延迟重置刷新状态，给用户视觉反馈
-      setTimeout(() => {
-        isRefreshing.value = false
-        refreshDistance.value = 0
-      }, 500)
-    }
-  } else {
-    // 如果拖动距离不够，直接重置
-    refreshDistance.value = 0
-    isRefreshing.value = false
+// 监听用户登录状态变化，刷新数据
+watch(() => userStore.isLoggedIn, (newValue, oldValue) => {
+  if (newValue !== oldValue) {
+    console.log('用户登录状态变化，刷新首页数据');
+    fetchHomeData(true); // 强制刷新
   }
-}
+});
+
+// 使用keep-alive优化
+onActivated(() => {
+  console.log('Home页面被激活');
+  // 检查数据是否过期，如果过期则刷新
+  const now = Date.now();
+  const needRefreshProducts = isDataExpired(cacheData.products.timestamp);
+  const needRefreshLostFound = isDataExpired(cacheData.lostFound.timestamp);
+  const needRefreshArticles = isDataExpired(cacheData.articles.timestamp);
+  
+  if (needRefreshProducts || needRefreshLostFound || needRefreshArticles) {
+    console.log('首页数据已过期，重新获取');
+    fetchHomeData(false); // 不强制刷新，有缓存的数据会先显示
+  }
+});
+
+onDeactivated(() => {
+  console.log('Home页面被停用');
+});
 
 // 刷新热门商品
 const refreshHotProducts = async () => {
@@ -613,6 +694,10 @@ const refreshHotProducts = async () => {
     
     if (hotProductsRes && hotProductsRes.code === 200 && hotProductsRes.data) {
       hotProducts.value = hotProductsRes.data.list || [];
+      // 更新缓存
+      cacheData.products.data = [...hotProducts.value];
+      cacheData.products.timestamp = Date.now();
+      
       if (hotProducts.value.length > 0) {
         messageStore.showSuccess('商品加载成功');
       } else {
@@ -696,10 +781,9 @@ onBeforeRouteLeave((to, from) => {
 onMounted(async () => {
   console.log('Home页面加载，当前路径:', window.location.pathname);
   console.log('登录状态:', {
-    token: localStorage.getItem('token'),
-    userId: localStorage.getItem('userId'),
-    username: localStorage.getItem('username'),
-    isLoggedIn: localStorage.getItem('isLoggedIn')
+    isLoggedIn: userStore.isLoggedIn,
+    userId: userStore.userInfo?.id,
+    username: userStore.userInfo?.username
   });
   
   // 获取首页数据
@@ -714,6 +798,12 @@ onMounted(async () => {
 
   // 添加下拉刷新事件监听
   document.addEventListener('touchstart', handleTouchStart, { passive: true })
+  
+  // 监听登录成功事件
+  window.addEventListener('user-login-success', () => {
+    console.log('检测到用户登录成功，刷新首页数据');
+    fetchHomeData(true);
+  });
 });
 
 onBeforeUnmount(() => { 
@@ -731,7 +821,76 @@ onBeforeUnmount(() => {
 
   // 移除下拉刷新事件监听
   document.removeEventListener('touchstart', handleTouchStart)
+  
+  // 移除登录成功事件监听
+  window.removeEventListener('user-login-success', () => {});
 });
+
+// 下拉刷新相关
+const isRefreshing = ref(false)
+const refreshDistance = ref(0)
+const maxRefreshDistance = 80
+const startY = ref(0)
+
+// 处理下拉刷新
+const handleTouchStart = (e) => {
+  // 只在页面顶部才能下拉刷新
+  if (window.scrollY > 0) return
+  
+  startY.value = e.touches[0].clientY
+  document.addEventListener('touchmove', handleTouchMove, { passive: false })
+  document.addEventListener('touchend', handleTouchEnd)
+}
+
+const handleTouchMove = (e) => {
+  // 如果不是从顶部开始，则不处理
+  if (window.scrollY > 0) return
+  
+  const currentY = e.touches[0].clientY
+  const diff = currentY - startY.value
+  
+  // 只处理下拉操作
+  if (diff <= 0) return
+  
+  // 阻止默认滚动行为
+  e.preventDefault()
+  
+  // 计算拖动距离，添加阻尼效果
+  refreshDistance.value = Math.min(maxRefreshDistance, diff * 0.5)
+  
+  // 更新状态
+  isRefreshing.value = refreshDistance.value >= maxRefreshDistance
+}
+
+const handleTouchEnd = async () => {
+  document.removeEventListener('touchmove', handleTouchMove)
+  document.removeEventListener('touchend', handleTouchEnd)
+  
+  // 如果拖动距离足够，触发刷新
+  if (refreshDistance.value >= maxRefreshDistance) {
+    // 显示刷新状态
+    isRefreshing.value = true
+    
+    try {
+      // 执行刷新操作，强制获取最新数据
+      await fetchHomeData(true)
+      messageStore.showSuccess('刷新成功')
+    } catch (error) {
+      console.error('刷新失败:', error)
+      messageStore.showError('刷新失败，请重试')
+    } finally {
+      // 延迟重置刷新状态，给用户视觉反馈
+      setTimeout(() => {
+        isRefreshing.value = false
+        refreshDistance.value = 0
+      }, 500)
+    }
+  } else {
+    // 如果拖动距离不够，直接重置
+    refreshDistance.value = 0
+    isRefreshing.value = false
+  }
+}
 </script>
 
 <style scoped>
