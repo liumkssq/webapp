@@ -240,47 +240,58 @@ const handleAccountLogin = async () => {
 }
 
 // 处理登录成功的通用函数
-const handleLoginSuccess = async (userData) => {
-  console.log('登录成功，保存用户数据:', userData);
-  
-  // 保存用户基本信息到localStorage
-  localStorage.setItem('token', userData.accessToken);
-  localStorage.setItem('tokenExpire', userData.accessExpire?.toString() || '');
-  localStorage.setItem('refreshAfter', userData.refreshAfter?.toString() || '');
-  localStorage.setItem('userId', userData.userId?.toString() || '');
-  localStorage.setItem('username', userData.username || '');
-  localStorage.setItem('isLoggedIn', 'true');
-  
-  // 存储到Pinia，确保状态管理一致性
-  userStore.setToken(userData.accessToken);
-  
-  // 获取完整的用户信息
-  try {
-    console.log('获取完整用户信息...');
-    const userInfoResponse = await getUserInfo();
+const handleLoginSuccess = (data) => {
+  if (data) {
+    console.log('登录成功，保存用户数据:', data);
     
-    if (userInfoResponse && userInfoResponse.code === 200 && userInfoResponse.data) {
-      console.log('获取用户信息成功:', userInfoResponse.data);
-      // 更新Pinia状态管理
-      userStore.setUserInfo(userInfoResponse.data);
-    } else {
-      console.warn('获取用户信息失败:', userInfoResponse);
+    // 提取和标准化用户数据
+    const userData = {
+      id: data.userId || data.id,
+      userId: data.userId || data.id,
+      username: data.username,
+      nickname: data.nickname || data.username,
+      avatar: data.avatar || '',
+      phone: data.phone || '',
+      // 其他用户字段...
+    };
+    
+    // 确保有token
+    const token = data.token || data.accessToken;
+    if (!token) {
+      messageStore.showError('登录失败：缺少访问令牌');
+      return;
     }
-  } catch (error) {
-    console.error('获取用户信息时出错:', error);
+    
+    // 存储token和用户ID到localStorage，提高持久性
+    localStorage.setItem('token', token);
+    localStorage.setItem('userId', userData.id || userData.userId);
+    localStorage.setItem('isLoggedIn', 'true');
+    
+    // 记录登录时间，用于判断token过期
+    const now = new Date().getTime();
+    localStorage.setItem('loginTime', now);
+    
+    // 更新Pinia状态
+    userStore.login(token);
+    userStore.setUserInfo(userData);
+    
+    // 显示登录成功消息
+    messageStore.showSuccess('登录成功');
+    
+    // 处理重定向
+    console.log('登录成功，准备跳转');
+    if (route.query.redirect) {
+      const redirectUrl = decodeURIComponent(route.query.redirect);
+      console.log('跳转到重定向页面:', redirectUrl);
+      router.replace(redirectUrl);
+    } else {
+      console.log('跳转到个人中心页面');
+      router.replace('/mine');
+    }
+  } else {
+    messageStore.showError('登录成功但未获取到用户信息');
   }
-  
-  // 显示成功消息
-  messageStore.showSuccess('登录成功，正在跳转...');
-  
-  // 确保消息显示后再跳转
-  setTimeout(() => {
-    console.log('准备跳转到首页...');
-    // 重定向到之前的页面或首页
-    const redirect = route.query.redirect || '/';
-    window.location.replace(redirect);
-  }, 1000);
-};
+}
 
 // 短信验证码登录
 const handleSmsLogin = async () => {

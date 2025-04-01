@@ -50,9 +50,27 @@ service.interceptors.request.use(
     // 从localStorage获取token
     const token = localStorage.getItem('token')
     
+    // 检查token是否过期
+    const loginTime = localStorage.getItem('loginTime')
+    const now = new Date().getTime()
+    const tokenMaxAge = 24 * 60 * 60 * 1000 // 设置token最大有效期为24小时
+    
+    // 如果token已过期，清除本地存储并重定向到登录页
+    if (token && loginTime && now - parseInt(loginTime) > tokenMaxAge) {
+      console.warn('Token已过期，需要重新登录')
+      
+      // 只在非登录相关页面才显示提示
+      if (!config.url.includes('/login') && !config.url.includes('/register')) {
+        // 使用事件总线触发全局通知
+        window.dispatchEvent(new CustomEvent('token-expired'))
+      }
+      
+      // 不自动清除token，让用户在提示后自行登录
+    }
+    
     // 如果有token，添加到请求头
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers['Authorization'] = `Bearer ${token}`
     }
     
     // 处理重复请求
@@ -61,7 +79,7 @@ service.interceptors.request.use(
     return config
   },
   error => {
-    console.error('请求错误', error)
+    console.error('Request error:', error)
     return Promise.reject(error)
   }
 )
@@ -121,7 +139,7 @@ service.interceptors.response.use(
       removePendingRequest(error.config)
     }
     
-    console.error('响应错误', error)
+    console.error('Response error:', error)
     
     let message = '网络错误'
     let statusCode = 500;
@@ -171,6 +189,16 @@ service.interceptors.response.use(
           default:
             message = `请求失败 (${error.response.status})`;
         }
+      }
+      
+      // 处理认证错误（token无效或过期）
+      if (error.response.status === 401) {
+        console.warn('认证失败，token可能无效或已过期')
+        
+        // 使用事件总线触发全局通知
+        window.dispatchEvent(new CustomEvent('token-invalid'))
+        
+        // 不自动清除token和重定向，让错误处理逻辑或组件自行处理
       }
     } else if (error.request) {
       message = '服务器无响应';

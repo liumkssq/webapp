@@ -25,13 +25,13 @@
         <!-- 商品图片 -->
         <div class="product-image">
           <img 
-            :src="product.images && product.images.length > 0 ? product.images[0] : '/placeholder.png'" 
+            :src="getProductImage(product)" 
             :alt="product.title"
             @error="handleImageError"
           >
           <!-- 商品状态标签 -->
-          <div class="product-status" v-if="product.status !== '在售'">
-            {{ product.status }}
+          <div class="product-status" v-if="product.status && product.status !== '在售' && product.status !== '\u0000'">
+            {{ product.status === '\u0000' ? '在售' : product.status }}
           </div>
         </div>
         
@@ -219,9 +219,9 @@ const toggleFilter = (type) => {
 // 获取商品列表
 const fetchProducts = async (isLoadMore = false) => {
   if (isLoadMore) {
-    loadingMore.value = true
+    loadingMore.value = true;
   } else {
-    loading.value = true
+    loading.value = true;
   }
   
   try {
@@ -229,109 +229,261 @@ const fetchProducts = async (isLoadMore = false) => {
     const params = {
       page: page.value,
       limit: props.pageSize
-    }
+    };
     
     // 添加分类ID
-    if (props.categoryId) {
-      params.category = props.categoryId
+    if (props.categoryId && props.categoryId !== 'all') {
+      params.category = props.categoryId;
     }
     
     // 添加用户ID
     if (props.userId) {
-      params.userId = props.userId
+      params.userId = props.userId;
     }
     
     // 添加排序参数
     if (activeFilters.sort !== 'latest') {
-      params.sort = activeFilters.sort
+      params.sort = activeFilters.sort;
     }
     
     // 添加价格范围
     if (activeFilters.price !== 'all') {
+      // 设置价格范围
       if (activeFilters.price === 'under50') {
-        params.minPrice = 0
-        params.maxPrice = 50
+        params.maxPrice = 50;
       } else if (activeFilters.price === '50_100') {
-        params.minPrice = 50
-        params.maxPrice = 100
+        params.minPrice = 50;
+        params.maxPrice = 100;
       } else if (activeFilters.price === '100_500') {
-        params.minPrice = 100
-        params.maxPrice = 500
+        params.minPrice = 100;
+        params.maxPrice = 500;
       } else if (activeFilters.price === 'above500') {
-        params.minPrice = 500
+        params.minPrice = 500;
       }
     }
     
-    // 添加成色参数
+    // 添加成色条件
     if (activeFilters.condition !== 'all') {
-      params.condition = activeFilters.condition
+      params.condition = activeFilters.condition;
     }
     
-    const res = await getProductList(params)
+    console.log('开始请求商品列表，参数:', params);
+    const response = await getProductList(params);
+    console.log('商品列表响应原始数据:', response);
     
-    if (res.code === 200 && res.data && res.data.list) {
-      if (isLoadMore) {
-        products.value = [...products.value, ...res.data.list]
-      } else {
-        products.value = res.data.list
-      }
+    // 处理响应数据
+    if (response) {
+      console.log('响应状态码:', response.code);
       
-      // 更新是否有更多数据
-      hasMore.value = res.data.hasMore || false
+      // 检查响应的各种可能格式
+      if (response.code === 200 && response.data) {
+        console.log('标准响应格式，处理list数据');
+        
+        // 检查是否有list字段
+        if (response.data.list && Array.isArray(response.data.list)) {
+          handleProductData(response.data.list, isLoadMore);
+          
+          // 更新分页信息
+          hasMore.value = products.value.length < (response.data.total || 0);
+        } else if (Array.isArray(response.data)) {
+          // 直接是数组的情况
+          console.log('响应数据是数组格式');
+          handleProductData(response.data, isLoadMore);
+          
+          // 假设还有更多数据
+          hasMore.value = response.data.length >= props.pageSize;
+        } else {
+          console.warn('响应数据格式异常:', response.data);
+          if (isLoadMore) {
+            // 加载更多时不清空现有数据
+          } else {
+            products.value = [];
+          }
+        }
+      } else if (Array.isArray(response)) {
+        // 直接返回数组的情况
+        console.log('直接返回数组格式');
+        handleProductData(response, isLoadMore);
+        
+        // 假设还有更多数据
+        hasMore.value = response.length >= props.pageSize;
+      } else {
+        console.error('无法识别的响应格式:', response);
+        if (!isLoadMore) {
+          products.value = [];
+        }
+      }
     } else {
-      console.error('返回数据格式错误', res)
+      console.error('获取商品列表失败: 空响应');
       if (!isLoadMore) {
-        products.value = []
+        products.value = [];
       }
     }
   } catch (error) {
-    console.error('获取商品列表失败', error)
+    console.error('获取商品列表异常:', error);
+    if (!isLoadMore) {
+      products.value = [];
+    }
   } finally {
-    loading.value = false
-    loadingMore.value = false
+    loading.value = false;
+    loadingMore.value = false;
+    
+    // 输出最终产品数据状态
+    console.log('最终products数据状态:', {
+      length: products.value.length,
+      hasMore: hasMore.value,
+      firstItem: products.value[0] ? {
+        id: products.value[0].id,
+        title: products.value[0].title,
+        images: products.value[0].images,
+        processedImage: getProductImage(products.value[0])
+      } : null
+    });
   }
-}
+};
+
+// 处理商品数据
+const handleProductData = (productsData, isLoadMore) => {
+  if (!Array.isArray(productsData)) {
+    console.error('处理商品数据失败: 不是数组', productsData);
+    return;
+  }
+  
+  console.log(`处理${productsData.length}个商品数据`);
+  
+  // 数据转换和处理
+  const newProducts = productsData.map(product => {
+    // 创建统一的卖家信息
+    const seller = product.seller || {
+      id: product.sellerId || '未知ID',
+      name: product.sellerName || '未知用户',
+      avatar: product.sellerAvatar || '/avatar-placeholder.png'
+    };
+    
+    // 处理商品时间
+    const createTime = product.createdAt || product.createTime || new Date().toISOString();
+    
+    // 确保价格是数字并处理
+    const price = typeof product.price === 'number' ? product.price : 
+                   (parseFloat(product.price) || 0);
+    
+    // 处理图片数据
+    let processedImages = product.images;
+    
+    if (typeof processedImages === 'string') {
+      try {
+        if (processedImages.startsWith('[')) {
+          processedImages = JSON.parse(processedImages);
+        } else {
+          processedImages = [processedImages];
+        }
+      } catch (e) {
+        console.error('解析图片JSON失败:', e);
+        processedImages = [processedImages];
+      }
+    } else if (!processedImages) {
+      processedImages = [];
+    }
+    
+    console.log(`商品[${product.id}]图片处理:`, {
+      原始: product.images,
+      处理后: processedImages
+    });
+    
+    return {
+      ...product,
+      seller,
+      createTime,
+      price,
+      images: processedImages,
+      // 确保状态字段统一
+      status: product.status === '\u0000' ? '在售' : (product.status || '在售')
+    };
+  });
+  
+  // 更新商品列表
+  if (isLoadMore) {
+    products.value = [...products.value, ...newProducts];
+  } else {
+    products.value = newProducts;
+  }
+  
+  // 如果有数据，且还有更多，自动增加页码
+  if (newProducts.length > 0 && hasMore.value) {
+    page.value += 1;
+  }
+  
+  // 触发刷新事件
+  emit('refresh', {
+    total: products.value.length + (hasMore.value ? '以上' : ''),
+    current: products.value.length
+  });
+};
+
+// 获取商品图片
+const getProductImage = (product) => {
+  if (!product || !product.images) return '/placeholder.png';
+  
+  // 处理图片数组
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    // 取第一张图片
+    const firstImage = product.images[0];
+    // 如果图片是字符串但实际是JSON字符串，需要解析
+    if (typeof firstImage === 'string' && firstImage.startsWith('[')) {
+      try {
+        const parsedImages = JSON.parse(firstImage);
+        return Array.isArray(parsedImages) && parsedImages.length > 0 ? parsedImages[0] : '/placeholder.png';
+      } catch (e) {
+        console.error('解析商品图片JSON失败:', e, firstImage);
+        return firstImage.replace(/^\[\"|\"\]$/g, '') || '/placeholder.png';
+      }
+    }
+    return firstImage;
+  }
+  
+  // 处理商品可能直接有image属性的情况
+  if (product.image) return product.image;
+  
+  return '/placeholder.png';
+};
+
+// 处理图片加载错误
+const handleImageError = (e) => {
+  console.warn('商品图片加载失败，使用占位图替换');
+  e.target.src = '/placeholder.png';
+};
 
 // 格式化时间
 const formatTime = (time) => {
-  if (!time) return ''
+  if (!time) return '刚刚';
   
-  const date = new Date(time)
-  const now = new Date()
-  const diff = Math.floor((now - date) / 1000)
-  
-  // 小于1分钟
-  if (diff < 60) {
-    return '刚刚'
+  try {
+    const date = new Date(time);
+    if (isNaN(date.getTime())) return '未知时间';
+    
+    const now = new Date();
+    const diff = now - date;
+    
+    // 小于1分钟
+    if (diff < 60 * 1000) return '刚刚';
+    // 小于1小时
+    if (diff < 60 * 60 * 1000) return Math.floor(diff / (60 * 1000)) + '分钟前';
+    // 小于1天
+    if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / (60 * 60 * 1000)) + '小时前';
+    // 小于30天
+    if (diff < 30 * 24 * 60 * 60 * 1000) return Math.floor(diff / (24 * 60 * 60 * 1000)) + '天前';
+    
+    // 显示具体日期
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  } catch (e) {
+    console.error('时间格式化错误:', e);
+    return '未知时间';
   }
-  // 小于1小时
-  else if (diff < 3600) {
-    return Math.floor(diff / 60) + '分钟前'
-  }
-  // 小于24小时
-  else if (diff < 86400) {
-    return Math.floor(diff / 3600) + '小时前'
-  }
-  // 小于30天
-  else if (diff < 2592000) {
-    return Math.floor(diff / 86400) + '天前'
-  }
-  // 超过30天
-  else {
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const day = date.getDate().toString().padStart(2, '0')
-    return `${month}-${day}`
-  }
-}
+};
 
 // 跳转到商品详情
 const goToProductDetail = (id) => {
   router.push(`/product/detail/${id}`)
-}
-
-// 处理图片加载错误
-const handleImageError = (e) => {
-  e.target.src = '/placeholder.png'
 }
 
 // 处理空状态操作

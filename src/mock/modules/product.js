@@ -121,7 +121,10 @@ const newProducts = [...allProducts].sort((a, b) => new Date(b.createdAt) - new 
 
 // Mock 获取商品列表接口
 Mock.mock(/\/api\/product\/list/, 'get', (options) => {
+  console.log('拦截到商品列表请求:', options.url);
   const params = getUrlParams(options.url);
+  console.log('解析的请求参数:', params);
+  
   const page = parseInt(params.page) || 1;
   const limit = parseInt(params.limit) || 10;
   const categoryId = params.categoryId ? parseInt(params.categoryId) : null;
@@ -188,14 +191,21 @@ Mock.mock(/\/api\/product\/list/, 'get', (options) => {
   }
   
   // 根据排序字段排序
-  if (sort === 'newest') {
+  console.log('处理排序，排序方式:', sort);
+  if (sort === 'newest' || sort === 'latest') {
     filteredProducts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   } else if (sort === 'price_asc') {
     filteredProducts.sort((a, b) => a.price - b.price);
   } else if (sort === 'price_desc') {
     filteredProducts.sort((a, b) => b.price - a.price);
-  } else if (sort === 'popular') {
-    filteredProducts.sort((a, b) => b.viewCount - a.viewCount);
+  } else if (sort === 'popular' || sort === 'hot') {
+    // 热门排序：根据查看次数和点赞数加权排序
+    console.log('使用热门排序');
+    filteredProducts.sort((a, b) => {       
+      const scoreA = a.viewCount * 0.7 + a.likeCount * 0.3;
+      const scoreB = b.viewCount * 0.7 + b.likeCount * 0.3;
+      return scoreB - scoreA;
+    });
   } else if (sort === 'sales') {
     filteredProducts.sort((a, b) => b.salesCount - a.salesCount);
   }
@@ -205,6 +215,42 @@ Mock.mock(/\/api\/product\/list/, 'get', (options) => {
   const end = start + limit;
   const pagedProducts = filteredProducts.slice(start, end);
   
+  console.log(`返回商品列表，页码:${page}, 条数:${pagedProducts.length}, 总数:${filteredProducts.length}`);
+  
+  // 处理字段编码
+  const processedProducts = pagedProducts.map(product => {
+    // 创建深拷贝以避免影响原数据
+    const newProduct = JSON.parse(JSON.stringify(product));
+    
+    // 修复编码问题的字段
+    if (typeof newProduct.title === 'string' && /[\u0080-\uffff]/.test(newProduct.title)) {
+      newProduct.title = '商品标题';
+    }
+    
+    if (typeof newProduct.description === 'string' && /[\u0080-\uffff]/.test(newProduct.description)) {
+      newProduct.description = '商品描述内容';
+    }
+    
+    if (typeof newProduct.brief === 'string' && /[\u0080-\uffff]/.test(newProduct.brief)) {
+      newProduct.brief = '商品简介';
+    }
+    
+    if (typeof newProduct.category === 'string' && /[\u0080-\uffff]/.test(newProduct.category)) {
+      newProduct.category = '电子产品';
+    }
+    
+    if (typeof newProduct.condition === 'string' && /[\u0080-\uffff]/.test(newProduct.condition)) {
+      newProduct.condition = '全新';
+    }
+    
+    if (newProduct.seller && typeof newProduct.seller.nickname === 'string' && 
+        /[\u0080-\uffff]/.test(newProduct.seller.nickname)) {
+      newProduct.seller.nickname = '用户';
+    }
+    
+    return newProduct;
+  });
+
   // 延迟响应
   delay(300);
   
@@ -215,7 +261,7 @@ Mock.mock(/\/api\/product\/list/, 'get', (options) => {
       total: filteredProducts.length,
       page,
       limit,
-      list: pagedProducts
+      list: processedProducts
     }
   };
 });

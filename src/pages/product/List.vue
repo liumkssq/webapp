@@ -45,8 +45,10 @@ import { useRouter } from 'vue-router'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
 import ProductList from '@/components/ProductList.vue'
+import { useMessageStore } from '@/store/message'
 
 const router = useRouter()
+const messageStore = useMessageStore()
 
 // 激活的分类ID
 const activeCategoryId = ref('all')
@@ -74,6 +76,7 @@ const switchCategory = (categoryId) => {
   if (activeCategoryId.value === categoryId) return
   
   activeCategoryId.value = categoryId
+  console.log(`切换到分类: ${categoryId}`);
   
   // 滚动分类到可见区域
   nextTick(() => {
@@ -82,18 +85,27 @@ const switchCategory = (categoryId) => {
   
   // 刷新商品列表
   if (productList.value) {
+    console.log('请求刷新商品列表');
     productList.value.refresh()
+  } else {
+    console.warn('商品列表组件未初始化');
   }
 }
 
 // 滚动分类到可见区域
 const scrollCategoryIntoView = () => {
-  if (!categoryScroll.value) return
+  if (!categoryScroll.value) {
+    console.warn('分类滚动容器未找到');
+    return;
+  }
   
   const container = categoryScroll.value
   const activeEl = container.querySelector('.category-item.active')
   
-  if (!activeEl) return
+  if (!activeEl) {
+    console.warn('未找到激活的分类元素');
+    return;
+  }
   
   // 计算滚动位置
   const containerWidth = container.offsetWidth
@@ -120,25 +132,46 @@ const goToPublish = () => {
 
 // 页面加载和激活时进行初始化
 onMounted(() => {
+  console.log('商品列表页加载');
+  
   // 从 URL 参数中获取分类
   const query = new URLSearchParams(window.location.search)
   const categoryId = query.get('category')
   
   if (categoryId && categories.some(c => c.id === categoryId)) {
+    console.log(`从URL参数获取分类: ${categoryId}`);
     activeCategoryId.value = categoryId
+  } else {
+    console.log('使用默认分类: all');
   }
   
   // 滚动分类到可见区域
   nextTick(() => {
     scrollCategoryIntoView()
   })
+  
+  // 确保ProductList组件已初始化
+  nextTick(() => {
+    if (productList.value) {
+      console.log('初始化时刷新商品列表');
+      productList.value.refresh();
+    } else {
+      console.warn('初始化时商品列表组件未找到');
+      messageStore.showWarning('加载商品列表失败，请刷新页面');
+    }
+  })
 })
 
 // 当页面被缓存后再次激活时执行
 onActivated(() => {
+  console.log('商品列表页被激活');
+  
   // 刷新商品列表
   if (productList.value) {
+    console.log('页面激活时刷新商品列表');
     productList.value.refresh()
+  } else {
+    console.warn('页面激活时商品列表组件未找到');
   }
 })
 </script>

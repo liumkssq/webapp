@@ -24,6 +24,8 @@ import AppMessage from '@/components/AppMessage.vue'
 import { onMounted, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEdgeSwipeGesture } from './composables/useGesture'
+import { useUserStore } from '@/store/user'
+import { useMessageStore } from '@/store/message'
 
 // 初始化路由器
 const router = useRouter()
@@ -52,8 +54,52 @@ const afterLeave = (el) => {
   }
 }
 
-// 在组件挂载后进行交互优化
-onMounted(() => {
+const userStore = useUserStore()
+const messageStore = useMessageStore()
+
+// 添加token失效/过期的全局处理
+const setupTokenEvents = () => {
+  // 监听token过期事件
+  window.addEventListener('token-expired', () => {
+    console.log('监听到token过期事件')
+    messageStore.showWarning('登录已过期，请重新登录')
+  })
+  
+  // 监听token无效事件
+  window.addEventListener('token-invalid', () => {
+    console.log('监听到token无效事件')
+    messageStore.showWarning('登录状态已失效，请重新登录')
+  })
+}
+
+onMounted(async () => {
+  console.log('App mounted, checking login status...')
+  
+  // 设置token事件监听
+  setupTokenEvents()
+  
+  // 检查localStorage中是否有token
+  const token = localStorage.getItem('token')
+  
+  if (token) {
+    console.log('Found token in localStorage, attempting to restore session')
+    
+    try {
+      // 恢复用户状态
+      const userData = await userStore.restoreUserSession()
+      
+      if (userData) {
+        console.log('Session restored successfully:', userData.nickname || userData.username)
+      } else {
+        console.warn('Failed to restore session, token may be invalid')
+      }
+    } catch (error) {
+      console.error('Error restoring session:', error)
+    }
+  } else {
+    console.log('No token found, user is not logged in')
+  }
+  
   // 初始化手势优化
   initializeInteractionFixes()
   

@@ -379,13 +379,21 @@ const fetchUserProfile = async () => {
       isToastReady: !!toast.value
     });
     
+    // 确保Toast组件已初始化
+    await nextTick();
+    if (!toast.value) {
+      console.warn('Toast组件未初始化，等待组件挂载');
+      // 使用setTimeout给Vue一点时间进行渲染
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     // 检查用户ID
     if (!userId.value) {
       console.error('未找到有效的userId，无法获取用户资料');
       if (toast.value) {
         toast.value.show('无法获取用户信息', 'error');
       } else {
-        console.error('Toast组件未初始化');
+        console.error('Toast组件仍未初始化，使用alert代替');
         alert('无法获取用户信息');
       }
       

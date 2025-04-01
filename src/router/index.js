@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '../store/user'
 
 // 路由配置
 const routes = [
@@ -267,6 +268,10 @@ const routes = [
       requiresAuth: true,
       title: '我的主页',
       description: '我的个人资料'
+    },
+    beforeEnter: (to, from, next) => {
+      console.log('拦截/user/me路由，重定向到/mine');
+      next('/mine');
     }
   },
   {
@@ -277,6 +282,10 @@ const routes = [
       requiresAuth: true,
       title: '个人主页',
       description: '查看和编辑自己的个人资料'
+    },
+    beforeEnter: (to, from, next) => {
+      console.log('拦截/user/profile路由，重定向到/mine');
+      next('/mine');
     }
   },
   {
@@ -434,32 +443,45 @@ router.afterEach((to, from) => {
   }
 })
 
-// 路由守卫
+// 全局路由守卫，处理登录验证
 router.beforeEach((to, from, next) => {
-  // 从localStorage获取token
-  const token = localStorage.getItem('token')
+  const userStore = useUserStore()
+  const isLoggedIn = !!localStorage.getItem('token')
   
-  // 需要登录的页面
+  // 将当前路由信息记录到localStorage，方便恢复
+  localStorage.setItem('lastRoute', JSON.stringify({
+    path: to.path,
+    query: to.query
+  }))
+
+  // 处理需要登录的路由
   if (to.matched.some(record => record.meta.requiresAuth)) {
-    if (!token) {
+    console.log(`路由${to.path}需要登录权限，当前登录状态:`, isLoggedIn)
+    
+    if (!isLoggedIn) {
+      console.log('用户未登录，重定向到登录页面')
       next({
         path: '/login',
-        query: { redirect: to.fullPath }
+        query: { redirect: encodeURIComponent(to.fullPath) }
       })
     } else {
+      // 用户已登录但可能没有完整的用户信息，这里不阻塞导航
+      // 让页面组件在挂载时处理用户信息获取
+      console.log('用户已登录，允许访问', to.path)
       next()
-    }
-  } 
-  // 只有未登录用户可以访问的页面（如登录、注册）
-  else if (to.matched.some(record => record.meta.requiresGuest)) {
-    if (token) {
-      next({ path: '/' })
-    } else {
-      next()
+      
+      // 后台异步验证token有效性，不阻塞导航
+      userStore.getUserInfo().catch(error => {
+        console.warn('获取用户信息失败，可能需要重新登录:', error)
+      })
     }
   } else {
+    // 不需要登录的路由直接放行
     next()
   }
+  
+  // 设置页面标题
+  document.title = to.meta.title || '校园二手交易平台'
 })
 
 export default router

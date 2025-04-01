@@ -100,9 +100,11 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { register, apiSendVerificationCode } from '@/api/user'
 import { useMessageStore } from '@/store/message'
+import { useUserStore } from '@/store/user'
 
 const router = useRouter()
 const messageStore = useMessageStore()
+const userStore = useUserStore()
 
 // 密码显示切换
 const showPassword = ref(false)
@@ -294,8 +296,8 @@ const handleRegister = async () => {
       
       // 确保消息显示后再跳转
       setTimeout(() => {
-        console.log('准备跳转到首页...');
-        window.location.replace('/');
+        console.log('准备跳转到个人中心页面');
+        handleRegisterSuccess(response);
       }, 1000);
       
       return;
@@ -331,6 +333,54 @@ const handleRegister = async () => {
     messageStore.showError(error.message || '注册失败，请稍后重试');
   } finally {
     registerLoading.value = false;
+  }
+}
+
+// 修复注册成功后的处理逻辑
+const handleRegisterSuccess = (data) => {
+  if (data) {
+    console.log('注册成功，保存用户数据:', data);
+    
+    // 提取和标准化用户数据
+    const userData = {
+      id: data.userId || data.id,
+      userId: data.userId || data.id,
+      username: data.username,
+      nickname: data.nickname || data.username,
+      avatar: data.avatar || '',
+      phone: data.phone || '',
+      // 其他用户字段...
+    };
+    
+    // 确保有token
+    const token = data.token || data.accessToken;
+    if (!token) {
+      messageStore.showError('注册成功，但缺少访问令牌');
+      return;
+    }
+    
+    // 存储token和用户ID到localStorage，提高持久性
+    localStorage.setItem('token', token);
+    localStorage.setItem('userId', userData.id || userData.userId);
+    localStorage.setItem('isLoggedIn', 'true');
+    
+    // 记录登录时间，用于判断token过期
+    const now = new Date().getTime();
+    localStorage.setItem('loginTime', now);
+    
+    // 更新Pinia状态
+    userStore.login(token);
+    userStore.setUserInfo(userData);
+    
+    // 显示注册成功消息
+    messageStore.showSuccess('注册成功，欢迎加入!');
+    
+    console.log('注册成功，跳转到个人中心页面');
+    
+    // 跳转到个人中心页面
+    router.replace('/mine');
+  } else {
+    messageStore.showError('注册成功但未获取到用户信息');
   }
 }
 

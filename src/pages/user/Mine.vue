@@ -19,13 +19,21 @@
           <div class="avatar-border"></div>
         </div>
         <div class="user-text">
-          <div class="username">{{ userInfo.nickname || userInfo.username || '未登录' }}</div>
-          <div class="user-id" v-if="userInfo.id">ID: {{ userInfo.id }}</div>
-          <div class="user-phone" v-if="userInfo.phone">{{ userInfo.phone }}</div>
-          <div class="login-tip" v-if="!userInfo.id" @click.stop="goToLogin">
-            <svg-icon name="log-in" size="14" class="login-icon" />
-            <span>点击登录账号</span>
-          </div>
+          <!-- 已登录状态 -->
+          <template v-if="isLoggedIn && userInfo.id">
+            <div class="username">{{ userInfo.nickname || userInfo.username || '未知用户' }}</div>
+            <div class="user-id">ID: {{ userInfo.id }}</div>
+            <div class="user-phone" v-if="userInfo.phone">{{ userInfo.phone }}</div>
+          </template>
+          
+          <!-- 未登录状态 -->
+          <template v-else>
+            <div class="username">未登录</div>
+            <div class="login-tip" @click.stop="goToLogin">
+              <svg-icon name="log-in" size="14" class="login-icon" />
+              <span>点击登录账号</span>
+            </div>
+          </template>
         </div>
       </div>
       <div class="settings-icon" @click="goToSettings">
@@ -215,8 +223,11 @@ const goToLogin = () => {
 
 const goToProfile = () => {
   if (isLoggedIn.value) {
-    console.log('从Mine页面导航到个人资料页...');
-    router.push('/user/me');
+    console.log('Mine页面中点击了个人头像，但当前已在个人中心页面，无需跳转');
+    // 当前已在个人中心页面，可以触发一个刷新操作
+    if (userInfo.value.id) {
+      messageStore.showInfo('已在个人中心页面');
+    }
   } else {
     goToLogin();
   }
