@@ -62,23 +62,75 @@ const generateDefaultProducts = (count = 4) => {
  * 获取商品列表
  * @param {Object} params 查询参数
  * @param {number} params.page 页码
- * @param {number} params.pageSize 每页数量
- * @param {string} params.category 分类
- * @param {string} params.keyword 关键词
- * @param {string} params.sort 排序方式 (latest/price-asc/price-desc)
+ * @param {number} params.limit 每页数量
+ * @param {string} params.category 商品分类
+ * @param {string} params.keyword 搜索关键词
+ * @param {string} params.sort 排序方式
  * @returns {Promise} Promise对象
  */
 export function getProductList(params) {
-  return request({
-    url: '/api/product/list',
-    method: 'get',
-    params
-  })
+  console.log('[API] 调用getProductList API，参数:', params);
+  
+  // 使用相对路径，让Vite代理生效
+  const apiUrl = `/api/product/list`;
+  console.log('[API] 请求URL:', apiUrl);
+  
+  // 直接使用fetch API请求，确保获取原始数据
+  return fetch(apiUrl + '?' + new URLSearchParams(params).toString())
+    .then(response => response.json())
+    .then(data => {
+      console.log('[API] 获取到商品列表原始数据:', data);
+      
+      // 简单检查是否有数据
+      if (!data) {
+        console.error('[API] 获取到的数据为空');
+        throw new Error('获取到的数据为空');
+      }
+      
+      // 返回标准格式的响应
+      if (data.list) {
+        // 已经是标准格式，直接返回
+        return { 
+          code: 200, 
+          message: 'success', 
+          data: data 
+        };
+      } else if (Array.isArray(data)) {
+        // 是数组格式，包装成标准响应
+        return { 
+          code: 200, 
+          message: 'success', 
+          data: { 
+            list: data, 
+            total: data.length 
+          } 
+        };
+      } else {
+        // 其他格式，尝试处理
+        return { 
+          code: 200, 
+          message: 'success', 
+          data: data 
+        };
+      }
+    })
+    .catch(error => {
+      console.error('[API] 获取商品列表失败:', error);
+      // 返回默认数据
+      return {
+        code: 500,
+        message: error.message || '获取商品列表失败',
+        data: {
+          list: [],
+          total: 0
+        }
+      };
+    });
 }
 
 /**
  * 获取商品详情
- * @param {number} id 商品ID
+ * @param {number|string} id 商品ID
  * @returns {Promise} Promise对象
  */
 export function getProductDetail(id) {
@@ -100,40 +152,22 @@ export function getProductCategories() {
 }
 
 /**
- * 发布商品
- * @param {Object} data 商品数据
- * @param {string} data.title 商品标题
- * @param {string} data.category 商品分类
- * @param {number} data.price 售价
- * @param {number} [data.originalPrice] 原价
- * @param {string} data.condition 商品成色(new/like_new/slight_used/used/heavily_used)
- * @param {string} data.description 商品描述
- * @param {Array<string>} data.imageUrls 图片URL数组
- * @param {Array<string>} data.deliveryMethods 交易方式数组(meetup/shipping)
- * @param {Object} [data.location] 交易地点(当面交易时必填)
- * @param {string} data.location.address 地址描述
- * @param {Object} [data.location.coordinates] 坐标
- * @param {number} data.location.coordinates.lng 经度
- * @param {number} data.location.coordinates.lat 纬度
- * @param {Object} data.contactInfo 联系方式
- * @param {string} data.contactInfo.phone 手机号
- * @param {string} [data.contactInfo.wechat] 微信号
+ * 发布新商品
+ * @param {Object} data 商品信息
  * @returns {Promise} Promise对象
  */
 export function publishProduct(data) {
-  console.log('调用发布商品API:', data);
-  
   return request({
-    url: 'http://localhost:8888/api/product/publish',
+    url: '/api/product/publish',
     method: 'post',
     data
   })
 }
 
 /**
- * 更新商品
- * @param {number} id 商品ID
- * @param {Object} data 商品更新数据
+ * 更新商品信息
+ * @param {number|string} id 商品ID
+ * @param {Object} data 商品信息
  * @returns {Promise} Promise对象
  */
 export function updateProduct(id, data) {
@@ -146,7 +180,7 @@ export function updateProduct(id, data) {
 
 /**
  * 删除商品
- * @param {number} id 商品ID
+ * @param {number|string} id 商品ID
  * @returns {Promise} Promise对象
  */
 export function deleteProduct(id) {
@@ -157,61 +191,41 @@ export function deleteProduct(id) {
 }
 
 /**
- * 收藏商品
- * @param {number} id 商品ID
+ * 获取用户发布的商品列表
+ * @param {number|string} userId 用户ID
+ * @param {Object} params 查询参数
  * @returns {Promise} Promise对象
  */
-export function favoriteProduct(id) {
+export function getUserProducts(userId, params) {
   return request({
-    url: `/api/product/favorite/${id}`,
-    method: 'post'
+    url: `/api/product/user/${userId}`,
+    method: 'get',
+    params
   })
 }
 
 /**
- * 获取用户收藏的商品列表
+ * 收藏/取消收藏商品
+ * @param {number|string} id 商品ID
+ * @param {boolean} favorite 是否收藏
+ * @returns {Promise} Promise对象
+ */
+export function favoriteProduct(id, favorite) {
+  return request({
+    url: `/api/product/favorite/${id}`,
+    method: 'post',
+    data: { favorite }
+  })
+}
+
+/**
+ * 获取收藏的商品列表
  * @param {Object} params 查询参数
- * @param {number} params.page 页码
- * @param {number} params.pageSize 每页数量
  * @returns {Promise} Promise对象
  */
 export function getFavoriteProducts(params) {
   return request({
     url: '/api/product/favorites',
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 获取用户发布的商品列表
- * @param {Object} params 查询参数
- * @param {number} params.page 页码
- * @param {number} params.pageSize 每页数量
- * @param {number} [params.userId] 用户ID，不传则获取当前登录用户的商品
- * @returns {Promise} Promise对象
- */
-export function getUserProducts(params) {
-  return request({
-    url: '/api/product/user',
-    method: 'get',
-    params
-  })
-}
-
-/**
- * 搜索商品
- * @param {Object} params 搜索参数
- * @param {string} params.keyword 关键词
- * @param {number} params.page 页码
- * @param {number} params.pageSize 每页数量
- * @param {string} [params.category] 分类
- * @param {string} [params.sort] 排序方式
- * @returns {Promise} Promise对象
- */
-export function searchProducts(params) {
-  return request({
-    url: '/api/product/search',
     method: 'get',
     params
   })

@@ -122,12 +122,6 @@
         还没有账号? <router-link to="/register">立即注册</router-link>
       </div>
       
-      <!-- 登录问题辅助功能 -->
-      <div v-if="userStore.isLoggedIn || localStorage.getItem('token')" class="debug-buttons">
-        <p class="debug-tip">若登录成功但未自动跳转，请使用下方按钮:</p>
-        <button class="emergency-button" @click="jumpToMine()">手动跳转到个人中心</button>
-      </div>
-      
       <!-- 图形验证码已移除 -->
     </div>
   </div>
@@ -137,11 +131,8 @@
 import { ref, reactive, onBeforeUnmount, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { loginByPassword, loginByVerificationCode, apiSendVerificationCode, autoLogin, adminLogin } from '@/api/user'
-import { setToken, setUserInfo } from '@/utils/auth'
 import { useUserStore } from '@/store/user'
 import { useMessageStore } from '@/store/message'
-import { showToast } from 'vant'
-import { parseRedirectPath } from '@/utils/redirect'
 
 const router = useRouter()
 const route = useRoute()
@@ -261,11 +252,7 @@ const handleLoginSuccess = (data) => {
       nickname: data.nickname || data.username,
       avatar: data.avatar || '',
       phone: data.phone || '',
-      email: data.email || '',
-      role: data.role || 'user',
-      bio: data.bio || '',
-      school: data.school || '',
-      gender: data.gender || '0'
+      // 其他用户字段...
     };
     
     // 确保有token
@@ -275,12 +262,14 @@ const handleLoginSuccess = (data) => {
       return;
     }
     
-    // 使用auth.js中的工具函数存储token和用户信息
-    setToken(token);
-    setUserInfo(userData);
-    
-    // 额外存储用户ID，用于兼容性
+    // 存储token和用户ID到localStorage，提高持久性
+    localStorage.setItem('token', token);
     localStorage.setItem('userId', userData.id || userData.userId);
+    localStorage.setItem('isLoggedIn', 'true');
+    
+    // 记录登录时间，用于判断token过期
+    const now = new Date().getTime();
+    localStorage.setItem('loginTime', now);
     
     // 更新Pinia状态
     userStore.login(token);
@@ -289,12 +278,16 @@ const handleLoginSuccess = (data) => {
     // 显示登录成功消息
     messageStore.showSuccess('登录成功');
     
-    // 超级简化版重定向 - 直接跳转到个人中心
-    console.log('登录成功，直接跳转到个人中心');
-    // 使用硬编码的方式，先用setTimeout确保DOM更新和token保存完成
-    setTimeout(() => {
-      window.location.href = '/mine';
-    }, 300);
+    // 处理重定向
+    console.log('登录成功，准备跳转');
+    if (route.query.redirect) {
+      const redirectUrl = decodeURIComponent(route.query.redirect);
+      console.log('跳转到重定向页面:', redirectUrl);
+      router.replace(redirectUrl);
+    } else {
+      console.log('跳转到个人中心页面');
+      router.replace('/mine');
+    }
   } else {
     messageStore.showError('登录成功但未获取到用户信息');
   }
@@ -496,17 +489,6 @@ const handleAdminLogin = async () => {
 
 // 自动填充表单并登录（开发模式专用）
 onMounted(() => {
-  // 检查是否已经登录，如果已登录但停留在登录页面，可能是跳转失败，尝试强制跳转
-  if (userStore.isLoggedIn || localStorage.getItem('token')) {
-    console.log('检测到用户已登录但仍在登录页面，可能是跳转失败');
-    setTimeout(() => {
-      if (window.location.pathname.includes('/login')) {
-        console.log('强制跳转到个人中心页面');
-        window.location.href = '/mine';
-      }
-    }, 1000);
-  }
-
   // 开发环境下自动填充登录表单
   if (import.meta.env.DEV) {
     accountForm.username = 'admin'
@@ -535,15 +517,6 @@ onBeforeUnmount(() => {
     clearInterval(countdownTimer)
   }
 })
-
-// 辅助函数 - 手动跳转到个人中心
-const jumpToMine = () => {
-  console.log('执行手动跳转到个人中心');
-  // 使用延时避免可能的导航冲突
-  setTimeout(() => {
-    window.location.href = '/mine';
-  }, 100);
-}
 </script>
 
 <style scoped>
@@ -798,36 +771,5 @@ const jumpToMine = () => {
   color: #999;
 }
 
-/* 辅助功能样式 */
-.debug-buttons {
-  margin-top: 20px;
-  text-align: center;
-  padding: 15px;
-  background-color: #f2f6ff;
-  border-radius: 8px;
-  border: 1px dashed #1890ff;
-}
-
-.debug-tip {
-  font-size: 13px;
-  color: #666;
-  margin-bottom: 8px;
-}
-
-.emergency-button {
-  background-color: #ff9800;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 15px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  width: 100%;
-  transition: all 0.3s;
-}
-
-.emergency-button:hover {
-  background-color: #f57c00;
-}
+/* 已移除验证码弹窗相关样式 */
 </style>

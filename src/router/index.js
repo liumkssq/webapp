@@ -1,19 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '../store/user'
-import { formatRedirectPath } from '../utils/redirect'
 
 // 路由配置
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('../pages/Home.vue'),
-    meta: {
-      title: '首页',
-      showNavBar: false,
-      keepAlive: true,
-      scrollPosition: 0
-    }
+    component: () => import('../pages/Home.vue')
   },
   // 认证相关路由
   {
@@ -394,7 +387,7 @@ const routes = [
     name: 'Mine',
     component: () => import('../pages/user/Mine.vue'),
     meta: {
-      requiresAuth: false, // 临时关闭认证要求，方便测试
+      requiresAuth: true,
       title: '我的',
       description: '个人中心'
     }
@@ -454,19 +447,8 @@ router.afterEach((to, from) => {
 
 // 全局路由守卫，处理登录验证
 router.beforeEach((to, from, next) => {
-  console.log('路由守卫处理: ', to.path, '来自', from.path);
-  
   const userStore = useUserStore()
-  // 检查token存在性
   const isLoggedIn = !!localStorage.getItem('token')
-  console.log('当前登录状态:', isLoggedIn, '访问路径:', to.path);
-  
-  // 特殊处理 - 如果是从登录页跳转到个人中心，直接放行
-  if (from.path.includes('/login') && to.path === '/mine') {
-    console.log('从登录页到个人中心，跳过验证直接放行');
-    next();
-    return;
-  }
   
   // 将当前路由信息记录到localStorage，方便恢复
   localStorage.setItem('lastRoute', JSON.stringify({
@@ -480,14 +462,10 @@ router.beforeEach((to, from, next) => {
     
     if (!isLoggedIn) {
       console.log('用户未登录，重定向到登录页面')
-      
-      // 构建重定向路径，避免URL编码带来的问题
-      const redirectPath = formatRedirectPath(to.fullPath);
-      console.log('重定向到:', `/login?redirect=${redirectPath}`);
-      
-      // 直接使用原始路径，避免Vue Router的自动转义
-      window.location.href = `/login?redirect=${redirectPath}`;
-      return;
+      next({
+        path: '/login',
+        query: { redirect: encodeURIComponent(to.fullPath) }
+      })
     } else {
       // 用户已登录但可能没有完整的用户信息，这里不阻塞导航
       // 让页面组件在挂载时处理用户信息获取
