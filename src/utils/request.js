@@ -47,38 +47,16 @@ const removePendingRequest = (config) => {
 // 请求拦截器
 service.interceptors.request.use(
   config => {
-    // 从localStorage获取token
+    // 在发送请求之前做些什么
     const token = localStorage.getItem('token')
-    
-    // 检查token是否过期
-    const loginTime = localStorage.getItem('loginTime')
-    const now = new Date().getTime()
-    const tokenMaxAge = 24 * 60 * 60 * 1000 // 设置token最大有效期为24小时
-    
-    // 如果token已过期，清除本地存储并重定向到登录页
-    if (token && loginTime && now - parseInt(loginTime) > tokenMaxAge) {
-      console.warn('Token已过期，需要重新登录')
-      
-      // 只在非登录相关页面才显示提示
-      if (!config.url.includes('/login') && !config.url.includes('/register')) {
-        // 使用事件总线触发全局通知
-        window.dispatchEvent(new CustomEvent('token-expired'))
-      }
-      
-      // 不自动清除token，让用户在提示后自行登录
-    }
-    
-    // 如果有token，添加到请求头
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
+      config.headers['Authorization'] = 'Bearer ' + token
     }
     
     // 打印请求信息
-    console.log(`[API请求] ${config.method.toUpperCase()} ${config.url}`, {
-      params: config.params,
-      data: config.data,
-      headers: config.headers
-    });
+    const method = config.method.toUpperCase()
+    console.log(`[请求] ${method} ${config.url}`, 
+                method === 'GET' ? config.params : config.data)
     
     // 处理重复请求
     config = addPendingRequest(config)
@@ -86,7 +64,8 @@ service.interceptors.request.use(
     return config
   },
   error => {
-    console.error('Request error:', error)
+    // 对请求错误做些什么
+    console.error('[请求错误]', error)
     return Promise.reject(error)
   }
 )
@@ -94,139 +73,83 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    // 移除请求标记
-    removePendingRequest(response.config)
-    
+    // 对响应数据做点什么
     const res = response.data
+    console.log(`[响应] ${response.config.url}`, res)
     
-    // 确保res存在
-    if (!res) {
-      showToast('服务器返回了空响应');
-      return {
-        code: 500,
-        message: '服务器返回了空响应',
-        data: null
-      };
-    }
-    
-    // 如果接口返回的状态码不是200，认为请求出错
-    if (res.code !== 200) {
-      // 显示错误信息
-      showToast(res.message || '请求失败')
-      
-      // 处理特定错误码
+    // 检查自定义错误码
+    if (res.code && res.code !== 200 && res.code !== 0) {
+      // 处理各种错误码
       if (res.code === 401) {
-        // 清除token并跳转到登录页
+        // 登录超时，需要重新登录
+        console.warn('登录已过期，请重新登录', res)
+        
+        // 清除token
         localStorage.removeItem('token')
-        router.push({
-          path: '/login',
-          query: { redirect: router.currentRoute.value.fullPath }
-        })
+        localStorage.removeItem('userId')
+        
+        // 跳转到登录页面
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
+        }
+      } else if (res.code === 403) {
+        // 权限不足
+        console.warn('权限不足，无法访问', res)
+        // 可以跳转到错误页面或提示用户
+      } else if (res.code === 404) {
+        // 资源不存在
+        console.warn('请求的资源不存在', res)
+      } else if (res.code === 500) {
+        // 服务器内部错误
+        console.error('服务器内部错误', res)
+      } else {
+        // 其他错误
+        console.warn('请求返回错误', res)
       }
       
-      // 返回标准格式的错误响应，而不是抛出异常
-      return res;
+      // 直接返回响应数据，让业务代码处理
+      return res
     }
     
+    // 返回正常响应数据
     return res
   },
   error => {
-    // 请求被取消，直接返回
-    if (axios.isCancel(error)) {
-      console.log('请求被取消:', error.message)
-      return {
-        code: 499, // 自定义错误码
-        message: '请求已取消',
-        data: null
-      };
-    }
-    
-    // 移除请求标记
-    if (error.config) {
-      removePendingRequest(error.config)
-    }
-    
-    console.error('Response error:', error)
-    
-    let message = '网络错误'
-    let statusCode = 500;
+    // 对响应错误做点什么
+    console.error('[响应错误]', error)
     
     if (error.response) {
-      statusCode = error.response.status;
+      console.log('[响应状态码]', error.response.status)
+      console.log('[响应数据]', error.response.data)
       
-      // 尝试从响应中获取详细错误信息
-      let errorData = null;
-      try {
-        errorData = error.response.data;
-      } catch (e) {
-        console.error('解析错误响应数据失败:', e);
-      }
-      
-      if (errorData && errorData.message) {
-        message = errorData.message;
-      } else {
-        switch (error.response.status) {
-          case 400:
-            message = '请求参数错误，请检查输入信息';
-            break;
-          case 401:
-            message = '未授权，请登录';
-            // 清除token并跳转到登录页
-            localStorage.removeItem('token');
-            router.push({
-              path: '/login',
-              query: { redirect: router.currentRoute.value.fullPath }
-            });
-            break;
-          case 403:
-            message = '拒绝访问';
-            break;
-          case 404:
-            message = '请求的资源不存在';
-            break;
-          case 409:
-            message = '资源冲突，可能是用户名或手机号已存在';
-            break;
-          case 422:
-            message = '请求数据验证失败，可能是验证码错误';
-            break;
-          case 500:
-            message = '服务器错误';
-            break;
-          default:
-            message = `请求失败 (${error.response.status})`;
+      // 服务器返回了错误状态码
+      if (error.response.status === 401) {
+        // 登录超时，需要重新登录
+        console.warn('登录已过期，请重新登录')
+        
+        // 清除token
+        localStorage.removeItem('token')
+        localStorage.removeItem('userId')
+        
+        // 跳转到登录页面
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
         }
       }
-      
-      // 处理认证错误（token无效或过期）
-      if (error.response.status === 401) {
-        console.warn('认证失败，token可能无效或已过期')
-        
-        // 使用事件总线触发全局通知
-        window.dispatchEvent(new CustomEvent('token-invalid'))
-        
-        // 不自动清除token和重定向，让错误处理逻辑或组件自行处理
-      }
     } else if (error.request) {
-      message = '服务器无响应';
+      // 请求已发送但未收到响应
+      console.error('未收到响应：', error.request)
     } else {
-      message = error.message;
+      // 发送请求时出现错误
+      console.error('请求设置错误：', error.message)
     }
     
-    // 显示错误信息
-    showToast(message);
-    
-    // 返回标准格式的错误响应，带上原始错误数据
+    // 返回统一的错误格式
     return {
-      code: statusCode,
-      message: message,
-      data: error.response?.data || null,
-      originalError: error.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        headers: error.response.headers
-      } : null
-    };
+      code: error.response?.status || 500,
+      message: error.message || '请求失败',
+      error: true
+    }
   }
 )
 

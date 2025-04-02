@@ -357,7 +357,7 @@ const fetchProducts = async (isLoadMore = false) => {
           hasMore.value = response.data.length >= props.pageSize;
         } else {
           console.warn('[ProductList] 响应数据格式异常:', response.data);
-          if (isLoadMore) {
+      if (isLoadMore) {
             // 加载更多时不清空现有数据
           } else {
             products.value = [];

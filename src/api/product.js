@@ -157,11 +157,26 @@ export function getProductCategories() {
  * @returns {Promise} Promise对象
  */
 export function publishProduct(data) {
+  console.log('[API] 调用publishProduct API，发送数据:', JSON.stringify(data));
+  
   return request({
     url: '/api/product/publish',
     method: 'post',
     data
   })
+  .then(response => {
+    console.log('[API] publishProduct成功响应:', response);
+    return response;
+  })
+  .catch(error => {
+    console.error('[API] publishProduct错误:', error);
+    // 返回友好的错误格式
+    return {
+      code: 500,
+      message: error.message || '发布商品失败，请稍后重试',
+      success: false
+    };
+  });
 }
 
 /**

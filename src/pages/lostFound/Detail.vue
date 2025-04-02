@@ -25,29 +25,29 @@
       
       <!-- 物品基本信息 -->
       <div class="info-card ios-card">
-        <div class="item-header">
+      <div class="item-header">
           <div class="item-status ios-badge" :class="item.status">{{ 
             item.status === 'open' ? '进行中' : 
             item.status === 'pending' ? '确认中' : '已完成' 
           }}</div>
           <h1 class="item-title">{{ item.title }}</h1>
-        </div>
-        
+      </div>
+      
         <div class="item-meta">
           <div class="meta-item">
             <svg-icon name="location" class="ios-icon" />
             <span>{{ item.location || '未知位置' }}</span>
-          </div>
+            </div>
           <div class="meta-item">
             <svg-icon name="time" class="ios-icon" />
             <span>{{ formatTime(item.createTime) }}</span>
-          </div>
+            </div>
           <div class="meta-item">
             <svg-icon name="category" class="ios-icon" />
             <span>{{ item.category?.name || '未分类' }}</span>
+            </div>
           </div>
-        </div>
-        
+          
         <div class="item-description">
           <h2 class="section-title">物品描述</h2>
           <p class="description-text">{{ item.description }}</p>
@@ -62,7 +62,7 @@
           <div class="publisher-detail">
             <div class="publisher-name">{{ item.publisher?.nickname || '未知用户' }}</div>
             <div class="publisher-time">发布于 {{ formatTime(item.createTime) }}</div>
-          </div>
+        </div>
           <div class="contact-btn" v-if="item.status === 'open'" @click="contactPublisher">
             <svg-icon name="chat" class="ios-icon" />
             <span>联系TA</span>
@@ -89,7 +89,7 @@
               <div class="replies" v-if="comment.replies && comment.replies.length > 0">
                 <div class="reply-item" v-for="(reply, rIndex) in comment.replies" :key="rIndex">
                   <span class="reply-user">{{ reply.user?.nickname || '未知用户' }}</span>
-                  <span class="reply-text">{{ reply.content }}</span>
+                    <span class="reply-text">{{ reply.content }}</span>
                 </div>
               </div>
             </div>
@@ -100,13 +100,13 @@
         <div class="no-comments" v-else>
           <svg-icon name="comment-empty" class="empty-icon" />
           <span>暂无评论，快来留言吧</span>
-        </div>
-        
+      </div>
+      
         <!-- 评论输入框 -->
         <div class="comment-input-container">
-          <input 
-            type="text" 
-            v-model="commentText" 
+        <input 
+          type="text" 
+          v-model="commentText" 
             placeholder="说点什么..." 
             class="comment-input ios-input"
             @keyup.enter="submitComment"
@@ -114,9 +114,9 @@
           <button class="submit-btn" :disabled="!commentText.trim()" @click="submitComment">
             <svg-icon name="send" class="ios-icon" />
           </button>
-        </div>
       </div>
-      
+    </div>
+    
       <!-- 相关推荐 -->
       <div class="related-card ios-card" v-if="relatedItems.length > 0">
         <h2 class="section-title">相关物品</h2>
@@ -139,8 +139,8 @@
       <div class="action-button share-btn" @click="shareItem">
         <svg-icon name="share" class="action-icon" />
         <span>分享</span>
-      </div>
-      
+    </div>
+    
       <div class="action-button primary-btn" @click="handlePrimaryAction">
         <svg-icon :name="primaryActionIcon" class="action-icon" />
         <span>{{ primaryActionText }}</span>
