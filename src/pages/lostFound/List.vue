@@ -1,446 +1,515 @@
 <template>
-  <div class="lost-found-list-page">
+  <div class="lost-found-page">
     <!-- 头部导航 -->
-    <HeaderNav 
-      title="失物招领" 
-      :showSearch="true" 
-      :showBack="true"
-      @search="goToSearch" 
-      class="ios-header"
+    <header-nav title="失物招领" :showBack="false" />
+    
+    <!-- 选项卡 -->
+    <div class="tab-container">
+      <van-tabs v-model:active="activeTab" background="#f5f7fa" animated swipeable>
+        <van-tab title="全部" name="all"></van-tab>
+        <van-tab title="寻物" name="lost"></van-tab>
+        <van-tab title="招领" name="found"></van-tab>
+      </van-tabs>
+    </div>
+    
+    <!-- 类别过滤 -->
+    <div class="category-filter">
+      <van-dropdown-menu>
+        <van-dropdown-item v-model="activeCategoryId" :options="categoryOptions" />
+        <van-dropdown-item v-model="activeStatus" :options="statusOptions" />
+        <van-dropdown-item v-model="sortMethod" :options="sortOptions" />
+      </van-dropdown-menu>
+    </div>
+    
+    <!-- 失物招领列表 -->
+    <div class="lost-found-container">
+      <lost-found-list 
+        ref="lostFoundListRef"
+        :defaultTab="activeTab"
+        @tabChange="handleTabChange"
+        @loading="handleListLoading"
+        @emptyAction="handleEmptyAction"
+      />
+    </div>
+    
+    <!-- 悬浮发布按钮 -->
+    <FloatingBubble 
+      class="publish-btn"
+      icon="plus"
+      color="#1989fa"
+      @click="handlePublish"
     />
-    
-    <!-- 顶部选项卡切换 -->
-    <div class="main-content">
-      <div class="ios-segmented-control">
-        <div 
-          v-for="tab in tabs"
-          :key="tab.value"
-          class="tab-item" 
-          :class="{ active: activeTab === tab.value }"
-          @click="switchTab(tab.value)"
-        >
-          {{ tab.label }}
-          <div class="tab-indicator" v-if="activeTab === tab.value"></div>
-        </div>
-      </div>
-      
-      <!-- 分类选择 -->
-      <div class="ios-category-tabs" v-if="showCategories">
-        <div class="sub-tabs-scroll" ref="categoryScroll">
-          <div 
-            v-for="category in categories" 
-            :key="category.id"
-            class="sub-tab-item"
-            :class="{ active: activeCategoryId === category.id }"
-            @click="switchCategory(category.id)"
-          >
-            {{ category.name }}
-          </div>
-        </div>
-      </div>
-      
-      <!-- 失物招领列表 -->
-      <div class="lost-found-content">
-        <div class="loading-indicator" v-if="isLoading">
-          <div class="spinner"></div>
-          <span>加载中...</span>
-        </div>
-        
-        <transition name="fade">
-          <LostFoundList 
-            :defaultTab="activeTab"
-            :showTabs="false"
-            ref="lostFoundList"
-            @tabChange="handleTabChange"
-            @emptyAction="goToPublish"
-            class="ios-list"
-            @loading="handleLoading"
-          />
-        </transition>
-      </div>
-    </div>
-    
-    <!-- 浮动按钮 -->
-    <div class="float-button ios-button" @click="goToPublish">
-      <svg-icon name="plus" class="plus-icon" />
-      <span>发布</span>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, onActivated } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { getLostFoundList } from '@/api/lostFound'
-import HeaderNav from '@/components/HeaderNav.vue'
-import FooterNav from '@/components/FooterNav.vue'
-import LostFoundList from '@/components/LostFoundList.vue'
+import { ref, reactive, onMounted, onActivated, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { Toast, Dialog, FloatingBubble } from 'vant';
+import HeaderNav from '@/components/HeaderNav.vue';
+import LostFoundList from '@/components/LostFoundList.vue';
+import { getLostFoundList } from '@/api/lostFound';
 
-const router = useRouter()
+const router = useRouter();
 
 // 状态变量
-const activeTab = ref('all')
-const activeCategoryId = ref('all')
-const showCategories = ref(true)
-const categoryScroll = ref(null)
-const lostFoundList = ref(null)
-const isLoading = ref(false)
+const activeTab = ref('all');
+const activeCategoryId = ref('all');
+const activeStatus = ref('all');
+const sortMethod = ref('latest');
+const lostFoundListRef = ref(null);
+const loading = ref(false);
 
-// 物品分类列表
-const categories = [
-  { id: 'all', name: '全部' },
-  { id: 'electronics', name: '电子产品' },
-  { id: 'books', name: '图书资料' },
-  { id: 'cards', name: '卡片证件' },
-  { id: 'clothing', name: '衣物饰品' },
-  { id: 'daily', name: '生活用品' },
-  { id: 'sports', name: '运动用品' },
-  { id: 'bags', name: '背包箱包' },
-  { id: 'jewelry', name: '首饰配件' },
-  { id: 'keys', name: '钥匙钱包' },
-  { id: 'others', name: '其他物品' }
-]
+// 失物招领数据
+const lostFoundData = ref({
+  list: [],
+  total: 0,
+  page: 1,
+  limit: 10
+});
 
-// 定义选项卡配置
-const tabs = [
-  { label: '全部', value: 'all' },
-  { label: '寻物启事', value: 'lost' },
-  { label: '招领启事', value: 'found' }
-]
+// 类别选项
+const categoryOptions = [
+  { text: '全部类别', value: 'all' },
+  { text: '电子产品', value: 'electronics' },
+  { text: '书籍资料', value: 'books' },
+  { text: '卡片证件', value: 'cards' },
+  { text: '衣物饰品', value: 'clothing' },
+  { text: '日常用品', value: 'daily' },
+  { text: '其他物品', value: 'other' }
+];
 
-// 计算属性 - 当前类型文本
-const currentTypeText = computed(() => {
-  if (activeTab.value === 'lost') return '寻物启事'
-  if (activeTab.value === 'found') return '招领启事'
-  return '失物招领'
-})
+// 状态选项
+const statusOptions = [
+  { text: '全部状态', value: 'all' },
+  { text: '处理中', value: 'pending' },
+  { text: '已完成', value: 'completed' },
+  { text: '已关闭', value: 'closed' }
+];
 
-// 处理加载状态
-const handleLoading = (loading) => {
-  isLoading.value = loading
-}
+// 排序选项
+const sortOptions = [
+  { text: '最新发布', value: 'latest' },
+  { text: '最多浏览', value: 'most_viewed' },
+  { text: '最多评论', value: 'most_commented' }
+];
 
-// 切换标签
-const switchTab = (tab) => {
-  if (activeTab.value === tab) return
-  
-  activeTab.value = tab
-  isLoading.value = true
-  
-  // 更新列表组件的选项卡
-  if (lostFoundList.value) {
-    lostFoundList.value.switchTab(tab)
+// 处理列表组件加载事件
+const handleListLoading = (shouldLoad, options = {}) => {
+  if (shouldLoad) {
+    const { refresh = false, page } = options;
+    if (refresh || page === 1) {
+      fetchLostFoundList(true);
+    } else if (page > 1) {
+      // 加载更多数据
+      lostFoundData.value.page = page;
+      fetchLostFoundList(false);
+    }
   }
-}
+};
 
-// 切换分类
-const switchCategory = (categoryId) => {
-  if (activeCategoryId.value === categoryId) return
-  
-  activeCategoryId.value = categoryId
-  isLoading.value = true
-  
-  // 滚动分类到可见区域
-  nextTick(() => {
-    scrollCategoryIntoView()
-  })
-  
-  // 刷新列表
-  if (lostFoundList.value) {
-    lostFoundList.value.refresh()
-  }
-}
-
-// 滚动分类到可见区域
-const scrollCategoryIntoView = () => {
-  if (!categoryScroll.value) return
-  
-  const container = categoryScroll.value
-  const activeEl = container.querySelector('.sub-tab-item.active')
-  
-  if (!activeEl) return
-  
-  // 计算滚动位置
-  const containerWidth = container.offsetWidth
-  const activeElLeft = activeEl.offsetLeft
-  const activeElWidth = activeEl.offsetWidth
-  
-  // 如果分类不在可见区域内，滚动到适当位置
-  if (activeElLeft < container.scrollLeft || 
-      activeElLeft + activeElWidth > container.scrollLeft + containerWidth) {
-    // 使用平滑滚动
-    container.scrollTo({
-      left: activeElLeft - (containerWidth / 2) + (activeElWidth / 2),
-      behavior: 'smooth'
-    })
-  }
-}
-
-// 处理选项卡变化
+// 处理标签切换
 const handleTabChange = (tab) => {
-  activeTab.value = tab
-}
+  console.log('Tab changed:', tab);
+  activeTab.value = tab;
+  fetchLostFoundList(true, true);
+};
 
-// 跳转到搜索页
-const goToSearch = () => {
-  router.push('/search?type=lost-found')
-}
+// 处理数据加载
+const handleLoading = async (data, isRefresh = false, total = null) => {
+  if (!data) {
+    console.error('数据为空');
+    return;
+  }
+  
+  // 处理数据
+  const processedData = processListData(Array.isArray(data) ? data : []);
+  
+  // 如果有传入total，则使用传入的total
+  if (total !== null) {
+    processedData.total = total;
+  }
+  
+  // 更新列表组件
+  if (lostFoundListRef.value) {
+    lostFoundListRef.value.updateListData(processedData);
+  } else {
+    console.error('列表组件引用不存在');
+  }
+  
+  // 更新本地数据
+  if (isRefresh) {
+    lostFoundData.value = processedData;
+  } else {
+    // 合并数据
+    lostFoundData.value = {
+      ...processedData,
+      list: [...lostFoundData.value.list, ...processedData.list]
+    };
+  }
+  
+  loading.value = false;
+};
 
-// 跳转到发布页
-const goToPublish = (type = activeTab.value) => {
-  router.push(`/publish/lost-found?type=${type === 'all' ? 'lost' : type}`)
-}
+// 处理空状态操作
+const handleEmptyAction = (tab) => {
+  handlePublish(tab);
+};
 
-// 页面加载和激活时进行初始化
+// 处理发布操作
+const handlePublish = (type = activeTab.value) => {
+  if (type === 'all') {
+    // 显示选择发布类型的对话框
+    Dialog.confirm({
+      title: '发布启事',
+      message: '请选择要发布的启事类型',
+      showCancelButton: true,
+      confirmButtonText: '招领启事',
+      cancelButtonText: '寻物启事',
+    })
+      .then(() => {
+        // 确认按钮 - 招领启事
+        router.push('/lost-found/publish/found');
+      })
+      .catch(() => {
+        // 取消按钮 - 寻物启事
+        router.push('/lost-found/publish/lost');
+      });
+  } else {
+    // 直接跳转到对应类型的发布页面
+    router.push(`/lost-found/publish/${type}`);
+  }
+};
+
+// 处理列表数据
+const processListData = (data) => {
+  if (!data || !Array.isArray(data)) {
+    console.error('列表数据格式错误:', data);
+    return {
+      list: [],
+      total: 0,
+      page: 1,
+      limit: 10
+    };
+  }
+  
+  // 处理列表数据
+  const processedList = data.map(item => {
+    const processedItem = { ...item };
+    
+    // 确保ID是有效的数字
+    if (processedItem.id) {
+      processedItem.id = parseInt(processedItem.id, 10);
+      if (isNaN(processedItem.id)) {
+        processedItem.id = Math.floor(Math.random() * 10000); // 生成随机ID作为后备
+        console.warn('项目有无效ID，已生成随机ID:', processedItem.id);
+      }
+    } else {
+      processedItem.id = Math.floor(Math.random() * 10000); // 生成随机ID
+      console.warn('项目缺少ID，已生成随机ID:', processedItem.id);
+    }
+    
+    // 处理空字段和特殊字符
+    if (!processedItem.type || processedItem.type === '\u0000') {
+      // 根据标题或描述推断类型
+      if (processedItem.title && (
+        processedItem.title.includes('找到') || 
+        processedItem.title.includes('捡到') || 
+        processedItem.title.includes('招领')
+      )) {
+        processedItem.type = 'found';
+      } else {
+        processedItem.type = 'lost';
+      }
+    }
+    
+    // 处理状态字段
+    if (!processedItem.status || processedItem.status === '\u0000') {
+      processedItem.status = 'pending';
+    }
+    
+    // 处理分类字段
+    if (!processedItem.category) {
+      // 根据标题或描述推断分类
+      const title = processedItem.title || '';
+      const description = processedItem.description || '';
+      const content = title + ' ' + description;
+      
+      if (content.match(/手机|电脑|耳机|充电宝|平板|相机|电子|数码/)) {
+        processedItem.category = '电子产品';
+      } else if (content.match(/书|笔记|课本|资料/)) {
+        processedItem.category = '书籍资料';
+      } else if (content.match(/卡|证|证件|学生证|身份证|校园卡/)) {
+        processedItem.category = '卡片证件';
+      } else if (content.match(/衣|裤|鞋|帽|包|伞|手表|眼镜/)) {
+        processedItem.category = '衣物饰品';
+      } else if (content.match(/水杯|餐具|钥匙|文具/)) {
+        processedItem.category = '日常用品';
+      } else {
+        processedItem.category = '其他物品';
+      }
+    }
+    
+    // 处理图片字段
+    if (processedItem.images) {
+      // 如果images是字符串，尝试解析JSON
+      if (typeof processedItem.images === 'string') {
+        try {
+          if (processedItem.images.startsWith('[')) {
+            processedItem.images = JSON.parse(processedItem.images);
+          } else {
+            processedItem.images = [processedItem.images];
+          }
+        } catch (e) {
+          console.error('解析图片JSON失败:', e);
+          processedItem.images = [processedItem.images];
+        }
+      } else if (!Array.isArray(processedItem.images)) {
+        processedItem.images = [processedItem.images];
+      }
+    } else {
+      // 设置默认图片
+      processedItem.images = [`https://picsum.photos/id/${(processedItem.id % 30) + 1}/300/300`];
+    }
+    
+    // 生成标签
+    if (!processedItem.tags || !Array.isArray(processedItem.tags) || processedItem.tags.length === 0) {
+      const tags = [];
+      
+      // 根据分类添加标签
+      if (processedItem.category) {
+        tags.push(processedItem.category);
+      }
+      
+      // 根据描述添加相关标签
+      const content = (processedItem.title || '') + ' ' + (processedItem.description || '');
+      
+      if (content.includes('耳机')) tags.push('耳机');
+      if (content.includes('手机')) tags.push('手机');
+      if (content.includes('钱包')) tags.push('钱包');
+      if (content.includes('钥匙')) tags.push('钥匙');
+      if (content.includes('卡')) tags.push('卡片');
+      
+      processedItem.tags = tags.slice(0, 3); // 最多3个标签
+    }
+    
+    return processedItem;
+  });
+  
+  console.log('处理后的列表数据:', processedList);
+  
+  return {
+    list: processedList,
+    total: data.length,
+    page: lostFoundData.value.page,
+    limit: lostFoundData.value.limit
+  };
+};
+
+// 获取失物招领列表数据
+const fetchLostFoundList = async (isRefresh = false, tabChanged = false) => {
+  if (isRefresh || tabChanged) {
+    lostFoundData.value.page = 1;
+    lostFoundData.value.list = [];
+  }
+
+  const params = {
+    page: lostFoundData.value.page,
+    limit: lostFoundData.value.limit,
+    type: activeTab.value === 'all' ? '' : activeTab.value
+  };
+
+  loading.value = true;
+  try {
+    console.log('Fetching lost found list with params:', params);
+    const response = await getLostFoundList(params);
+    console.log('API Response:', response);
+    
+    // 检查响应数据格式
+    if (response) {
+      // 优先检查response.data.list
+      if (response.data && response.data.list && Array.isArray(response.data.list)) {
+        console.log('处理response.data.list格式数据');
+        handleLoading(response.data.list, isRefresh, response.data.total);
+        return;
+      }
+      
+      // 检查response.list (API直接返回了对象)
+      if (response.list && Array.isArray(response.list)) {
+        console.log('处理response.list格式数据');
+        handleLoading(response.list, isRefresh, response.total);
+        return;
+      }
+      
+      // 检查response.data (如果是数组)
+      if (response.data && Array.isArray(response.data)) {
+        console.log('处理response.data数组格式数据');
+        handleLoading(response.data, isRefresh);
+        return;
+      }
+      
+      // 如果response本身是数组
+      if (Array.isArray(response)) {
+        console.log('处理response数组格式数据');
+        handleLoading(response, isRefresh);
+        return;
+      }
+      
+      console.warn('未识别的响应格式，尝试检查更深层结构', response);
+      // 最后尝试查找任何可能的数组数据
+      for (const key in response) {
+        if (response[key] && Array.isArray(response[key])) {
+          console.log(`找到数组数据在 response.${key}`);
+          handleLoading(response[key], isRefresh);
+          return;
+        }
+        
+        if (response[key] && typeof response[key] === 'object' && response[key].list && Array.isArray(response[key].list)) {
+          console.log(`找到数组数据在 response.${key}.list`);
+          handleLoading(response[key].list, isRefresh, response[key].total);
+          return;
+        }
+      }
+      
+      console.error('未能找到有效的列表数据:', response);
+    }
+    
+    console.error('无法处理的响应格式:', response);
+    loadMockData(isRefresh);
+  } catch (error) {
+    console.error('Failed to fetch lost found list:', error);
+    loadMockData(isRefresh);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 生成模拟数据 - 仅用于开发阶段
+const generateMockData = (count) => {
+  const types = ['lost', 'found'];
+  const categories = ['电子产品', '书籍资料', '卡片证件', '衣物饰品', '日常用品', '其他物品'];
+  const statuses = ['pending', 'completed', 'closed'];
+  const locations = ['图书馆', '教学楼', '宿舍', '食堂', '操场', '其他地点'];
+  const titles = [
+    '捡到耳机',
+    '丢失钱包急寻',
+    '遗失一张学生卡',
+    '在食堂捡到手机',
+    '丢失笔记本电脑',
+    '丢失眼镜',
+    '捡到钥匙',
+    '丢失蓝牙音箱',
+    '捡到一件外套',
+    '丢失银行卡'
+  ];
+  
+  return Array.from({ length: count }).map((_, index) => {
+    const type = types[Math.floor(Math.random() * types.length)];
+    const title = titles[index % titles.length];
+    const isLost = type === 'lost';
+    
+    return {
+      id: index + 1,
+      title: isLost ? title.replace('捡到', '丢失') : title.replace('丢失', '捡到'),
+      description: `${isLost ? '我在校园内丢失了' : '我在校园内捡到了'}${title.replace('捡到', '').replace('丢失', '').replace('急寻', '')}，${isLost ? '希望好心人看到能够联系我' : '失主请尽快联系我认领'}。`,
+      type,
+      category: categories[Math.floor(Math.random() * categories.length)],
+      status: statuses[Math.floor(Math.random() * statuses.length)],
+      location: locations[Math.floor(Math.random() * locations.length)],
+      lostFoundTime: new Date(Date.now() - Math.random() * 604800000).toISOString(), // 随机7天内的时间
+      contactInfo: `1${Math.floor(Math.random() * 9000000000 + 1000000000)}`,
+      publisherId: index + 100,
+      publisherName: `用户${index + 100}`,
+      publisherAvatar: `https://i.pravatar.cc/100?img=${(index % 70) + 1}`,
+      images: [`https://picsum.photos/id/${(index % 30) + 1}/300/300`],
+      tags: [categories[Math.floor(Math.random() * categories.length)], isLost ? '急寻' : '待认领'],
+      viewCount: Math.floor(Math.random() * 100),
+      likeCount: Math.floor(Math.random() * 20),
+      commentCount: Math.floor(Math.random() * 10),
+      createdAt: new Date(Date.now() - Math.random() * 604800000).toISOString() // 随机7天内的时间
+    };
+  });
+};
+
+// 加载模拟数据
+const loadMockData = (isRefresh = false) => {
+  console.log('加载模拟数据');
+  // 生成模拟数据
+  const mockData = generateMockData(10);
+  // 处理模拟数据
+  const processedData = processListData(mockData);
+  // 更新列表数据
+  handleLoading(processedData.list, isRefresh, processedData.total);
+};
+
+// 监听筛选条件变化
+watch([activeCategoryId, activeStatus, sortMethod], () => {
+  fetchLostFoundList(1, true);
+});
+
+// 组件挂载时执行
 onMounted(() => {
-  // 从 URL 参数中获取类型和分类
-  const query = new URLSearchParams(window.location.search)
-  const tab = query.get('tab')
-  const categoryId = query.get('category')
-  
-  if (tab && ['all', 'lost', 'found'].includes(tab)) {
-    activeTab.value = tab
-  }
-  
-  if (categoryId && categories.some(c => c.id === categoryId)) {
-    activeCategoryId.value = categoryId
-  }
-  
-  // 滚动分类到可见区域
-  nextTick(() => {
-    scrollCategoryIntoView()
-  })
-})
+  console.log('失物招领列表页面挂载');
+  fetchLostFoundList(true);
+});
 
-// 当页面被缓存后再次激活时执行
+// 组件激活时执行
 onActivated(() => {
-  // 刷新列表
-  if (lostFoundList.value) {
-    lostFoundList.value.refresh()
+  console.log('失物招领列表页面激活');
+  // 当从详情页返回列表页时，刷新列表
+  if (lostFoundListRef.value) {
+    lostFoundListRef.value.refresh();
+    fetchLostFoundList(true);
   }
-})
+});
 </script>
 
 <style scoped>
-.lost-found-list-page {
-  min-height: 100vh;
-  background-color: var(--background-secondary);
-  padding-top: calc(var(--header-height) + var(--safe-area-inset-top));
-  padding-bottom: var(--safe-area-inset-bottom);
+.lost-found-page {
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  background-color: #f5f7fa;
 }
 
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 16px 16px 80px 16px;
-}
-
-.ios-header {
-  backdrop-filter: blur(10px);
-  background-color: rgba(255, 255, 255, 0.85);
-  border-bottom: 0.5px solid var(--separator-color);
-  position: fixed;
+.tab-container {
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
+  z-index: 2;
 }
 
-.ios-segmented-control {
-  display: flex;
-  background-color: rgba(0, 0, 0, 0.04);
-  padding: 2px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-}
-
-.ios-segmented-control .tab-item {
-  flex: 1;
-  text-align: center;
-  padding: 10px 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-  position: relative;
-  border-radius: 6px;
-  transition: all 0.3s ease;
+.category-filter {
+  position: sticky;
+  top: 44px;
   z-index: 1;
+  background-color: #ffffff;
 }
 
-.ios-segmented-control .tab-item.active {
-  color: var(--primary-color);
-  font-weight: 500;
-}
-
-.ios-segmented-control .tab-item.active::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
-  background-color: white;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-  z-index: -1;
-  animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-@keyframes slideIn {
-  0% {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.ios-category-tabs {
-  background-color: transparent;
-  margin-bottom: 16px;
-  position: relative;
-}
-
-.sub-tabs-scroll {
-  display: flex;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  padding-bottom: 8px;
-}
-
-.sub-tabs-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.sub-tab-item {
-  padding: 8px 16px;
-  margin-right: 8px;
-  font-size: 14px;
-  color: var(--text-secondary);
-  background-color: white;
-  border-radius: 16px;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  border: 0.5px solid var(--separator-color);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-}
-
-.sub-tab-item.active {
-  color: white;
-  background-color: var(--primary-color);
-  font-weight: 500;
-  border-color: transparent;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(0, 122, 255, 0.2);
-}
-
-.lost-found-content {
+.lost-found-container {
   flex: 1;
-  position: relative;
+  overflow-y: auto;
+  padding: 12px;
+  padding-bottom: 80px;
 }
 
-.ios-list {
-  border-radius: 12px;
-  overflow: hidden;
-  background-color: transparent;
-}
-
-.loading-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  z-index: 10;
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid rgba(0, 122, 255, 0.2);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-indicator span {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.float-button {
+.publish-btn {
   position: fixed;
   right: 20px;
-  bottom: calc(20px + var(--safe-area-inset-bottom));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--primary-color);
-  color: white;
-  padding: 12px 24px;
-  border-radius: 20px;
-  font-size: 15px;
-  font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.2);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  z-index: 99;
+  bottom: 20px;
+  z-index: 10;
+  width: 56px;
+  height: 56px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.float-button:active {
-  transform: scale(0.96);
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.15);
-}
-
-.plus-icon {
-  margin-right: 6px;
-  font-size: 18px;
-}
-
+/* 深色模式适配 */
 @media (prefers-color-scheme: dark) {
-  .ios-header {
-    background-color: rgba(30, 30, 30, 0.85);
-    border-bottom-color: rgba(255, 255, 255, 0.1);
+  .lost-found-page {
+    background-color: #121212;
   }
   
-  .ios-segmented-control {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .ios-segmented-control .tab-item.active::before {
-    background-color: rgba(50, 50, 50, 0.95);
-  }
-  
-  .sub-tab-item {
-    background-color: rgba(60, 60, 60, 0.8);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .spinner {
-    border-color: rgba(0, 122, 255, 0.2);
-    border-top-color: var(--primary-color);
+  .category-filter {
+    background-color: #1c1c1e;
   }
 }
 </style>

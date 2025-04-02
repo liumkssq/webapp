@@ -47,8 +47,8 @@
               />
             </van-swipe-item>
           </van-swipe>
-        </div>
-
+      </div>
+      
         <!-- 物品基本信息卡片 -->
         <van-cell-group inset class="card-style">
           <!-- 标题与类型 -->
@@ -63,7 +63,7 @@
                   {{ item.type === 'lost' ? '寻物' : '招领' }}
                 </van-tag>
                 <span class="item-title">{{ item.title || '无标题' }}</span>
-              </div>
+            </div>
             </template>
           </van-cell>
           
@@ -80,7 +80,7 @@
                 >
                   {{ tag }}
                 </van-tag>
-              </div>
+            </div>
             </template>
           </van-cell>
           
@@ -123,7 +123,7 @@
                 <div class="publisher-details">
                   <div class="publisher-name">{{ item.publisherName || '未知用户' }}</div>
                   <div class="publish-time text-gray">{{ formatTimeAgo(item.createdAt) }} 发布</div>
-                </div>
+              </div>
               </div>
             </template>
           </van-cell>
@@ -135,8 +135,8 @@
             <template #icon><van-icon name="phone-o" /></template>
             {{ getPrimaryActionText }}
           </van-button>
-        </div>
-        
+            </div>
+            
         <!-- 操作按钮组 -->
         <van-grid :column-num="3" :border="false" class="action-grid">
           <van-grid-item icon="share-o" text="分享" @click="handleShare" />
@@ -176,16 +176,16 @@
           <!-- 空评论提示 -->
           <div v-if="!comments.length" class="empty-comment">
             <van-empty description="暂无评论" />
-          </div>
-          
-          <!-- 评论列表 -->
+        </div>
+        
+        <!-- 评论列表 -->
           <div v-else>
             <van-cell 
               v-for="(comment, index) in comments" 
               :key="comment.id || index"
-              class="comment-item"
+            class="comment-item"
               :class="{'comment-last': index === comments.length - 1}"
-            >
+          >
               <div class="comment-header">
                 <van-image
                   round
@@ -197,11 +197,11 @@
                 <div class="comment-author">
                   <div class="author-name">{{ comment.author?.name || '匿名用户' }}</div>
                   <div class="comment-time">{{ formatTimeAgo(comment.createTime) }}</div>
-                </div>
+              </div>
               </div>
               <div class="comment-content">{{ comment.content }}</div>
             </van-cell>
-          </div>
+              </div>
         </van-cell-group>
         
         <!-- 评论区加载中 -->
@@ -210,8 +210,8 @@
           <van-skeleton title avatar row="3" />
         </van-cell-group>
       </template>
-    </div>
-    
+        </div>
+        
     <!-- 状态更新弹窗 -->
     <van-dialog
       v-model:show="showStatusUpdatePopup"
@@ -234,7 +234,7 @@
             </van-cell>
           </van-cell-group>
         </van-radio-group>
-      </div>
+            </div>
     </van-dialog>
 
     <!-- 举报对话框 -->
@@ -288,7 +288,7 @@
           show-word-limit
           class="report-detail"
         />
-      </div>
+        </div>
     </van-dialog>
     
     <!-- 分享操作表 -->
@@ -460,34 +460,32 @@ const handlePrimaryAction = () => {
   }
 };
 
-// 处理收藏
+// 收藏物品
 const handleFavorite = async () => {
   if (!userStore.isLoggedIn) {
-    Toast('请先登录');
+    Toast.fail('请先登录');
+    router.push('/login?redirect=' + route.fullPath);
     return;
   }
   
   try {
-    isFavorite.value = !isFavorite.value;
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    if (isFavorite.value) {
-      Toast('收藏成功');
-      // 更新收藏数
-      if (item.value) {
-        item.value.likeCount = (item.value.likeCount || 0) + 1;
-      }
+    // 切换收藏状态
+    item.value.isLiked = !item.value.isLiked;
+    
+    // 更新收藏计数
+    if (item.value.isLiked) {
+      item.value.likeCount = (item.value.likeCount || 0) + 1;
+      Toast.success('收藏成功');
     } else {
-      Toast('已取消收藏');
-      // 更新收藏数
-      if (item.value && item.value.likeCount > 0) {
-        item.value.likeCount = item.value.likeCount - 1;
-      }
+      item.value.likeCount = Math.max(0, (item.value.likeCount || 1) - 1);
+      Toast.success('已取消收藏');
     }
   } catch (error) {
     console.error('收藏操作失败', error);
-    // 恢复状态
-    isFavorite.value = !isFavorite.value;
-    Toast('操作失败，请稍后重试');
+    Toast.fail('操作失败，请稍后重试');
   }
 };
 
@@ -822,65 +820,98 @@ const relatedItems = ref([]);
 // 获取物品数据
 const fetchItemDetail = async () => {
   loading.value = true;
-  console.log('获取物品详情，ID:', route.params.id);
+  console.log('获取物品详情，原始ID:', route.params.id);
   
   try {
     const id = route.params.id;
-    // 直接检查ID，如果是模拟测试ID（如'mock'或'50'），使用模拟数据
-    if (id === 'mock' || id === '50' || id === 50) {
+    
+    // 处理ID，确保是有效的数字
+    let validId;
+    
+    // 如果是字符串，尝试处理
+    if (typeof id === 'string') {
+      // 移除不必要的字符
+      const cleanId = id.trim().replace(/[^\d]/g, '');
+      validId = parseInt(cleanId, 10);
+    } else if (typeof id === 'number') {
+      validId = id;
+    } else {
+      validId = NaN;
+    }
+    
+    console.log('处理后的ID:', validId);
+    
+    // 直接检查ID，如果是测试ID，使用模拟数据
+    // 同时支持字符串'50'和数字50两种格式
+    if (id === 'mock' || id === '50' || validId === 50) {
       console.log('检测到测试ID，直接使用模拟数据');
       loadMockData();
       return;
     }
     
-    // API调用
-    const response = await getLostFoundDetail(id);
+    // 验证ID有效性
+    if (isNaN(validId) || validId <= 0) {
+      console.error('无效的ID:', id);
+      Toast('无效的项目ID，无法加载详情');
+      loadMockData(); // 加载模拟数据作为后备
+      return;
+    }
+    
+    // API调用，使用处理后的validId
+    console.log('调用API获取详情，ID:', validId);
+    const response = await getLostFoundDetail(validId);
     console.log('物品详情API响应:', response);
     
     if (response && (response.code === 200 || response.success)) {
       if (response.data) {
-        // 使用API返回的数据更新物品信息
-        if (typeof response.data === 'string') {
+        // 处理API返回的数据
+        let responseData = response.data;
+        
+        // 如果是字符串，尝试解析为JSON
+        if (typeof responseData === 'string') {
           try {
-            // 尝试解析JSON字符串
-            const parsedData = JSON.parse(response.data);
-            if (parsedData.item) {
-              item.value = parsedData.item;
-              comments.value = parsedData.comments || [];
-            } else {
-              item.value = parsedData;
-            }
+            responseData = JSON.parse(responseData);
+            console.log('解析后的响应数据:', responseData);
           } catch (e) {
             console.error('JSON解析失败:', e);
-            item.value = response.data;
           }
+        }
+        
+        // 根据响应格式设置item和comments
+        if (responseData.item) {
+          item.value = responseData.item;
+          comments.value = responseData.comments || [];
         } else {
-          item.value = response.data.item || response.data;
+          // 直接使用响应数据
+          item.value = responseData;
           
-          if (response.data.comments) {
-            comments.value = Array.isArray(response.data.comments) 
-              ? response.data.comments 
+          // 确保comments始终是数组
+          if (responseData.comments) {
+            comments.value = Array.isArray(responseData.comments) 
+              ? responseData.comments 
               : [];
+          } else {
+            comments.value = [];
           }
         }
         
         // 数据兼容性处理
         processItemData();
-        
         console.log('处理后的物品数据:', item.value);
+        console.log('评论数据:', comments.value);
       } else {
         console.error('API返回的数据为空');
-        showError('获取物品详情失败，返回数据为空');
+        Toast('获取物品详情失败，返回数据为空');
         loadMockData();
       }
     } else {
       console.error('获取物品详情失败:', response);
-      showError('获取物品详情失败，请稍后重试');
+      Toast('获取物品详情失败，请稍后重试');
       loadMockData();
     }
   } catch (error) {
     console.error('获取物品详情异常:', error);
-    showError('获取物品详情出错，请稍后重试');
+    Toast('获取物品详情出错，请稍后重试');
     loadMockData();
   } finally {
     loading.value = false;
@@ -1049,7 +1080,7 @@ const loadMockData = () => {
 const showError = (message) => {
   loadingError.value = true;
   loadingStatus.value = message;
-  Toast(message);
+  Toast.fail(message);
 };
 
 // 切换关注状态
@@ -1070,7 +1101,7 @@ const toggleFollow = async () => {
 // 联系发布者
 const contactPublisher = () => {
   if (!item.value.contactInfo) {
-    Toast('暂无联系方式');
+    Toast.fail('暂无联系方式');
     return;
   }
   
@@ -1085,10 +1116,10 @@ const contactPublisher = () => {
     // 复制到剪贴板
     navigator.clipboard.writeText(item.value.contactInfo)
       .then(() => {
-        Toast('已复制联系方式');
+        Toast.success('已复制联系方式');
       })
       .catch(() => {
-        Toast('复制失败，请手动复制');
+        Toast.fail('复制失败，请手动复制');
       });
   });
 };
@@ -1126,11 +1157,11 @@ const updateItemStatus = async () => {
     // 更新本地状态
     item.value.status = newStatus.value;
     
-    Toast('状态更新成功');
+    Toast.success('状态更新成功');
     showStatusUpdatePopup.value = false;
   } catch (error) {
     console.error('更新状态失败', error);
-    Toast('状态更新失败，请稍后重试');
+    Toast.fail('状态更新失败，请稍后重试');
   }
 };
 
