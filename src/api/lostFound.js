@@ -109,7 +109,7 @@ export function getUserLostFound(params) {
  */
 export function publishLostFound(data) {
   return request({
-    url: '/api/lost-found/publish',
+    url: '/api/lost-found/',
     method: 'post',
     data
   })

@@ -446,7 +446,7 @@ const getTagColor = (tag) => {
 // 主要操作按钮点击事件
 const handlePrimaryAction = () => {
   if (!userStore.isLoggedIn) {
-    Toast('请先登录');
+    Toast.fail('请先登录');
     return;
   }
   
@@ -492,7 +492,7 @@ const handleFavorite = async () => {
 // 处理举报
 const handleReport = () => {
   if (!userStore.isLoggedIn) {
-    Toast('请先登录');
+    Toast.fail('请先登录');
     return;
   }
   
@@ -548,7 +548,7 @@ const refreshComments = async () => {
     console.log('评论数据加载完成', comments.value);
   } catch (error) {
     console.error('获取评论失败', error);
-    Toast('获取评论失败，请稍后重试');
+    Toast.fail('获取评论失败，请稍后重试');
   } finally {
     loadingComments.value = false;
   }
@@ -557,12 +557,12 @@ const refreshComments = async () => {
 // 提交评论
 const submitComment = async () => {
   if (!commentContent.value.trim()) {
-    Toast('请输入评论内容');
+    Toast.fail('请输入评论内容');
     return;
   }
   
   if (!userStore.isLoggedIn) {
-    Toast('请先登录后再评论');
+    Toast.fail('请先登录后再评论');
     // 可以跳转到登录页
     // router.push('/login?redirect=' + encodeURIComponent(route.fullPath));
     return;
@@ -599,11 +599,11 @@ const submitComment = async () => {
     // 清空输入框
     commentContent.value = '';
     
-    Toast('评论成功');
+    Toast.success('评论成功');
     console.log('评论提交成功', newComment);
   } catch (error) {
     console.error('提交评论失败', error);
-    Toast('评论提交失败，请稍后重试');
+    Toast.fail('评论提交失败，请稍后重试');
   } finally {
     submittingComment.value = false;
   }
@@ -852,7 +852,7 @@ const fetchItemDetail = async () => {
     // 验证ID有效性
     if (isNaN(validId) || validId <= 0) {
       console.error('无效的ID:', id);
-      Toast('无效的项目ID，无法加载详情');
+      Toast.fail('无效的项目ID，无法加载详情');
       loadMockData(); // 加载模拟数据作为后备
       return;
     }
@@ -901,17 +901,17 @@ const fetchItemDetail = async () => {
         console.log('评论数据:', comments.value);
       } else {
         console.error('API返回的数据为空');
-        Toast('获取物品详情失败，返回数据为空');
+        Toast.fail('获取物品详情失败，返回数据为空');
         loadMockData();
       }
     } else {
       console.error('获取物品详情失败:', response);
-      Toast('获取物品详情失败，请稍后重试');
+      Toast.fail('获取物品详情失败，请稍后重试');
       loadMockData();
     }
   } catch (error) {
     console.error('获取物品详情异常:', error);
-    Toast('获取物品详情出错，请稍后重试');
+    Toast.fail('获取物品详情出错，请稍后重试');
     loadMockData();
   } finally {
     loading.value = false;
@@ -1525,7 +1525,7 @@ onMounted(() => {
 // 提交举报函数
 const submitReport = async () => {
   if (reportReason.value === 'other' && !reportDetail.value.trim()) {
-    Toast('请填写举报原因');
+    Toast.fail('请填写举报原因');
     return;
   }
   
@@ -1535,7 +1535,7 @@ const submitReport = async () => {
     // 模拟API调用延迟
     await new Promise(resolve => setTimeout(resolve, 800));
     
-    Toast('举报已提交，感谢您的反馈');
+    Toast.success('举报已提交，感谢您的反馈');
     
     // 重置表单
     reportReason.value = 'fake';
@@ -1543,25 +1543,28 @@ const submitReport = async () => {
     showReportDialog.value = false;
   } catch (error) {
     console.error('提交举报失败', error);
-    Toast('举报提交失败，请稍后重试');
+    Toast.fail('举报提交失败，请稍后重试');
   }
 };
 
 // 处理分享选择
 const onShareSelect = (option) => {
-  Toast(`已选择 ${option.name}`);
+  // 将直接调用改为使用Toast.text方法
+  Toast.text(`已选择 ${option.name}`);
   
   if (option.name === '复制链接') {
     navigator.clipboard.writeText(window.location.href)
       .then(() => {
-        Toast('链接已复制到剪贴板');
+        // 成功提示应该使用Toast.success
+        Toast.success('链接已复制到剪贴板');
       })
       .catch(() => {
-        Toast('复制失败，请手动复制链接');
+        // 失败提示应该使用Toast.fail
+        Toast.fail('复制失败，请手动复制链接');
       });
   } else {
     // 这里可以接入实际的分享SDK
-    Toast(`分享到${option.name}功能暂未接入，敬请期待`);
+    Toast.text(`分享到${option.name}功能暂未接入，敬请期待`);
   }
   
   showSharePopup.value = false;

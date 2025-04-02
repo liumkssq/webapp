@@ -25,11 +25,11 @@
     <div class="lost-found-container">
       <lost-found-list 
         ref="lostFoundListRef"
-        :defaultTab="activeTab"
-        @tabChange="handleTabChange"
+      :defaultTab="activeTab"
+      @tabChange="handleTabChange"
         @loading="handleListLoading"
         @emptyAction="handleEmptyAction"
-      />
+    />
     </div>
     
     <!-- 悬浮发布按钮 -->

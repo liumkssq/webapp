@@ -293,7 +293,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { showToast } from 'vant'
@@ -532,18 +532,94 @@ const publishLostFound = async () => {
   try {
     showToast('发布中...')
     
-    // 模拟API请求
-    setTimeout(() => {
+    // 打印完整的表单数据
+    console.log('完整的表单数据:', JSON.stringify(lostFoundForm, null, 2))
+    
+    // 转换分类为ID (临时解决方案)
+    let categoryId = 1;
+    const categoryMapping = {
+      '证件': 1,
+      '电子产品': 2,
+      '书籍': 3,
+      '钱包/钥匙': 4,
+      '服装': 5,
+      '生活用品': 6,
+      '其他': 7
+    };
+    
+    if (lostFoundForm.category && categoryMapping[lostFoundForm.category]) {
+      categoryId = categoryMapping[lostFoundForm.category];
+    }
+    
+    console.log('分类映射:', lostFoundForm.category, '->', categoryId);
+    
+    // 准备API请求数据
+    const lostFoundData = {
+      title: lostFoundForm.title,
+      description: lostFoundForm.description,
+      type: formType.value, // lost 或 found
+      categoryId: categoryId,
+      category: lostFoundForm.category,
+      images: lostFoundForm.images.map(img => img.url),
+      location: lostFoundForm.location,
+      locationCoords: lostFoundForm.locationCoords,
+      eventTime: lostFoundForm.lostFoundTime,
+      reward: formType.value === 'lost' ? Number(lostFoundForm.reward) || 0 : 0,
+      contactWay: lostFoundForm.contactWay,
+      contactInfo: lostFoundForm.contactInfo,
+      tags: lostFoundForm.tags || []
+    }
+    
+    console.log('准备发送的失物招领数据:', JSON.stringify(lostFoundData, null, 2))
+    
+    // 导入API函数
+    const { publishLostFound } = await import('@/api/lostFound')
+    
+    // 调用发布失物招领API
+    console.log('开始调用publishLostFound API...')
+    const response = await publishLostFound(lostFoundData)
+    
+    console.log('发布失物招领API响应:', response)
+    
+    // 检查响应
+    if (!response) {
+      console.error('API响应为空')
+      showToast('发布失败：服务器响应为空')
+      return
+    }
+    
+    if (response && (response.code === 200 || response.success)) {
       showToast('发布成功')
       
-      // 跳转到首页
+      // 发布成功，清除草稿
+      clearFormDataStorage();
+      
+      // 打印成功信息
+      console.log('失物招领发布成功，准备跳转...')
+      
+      // 延迟跳转到首页或详情页
       setTimeout(() => {
-        router.push('/')
+        if (response.data && response.data.id) {
+          // 如果返回了ID，跳转到详情页
+          const itemId = response.data.id
+          console.log('跳转到失物招领详情页:', itemId)
+          // 跳转到详情页
+          router.push(`/lostFound/detail/${itemId}`)
+        } else {
+          // 否则返回列表页
+          console.log('跳转到失物招领列表页')
+          router.push('/lostFound')
+        }
       }, 1000)
-    }, 1500)
+    } else {
+      // 显示错误信息
+      const errorMsg = response?.message || '发布失败，请重试'
+      console.error('发布失败:', errorMsg, response)
+      showToast(errorMsg)
+    }
   } catch (error) {
-    console.error('发布失物招领信息失败', error)
-    showToast('发布失败，请重试')
+    console.error('发布失物招领异常:', error)
+    showToast('发布失败：' + (error.message || '请重试'))
   }
 }
 
@@ -628,10 +704,60 @@ const handleLocationUpdate = (location) => {
   }
 };
 
+// 存储表单数据到本地存储
+const saveFormDataToStorage = () => {
+  localStorage.setItem('lostfound_form_draft', JSON.stringify({
+    title: lostFoundForm.title,
+    category: lostFoundForm.category,
+    description: lostFoundForm.description,
+    images: lostFoundForm.images,
+    contactWay: lostFoundForm.contactWay,
+    contactInfo: lostFoundForm.contactInfo,
+    reward: lostFoundForm.reward,
+    // 不保存位置信息，因为位置信息会从URL中获取
+  }));
+  console.log('已保存失物招领表单数据到本地存储');
+};
+
+// 从本地存储中恢复表单数据
+const restoreFormDataFromStorage = () => {
+  const savedData = localStorage.getItem('lostfound_form_draft');
+  if (!savedData) return false;
+  
+  try {
+    const formData = JSON.parse(savedData);
+    console.log('从本地存储恢复失物招领表单数据:', formData);
+    
+    // 恢复表单数据
+    if (formData.title) lostFoundForm.title = formData.title;
+    if (formData.category) lostFoundForm.category = formData.category;
+    if (formData.description) lostFoundForm.description = formData.description;
+    if (formData.images && formData.images.length) lostFoundForm.images = formData.images;
+    if (formData.contactWay) lostFoundForm.contactWay = formData.contactWay;
+    if (formData.contactInfo) lostFoundForm.contactInfo = formData.contactInfo;
+    if (formData.reward) lostFoundForm.reward = formData.reward;
+    
+    return true;
+  } catch (error) {
+    console.error('恢复失物招领表单数据失败:', error);
+    return false;
+  }
+};
+
+// 清除本地存储的表单数据
+const clearFormDataStorage = () => {
+  localStorage.removeItem('lostfound_form_draft');
+  console.log('已清除失物招领表单数据本地存储');
+};
+
 // 在onMounted中初始化数据
 onMounted(() => {
   // 初始化日期时间
   initDateTimeInput();
+  
+  // 先尝试恢复表单数据
+  const restored = restoreFormDataFromStorage();
+  console.log('表单数据恢复状态:', restored);
   
   // 检查是否有地图选择的回调数据
   let locationDataFromUrl = null;
@@ -700,5 +826,33 @@ onMounted(() => {
       address: lostFoundForm.location
     };
   }
+  
+  // 设置自动保存草稿
+  window.addEventListener('beforeunload', saveFormDataToStorage);
 });
+
+// 在组件销毁时移除事件监听
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', saveFormDataToStorage);
+});
+
+// 跳转到地图选择页面
+const navigateToLocationPicker = () => {
+  // 先保存当前表单内容
+  saveFormDataToStorage();
+  
+  // 将当前地址传递给地图选择页面（如果有）
+  const query = lostFoundForm.locationCoords ? 
+    { location: JSON.stringify(lostFoundForm.locationCoords) } : 
+    {};
+  
+  // 导航到地图选择页面，并设置回调
+  router.push({
+    path: '/map/picker',
+    query: {
+      ...query,
+      callback: '/publish/lostFound'
+    }
+  });
+};
 </script>
