@@ -7,13 +7,13 @@
 export const DEFAULT_AVATAR = '/images/default-avatar.jpg';
 
 // 默认背景图
-export const DEFAULT_BACKGROUND = '/images/default-bg.jpg'; 
+export const DEFAULT_BACKGROUND = '/images/default-bg.jpg';
 
-// 默认商品图
+// 默认商品图片
 export const DEFAULT_PRODUCT_IMAGE = '/images/default-product.jpg';
 
-// 默认文章封面图
-export const DEFAULT_ARTICLE_COVER = '/images/default-article-cover.jpg';
+// 默认文章封面
+export const DEFAULT_ARTICLE_COVER = '/images/default-article.jpg';
 
 // 备用网络图片（当本地图片不可用时）
 export const FALLBACK_IMAGES = {
@@ -21,6 +21,35 @@ export const FALLBACK_IMAGES = {
   background: 'https://img01.yzcdn.cn/vant/cat-2.jpeg',
   product: 'https://img01.yzcdn.cn/vant/ipad.jpeg',
   article: 'https://img01.yzcdn.cn/vant/apple-1.jpg'
+};
+
+/**
+ * 清理图片URL中的异常部分，修复被错误连接的URL
+ * @param {string} url 原始图片URL
+ * @returns {string} 修复后的URL
+ */
+export const cleanupImageUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  
+  // 修复.daimg.com错误后缀问题
+  if (url.includes('.jpg.daimg.com') || url.includes('.png.daimg.com') || url.includes('.jpeg.daimg.com')) {
+    // 查找.jpg、.png或.jpeg后的位置
+    const jpgIndex = url.indexOf('.jpg');
+    const pngIndex = url.indexOf('.png');
+    const jpegIndex = url.indexOf('.jpeg');
+    
+    let cutIndex = -1;
+    if (jpgIndex > 0) cutIndex = jpgIndex + 4; // .jpg后
+    else if (pngIndex > 0) cutIndex = pngIndex + 4; // .png后
+    else if (jpegIndex > 0) cutIndex = jpegIndex + 5; // .jpeg后
+    
+    if (cutIndex > 0) {
+      // 截取到正确的URL部分
+      return url.substring(0, cutIndex);
+    }
+  }
+  
+  return url;
 };
 
 /**
@@ -38,6 +67,9 @@ export const getSafeImageUrl = (src, fallback = DEFAULT_AVATAR) => {
     if (fallback === DEFAULT_ARTICLE_COVER) return FALLBACK_IMAGES.article;
     return fallback;
   }
+  
+  // 清理URL中的异常部分
+  src = cleanupImageUrl(src);
   
   // 如果是相对路径但没有以/开头，添加/
   if (!src.startsWith('http') && !src.startsWith('/')) {
@@ -74,5 +106,6 @@ export default {
   DEFAULT_ARTICLE_COVER,
   FALLBACK_IMAGES,
   getSafeImageUrl,
-  handleImageError
+  handleImageError,
+  cleanupImageUrl
 }; 

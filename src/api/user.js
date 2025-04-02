@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 
 import { defineStore } from 'pinia'
+import { cleanupImageUrl } from '@/utils/defaultImages'
 
 /**
  * 账号密码登录
@@ -259,9 +260,10 @@ function getErrorMessage(statusCode) {
 export function getUserInfo() {
   console.log('调用getUserInfo API获取当前用户信息');
   
-  // 检查是否有缓存的用户信息，在请求失败时可作为备用
-  const cachedUserInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+  // 获取存储在localStorage的用户ID
+  const userId = localStorage.getItem('userId');
   
+  // 获取当前已登录用户信息
   return request({
     url: '/api/user/info',
     method: 'get'
@@ -269,21 +271,25 @@ export function getUserInfo() {
   .then(response => {
     console.log('getUserInfo API原始响应:', JSON.stringify(response));
     
-    // 处理请求取消的情况
-    if (response && response.code === 499) {
-      console.warn('检测到请求被取消，尝试使用缓存数据');
-      if (cachedUserInfo && cachedUserInfo.id) {
-        return {
-          code: 200,
-          message: '使用缓存数据替代已取消的请求',
-          data: cachedUserInfo
-        };
-      }
+    // 处理错误情况
+    if (!response) {
+      console.error('getUserInfo API返回空响应');
+      return {
+        code: 500,
+        message: '获取用户信息失败',
+        data: null
+      };
     }
     
     // 处理后端可能直接返回用户对象的情况
     if (response && !response.code && response.userId) {
       console.log('检测到后端直接返回用户对象，进行兼容处理');
+      
+      // 修复avatar URL的错误
+      if (response.avatar) {
+        response.avatar = cleanupImageUrl(response.avatar);
+        console.log('修复后的头像URL:', response.avatar);
+      }
       
       // 直接使用返回的用户对象作为数据
       const userData = {
@@ -326,6 +332,12 @@ export function getUserInfo() {
         console.warn('警告: getUserInfo响应中缺少用户ID');
       }
       
+      // 修复avatar URL的错误
+      if (response.data.avatar) {
+        response.data.avatar = cleanupImageUrl(response.data.avatar);
+        console.log('修复后的头像URL:', response.data.avatar);
+      }
+      
       // 后端与前端字段名称映射
       const standardizedData = {
         id: response.data.id || response.data.userId || parseInt(localStorage.getItem('userId')) || 0,
@@ -354,38 +366,15 @@ export function getUserInfo() {
       
       response.data = standardizedData;
       console.log('getUserInfo API标准化后响应:', JSON.stringify(response));
-    } else if (!response || response.code !== 200) {
-      console.error('getUserInfo API响应格式异常:', response);
-      
-      // 如果有缓存的用户信息，在响应异常时使用缓存
-      if (cachedUserInfo && cachedUserInfo.id) {
-        console.warn('使用缓存的用户信息替代异常响应');
-        return {
-          code: 200,
-          message: '使用缓存数据',
-          data: cachedUserInfo
-        };
-      }
     }
     
     return response;
   })
   .catch(error => {
-    console.error('getUserInfo API请求失败:', error);
-    
-    // 如果有缓存的用户信息，在请求失败时使用缓存
-    if (cachedUserInfo && cachedUserInfo.id) {
-      console.warn('使用缓存的用户信息替代请求失败');
-      return {
-        code: 200,
-        message: '使用缓存数据',
-        data: cachedUserInfo
-      };
-    }
-    
+    console.error('getUserInfo API异常:', error);
     return {
       code: 500,
-      message: error.message || '获取用户信息失败',
+      message: '获取用户信息失败: ' + (error.message || error),
       data: null
     };
   });
