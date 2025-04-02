@@ -472,30 +472,34 @@ const fetchItems = async () => {
   if (loading.value) return;
   
   loading.value = true;
+  loadingMore.value = page.value > 1;
+  
+  // 通知父组件加载状态变化
+  emit('loading', true);
+  
+  // 构建请求参数
+  const params = {
+    page: page.value,
+    limit: props.pageSize,
+    type: activeTab.value !== 'all' ? activeTab.value : '',
+    status: activeFilters.status !== 'all' ? activeFilters.status : '',
+    category: activeFilters.category !== 'all' ? activeFilters.category : '',
+    sort: activeFilters.sort,
+    location: activeFilters.location !== 'all' ? activeFilters.location : '',
+    time: activeFilters.time !== 'all' ? activeFilters.time : ''
+  };
+  
+  // 如果指定了用户ID，添加到参数中
+  if (props.userId) {
+    params.userId = props.userId;
+  }
+  
+  console.log('获取失物招领列表参数:', params);
   
   try {
-    console.log('获取失物招领列表，参数:', {
-      page: page.value,
-      limit: props.pageSize,
-      type: activeTab.value,
-      status: activeFilters.status,
-      category: activeFilters.category,
-      location: activeFilters.location,
-      time: activeFilters.time
-    });
-    
-    const response = await getLostFoundList({
-      page: page.value,
-      limit: props.pageSize,
-      type: activeTab.value === 'all' ? '' : activeTab.value,
-      status: activeFilters.status === 'all' ? '' : activeFilters.status,
-      category: activeFilters.category === 'all' ? '' : activeFilters.category,
-      location: activeFilters.location === 'all' ? '' : activeFilters.location,
-      time: activeFilters.time === 'all' ? '' : activeFilters.time
-    });
-    
-    // 记录原始响应
-    console.log('失物招领列表原始响应:', response);
+    // 调用API获取数据
+    const response = await getLostFoundList(params);
+    console.log('失物招领API响应:', response);
     
     if (response && (response.code === 200 || response.success)) {
       // 处理接口返回的数据结构不一致的情况

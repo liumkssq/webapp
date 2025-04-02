@@ -255,7 +255,7 @@ const routes = [
     },
     props: route => ({
       conversationType: 'private',
-      targetId: parseInt(route.params.id)
+      targetId: route.params.id
     })
   },
   

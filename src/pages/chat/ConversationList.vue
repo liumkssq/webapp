@@ -68,13 +68,17 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import ConversationList from '@/components/im/ConversationList.vue'
-import { createConversation as apiCreateConversation } from '@/api/im'
+import { useUserStore } from '@/store/user'
+import { useIMStore } from '@/store/im'
+import { getConversations, setUpUserConversation } from '@/api/im'
 
 const router = useRouter()
+const userStore = useUserStore()
+const imStore = useIMStore()
 const showNewConversation = ref(false)
 const searchText = ref('')
 const searchResults = ref([])
@@ -133,13 +137,18 @@ const searchUsers = async () => {
 const createConversation = async (user) => {
   loading.value = true
   try {
-    const response = await apiCreateConversation(user.id)
+    const response = await setUpUserConversation({
+      sendId: userStore.currentUser.id,
+      recvId: user.id,
+      chatType: 1 // 单聊
+    })
+    
     if (response.code === 200) {
       showNewConversation.value = false
       
       // 导航到会话详情页
       router.push({
-        path: `/chat/conversation/${response.data.id}`,
+        path: `/chat/conversation/${response.data.conversationId}`,
         query: { name: user.name }
       })
     } else {
@@ -153,11 +162,32 @@ const createConversation = async (user) => {
   }
 }
 
+// 初始化WebSocket连接
+const initWebSocket = () => {
+  if (userStore.isLoggedIn) {
+    imStore.initWebSocket(userStore.currentUser.id)
+  }
+}
+
+// 组件挂载时初始化WebSocket
+onMounted(() => {
+  initWebSocket()
+})
+
 // 获取姓名首字母作为头像占位
 const getInitials = (name) => {
   if (!name) return '?'
   return name.charAt(0)
 }
+
+// 监听WebSocket连接状态变化
+watch(() => imStore.connected, (connected) => {
+  if (connected) {
+    console.log('WebSocket已连接')
+  } else {
+    console.log('WebSocket已断开')
+  }
+})
 </script>
 
 <style scoped>

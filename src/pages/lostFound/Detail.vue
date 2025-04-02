@@ -1,151 +1,286 @@
 <template>
   <div class="lost-found-detail-page">
-    <!-- 头部导航 -->
+    <!-- iOS风格导航栏 -->
     <HeaderNav 
       :title="item.type === 'lost' ? '寻物启事' : '招领启事'" 
-      :showBack="true" 
-      class="ios-header"
-    />
+      left-arrow 
+      @click-left="router.back()"
+      fixed
+      placeholder
+      border
+    >
+      <template #right>
+        <van-icon name="share-o" size="18" @click="handleShare" />
+      </template>
+    </HeaderNav>
     
-    <!-- 主要内容区域 -->
+    <!-- 主内容区域 -->
     <div class="detail-container">
-      <!-- 物品图片 -->
-      <div class="image-container" v-if="item.images && item.images.length > 0">
-        <swiper 
-          :slides-per-view="1" 
-          :pagination="{ clickable: true }" 
-          :autoplay="{ delay: 3000 }"
-          class="image-swiper"
-        >
-          <swiper-slide v-for="(img, index) in parsedImages" :key="index">
-            <img :src="img" @error="handleImageError" class="detail-image" :alt="item.title">
-          </swiper-slide>
-        </swiper>
-      </div>
-      
-      <!-- 物品基本信息 -->
-      <div class="info-card ios-card">
-      <div class="item-header">
-          <div class="item-status ios-badge" :class="item.status">{{ 
-            item.status === 'open' ? '进行中' : 
-            item.status === 'pending' ? '确认中' : '已完成' 
-          }}</div>
-          <h1 class="item-title">{{ item.title }}</h1>
-      </div>
-      
-        <div class="item-meta">
-          <div class="meta-item">
-            <svg-icon name="location" class="ios-icon" />
-            <span>{{ item.location || '未知位置' }}</span>
-            </div>
-          <div class="meta-item">
-            <svg-icon name="time" class="ios-icon" />
-            <span>{{ formatTime(item.createTime) }}</span>
-            </div>
-          <div class="meta-item">
-            <svg-icon name="category" class="ios-icon" />
-            <span>{{ item.category?.name || '未分类' }}</span>
-            </div>
-          </div>
-          
-        <div class="item-description">
-          <h2 class="section-title">物品描述</h2>
-          <p class="description-text">{{ item.description }}</p>
+      <!-- 加载状态 -->
+      <van-skeleton v-if="loading" title avatar :row="10" />
+
+      <template v-else>
+        <!-- 物品图片区域 -->
+        <div class="image-wrapper">
+          <van-swipe
+            class="image-swiper"
+            :autoplay="3000"
+            indicator-color="#007aff"
+          >
+            <van-swipe-item v-if="item.images && item.images.length">
+              <van-image
+                :src="item.images[0]"
+                width="100%"
+                height="230"
+                radius="8px 8px 0 0"
+                fit="cover"
+                @error="handleImageError"
+              />
+            </van-swipe-item>
+            <van-swipe-item v-else>
+              <van-image
+                src="https://img01.yzcdn.cn/vant/apple-1.jpg"
+                width="100%"
+                height="230"
+                radius="8px 8px 0 0"
+                fit="cover"
+              />
+            </van-swipe-item>
+          </van-swipe>
         </div>
-      </div>
-      
-      <!-- 发布者信息 -->
-      <div class="publisher-card ios-card">
-        <h2 class="section-title">发布者信息</h2>
-        <div class="publisher-info">
-          <img :src="item.publisher?.avatar || '/images/default-avatar.jpg'" class="publisher-avatar" alt="发布者头像">
-          <div class="publisher-detail">
-            <div class="publisher-name">{{ item.publisher?.nickname || '未知用户' }}</div>
-            <div class="publisher-time">发布于 {{ formatTime(item.createTime) }}</div>
-        </div>
-          <div class="contact-btn" v-if="item.status === 'open'" @click="contactPublisher">
-            <svg-icon name="chat" class="ios-icon" />
-            <span>联系TA</span>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 评论区 -->
-      <div class="comments-card ios-card">
-        <h2 class="section-title">互动区 ({{ comments.length }})</h2>
-        
-        <!-- 评论列表 -->
-        <div class="comments-list" v-if="comments.length > 0">
-          <div class="comment-item" v-for="(comment, index) in comments" :key="index">
-            <img :src="comment.user?.avatar || '/images/default-avatar.jpg'" class="comment-avatar" alt="评论者头像">
-            <div class="comment-content">
-              <div class="comment-header">
-                <span class="comment-user">{{ comment.user?.nickname || '未知用户' }}</span>
-                <span class="comment-time">{{ formatTime(comment.createTime) }}</span>
+
+        <!-- 物品基本信息卡片 -->
+        <van-cell-group inset class="card-style">
+          <!-- 标题与类型 -->
+          <van-cell class="title-cell">
+            <template #title>
+              <div class="title-row">
+                <van-tag
+                  :type="item.type === 'lost' ? 'danger' : 'success'"
+                  size="medium"
+                  class="mr-8"
+                >
+                  {{ item.type === 'lost' ? '寻物' : '招领' }}
+                </van-tag>
+                <span class="item-title">{{ item.title || '无标题' }}</span>
               </div>
-              <div class="comment-text">{{ comment.content }}</div>
-              
-              <!-- 回复列表 -->
-              <div class="replies" v-if="comment.replies && comment.replies.length > 0">
-                <div class="reply-item" v-for="(reply, rIndex) in comment.replies" :key="rIndex">
-                  <span class="reply-user">{{ reply.user?.nickname || '未知用户' }}</span>
-                    <span class="reply-text">{{ reply.content }}</span>
+            </template>
+          </van-cell>
+          
+          <!-- 描述信息 -->
+          <van-cell>
+            <template #label>
+              <div class="description-text">{{ item.description || '暂无描述' }}</div>
+            </template>
+          </van-cell>
+
+          <!-- 地点和联系方式 -->
+          <van-cell title="拾获地点" icon="location-o" v-if="item.location">
+            <template #value>{{ item.location }}</template>
+          </van-cell>
+          <van-cell title="联系方式" icon="phone-o" v-if="item.contactInfo">
+            <template #value>{{ item.contactInfo }}</template>
+          </van-cell>
+          <van-cell title="发布时间" icon="clock-o">
+            <template #value>{{ formatTimeAgo(item.createdAt) }}</template>
+          </van-cell>
+          <van-cell title="浏览次数" icon="eye-o">
+            <template #value>{{ item.viewCount || 0 }}</template>
+          </van-cell>
+        </van-cell-group>
+
+        <!-- 发布者信息卡片 -->
+        <van-cell-group inset class="card-style">
+          <van-cell title="发布者信息" icon="manager-o" />
+          <van-cell class="publisher-cell">
+            <template #default>
+              <div class="publisher-info">
+                <van-image
+                  round
+                  width="48"
+                  height="48"
+                  :src="item.publisherAvatar || 'https://img.yzcdn.cn/vant/cat.jpeg'"
+                  @error="handleAvatarError"
+                  class="publisher-avatar"
+                />
+                <div class="publisher-details">
+                  <div class="publisher-name">{{ item.publisherName || '未知用户' }}</div>
+                  <div class="publish-time text-gray">{{ formatTimeAgo(item.createdAt) }} 发布</div>
                 </div>
               </div>
-            </div>
-          </div>
+            </template>
+          </van-cell>
+        </van-cell-group>
+        
+        <!-- 快捷操作按钮 -->
+        <div class="primary-action">
+          <van-button type="primary" size="large" round block @click="handlePrimaryAction">
+            <template #icon><van-icon name="phone-o" /></template>
+            {{ getPrimaryActionText }}
+          </van-button>
         </div>
         
-        <!-- 无评论提示 -->
-        <div class="no-comments" v-else>
-          <svg-icon name="comment-empty" class="empty-icon" />
-          <span>暂无评论，快来留言吧</span>
-      </div>
-      
-        <!-- 评论输入框 -->
-        <div class="comment-input-container">
-        <input 
-          type="text" 
-          v-model="commentText" 
-            placeholder="说点什么..." 
-            class="comment-input ios-input"
-            @keyup.enter="submitComment"
-          />
-          <button class="submit-btn" :disabled="!commentText.trim()" @click="submitComment">
-            <svg-icon name="send" class="ios-icon" />
-          </button>
-      </div>
-    </div>
-    
-      <!-- 相关推荐 -->
-      <div class="related-card ios-card" v-if="relatedItems.length > 0">
-        <h2 class="section-title">相关物品</h2>
-        <div class="related-list">
-          <div 
-            class="related-item" 
-            v-for="relatedItem in relatedItems" 
-            :key="relatedItem.id"
-            @click="goToDetail(relatedItem.id)"
+        <!-- 操作按钮组 -->
+        <van-grid :column-num="3" :border="false" class="action-grid">
+          <van-grid-item icon="share-o" text="分享" @click="handleShare" />
+          <van-grid-item :icon="isFavorite ? 'star' : 'star-o'" 
+                       :text="isFavorite ? '已收藏' : '收藏'" 
+                       :class="{'favorite-active': isFavorite}"
+                       @click="handleFavorite" />
+          <van-grid-item icon="warning-o" text="举报" @click="handleReport" />
+        </van-grid>
+        
+        <!-- 评论区 -->
+        <van-cell-group inset class="card-style comments-section" v-if="!loadingComments">
+          <van-cell title="评论" icon="chat-o">
+            <template #value>
+              <span class="comment-count">{{ item.commentCount || 0 }}</span>
+            </template>
+            <template #right-icon>
+              <van-icon name="replay" @click="refreshComments" :class="{loading: loadingComments}" />
+            </template>
+          </van-cell>
+          
+          <!-- 评论输入框 -->
+          <van-field
+            v-model="commentContent"
+            rows="1"
+            autosize
+            type="textarea"
+            placeholder="写下你的评论..."
+            :disabled="submittingComment"
+            class="comment-input"
           >
-            <img :src="getImageUrl(relatedItem)" class="related-image" :alt="relatedItem.title">
-            <div class="related-title">{{ relatedItem.title }}</div>
+            <template #button>
+              <van-button size="small" type="primary" round @click="submitComment" :loading="submittingComment">发送</van-button>
+            </template>
+          </van-field>
+          
+          <!-- 空评论提示 -->
+          <div v-if="!comments.length" class="empty-comment">
+            <van-empty description="暂无评论" />
           </div>
-        </div>
-      </div>
+          
+          <!-- 评论列表 -->
+          <div v-else>
+            <van-cell 
+              v-for="(comment, index) in comments" 
+              :key="comment.id"
+              class="comment-item"
+              :class="{'comment-last': index === comments.length - 1}"
+            >
+              <div class="comment-header">
+                <van-image
+                  round
+                  width="36"
+                  height="36"
+                  :src="comment.author?.avatar || 'https://img.yzcdn.cn/vant/cat.jpeg'"
+                  @error="handleAvatarError"
+                />
+                <div class="comment-author">
+                  <div class="author-name">{{ comment.author?.name || '匿名用户' }}</div>
+                  <div class="comment-time">{{ formatTimeAgo(comment.createTime) }}</div>
+                </div>
+              </div>
+              <div class="comment-content">{{ comment.content }}</div>
+            </van-cell>
+          </div>
+        </van-cell-group>
+        
+        <!-- 评论区加载中 -->
+        <van-cell-group inset class="card-style" v-else>
+          <van-cell title="评论" icon="chat-o" />
+          <van-skeleton title avatar row="3" />
+        </van-cell-group>
+      </template>
     </div>
     
-    <!-- 底部操作按钮 -->
-    <div class="bottom-actions">
-      <div class="action-button share-btn" @click="shareItem">
-        <svg-icon name="share" class="action-icon" />
-        <span>分享</span>
-    </div>
-    
-      <div class="action-button primary-btn" @click="handlePrimaryAction">
-        <svg-icon :name="primaryActionIcon" class="action-icon" />
-        <span>{{ primaryActionText }}</span>
+    <!-- 状态更新弹窗 -->
+    <van-dialog
+      v-model:show="showStatusUpdatePopup"
+      title="更新物品状态"
+      show-cancel-button
+      @confirm="updateItemStatus"
+    >
+      <div class="dialog-content">
+        <van-radio-group v-model="newStatus">
+          <van-cell-group inset>
+            <van-cell clickable @click="newStatus = 'pending'">
+              <template #title>
+                <van-radio name="pending">未找到/未认领</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="newStatus = 'completed'">
+              <template #title>
+                <van-radio name="completed">已找到/已认领</van-radio>
+              </template>
+            </van-cell>
+          </van-cell-group>
+        </van-radio-group>
       </div>
-    </div>
+    </van-dialog>
+
+    <!-- 举报对话框 -->
+    <van-dialog
+      v-model:show="showReportDialog"
+      title="举报内容"
+      show-cancel-button
+      @confirm="submitReport"
+      confirm-button-color="#ee0a24"
+    >
+      <div class="dialog-content">
+        <p class="dialog-subtitle">请选择举报原因：</p>
+        <van-radio-group v-model="reportReason">
+          <van-cell-group inset>
+            <van-cell clickable @click="reportReason = 'fake'">
+              <template #title>
+                <van-radio name="fake">虚假信息</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'spam'">
+              <template #title>
+                <van-radio name="spam">广告/垃圾信息</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'rights'">
+              <template #title>
+                <van-radio name="rights">侵犯权益</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'illegal'">
+              <template #title>
+                <van-radio name="illegal">违法违规</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'other'">
+              <template #title>
+                <van-radio name="other">其他原因</van-radio>
+              </template>
+            </van-cell>
+          </van-cell-group>
+        </van-radio-group>
+        
+        <van-field
+          v-if="reportReason === 'other'"
+          v-model="reportDetail"
+          rows="3"
+          autosize
+          type="textarea"
+          maxlength="200"
+          placeholder="请详细说明原因"
+          show-word-limit
+          class="report-detail"
+        />
+      </div>
+    </van-dialog>
+    
+    <!-- 分享操作表 -->
+    <van-share-sheet
+      v-model:show="showSharePopup"
+      title="分享给好友"
+      :options="shareOptions"
+      @select="onShareSelect"
+    />
   </div>
 </template>
 
@@ -157,6 +292,8 @@ import { useUserStore } from '@/store/user'
 import { getLostFoundDetail, updateLostFoundStatus, commentLostFound, likeLostFound, unlikeLostFound } from '@/api/lostFound'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
+// 导入Vant组件
+import { Dialog, Button, Cell, CellGroup, Image as VanImage, Divider, Field, RadioGroup, Radio, Tag, Icon, Toast, Empty, Grid, GridItem, Swipe, SwipeItem, ShareSheet, Skeleton } from 'vant'
 
 const route = useRoute()
 const router = useRouter()
@@ -164,6 +301,7 @@ const userStore = useUserStore()
 
 // 状态变量
 const item = ref({})
+const comments = ref([]) // 初始化为空数组
 const loading = ref(true)
 const loadingStatus = ref('加载中...')
 const loadingError = ref(false)
@@ -176,10 +314,197 @@ const showImagePreview = ref(false)
 const previewSrc = ref('')
 const showSharePopup = ref(false)
 const showStatusUpdatePopup = ref(false)
+const showReportDialog = ref(false)
+const newStatus = ref('pending')
 const toast = reactive({
   show: false,
   message: ''
 })
+
+// 举报相关
+const reportReason = ref('fake');
+const reportDetail = ref('');
+
+// 与联系相关的操作
+const commentContent = ref('');
+const loadingComments = ref(false);
+const submittingComment = ref(false);
+const isFavorite = ref(false);
+
+// 分享选项
+const shareOptions = [
+  { name: '微信', icon: 'wechat' },
+  { name: '微博', icon: 'weibo' },
+  { name: 'QQ', icon: 'qq' },
+  { name: '复制链接', icon: 'link' }
+];
+
+// 主要操作按钮文本
+const getPrimaryActionText = computed(() => {
+  // 如果当前用户是发布者
+  if (isCurrentUser.value) {
+    return '修改状态';
+  }
+  
+  // 如果是寻物启事
+  if (item.value.type === 'lost') {
+    return '我捡到了';
+  }
+  
+  // 如果是招领启事
+  if (item.value.type === 'found') {
+    return '是我的物品';
+  }
+  
+  return '联系发布者';
+});
+
+// 主要操作按钮点击事件
+const handlePrimaryAction = () => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath);
+    return;
+  }
+  
+  // 如果当前用户是发布者
+  if (isCurrentUser.value) {
+    showStatusUpdatePopup.value = true;
+    return;
+  }
+  
+  // 非发布者，直接联系发布者
+  contactPublisher();
+};
+
+// 处理收藏
+const handleFavorite = () => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath);
+    return;
+  }
+  
+  isFavorite.value = !isFavorite.value;
+  const message = isFavorite.value ? '已收藏' : '已取消收藏';
+  showToast(message);
+  
+  // 后续可调用实际API保存收藏状态
+};
+
+// 处理举报
+const handleReport = () => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath);
+    return;
+  }
+  
+  showReportDialog.value = true;
+};
+
+// 处理分享
+const handleShare = () => {
+  const shareData = {
+    title: item.value.title || '失物招领',
+    text: item.value.description || '查看详情',
+    url: window.location.href
+  };
+  
+  if (navigator.share && navigator.canShare(shareData)) {
+    navigator.share(shareData)
+      .then(() => console.log('分享成功'))
+      .catch(err => {
+        console.error('分享失败:', err);
+        showToast('链接已复制到剪贴板');
+      });
+  } else {
+    // 回退到复制链接
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => showToast('链接已复制到剪贴板'))
+      .catch(() => showToast('复制失败，请手动复制链接'));
+  }
+};
+
+// 刷新评论
+const refreshComments = async () => {
+  if (loadingComments.value) return;
+  
+  loadingComments.value = true;
+  
+  try {
+    const id = route.params.id;
+    // 这里应该调用获取评论的API
+    // const response = await getLostFoundComments(id);
+    
+    // 模拟API响应
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 模拟空评论
+    comments.value = [];
+    
+    loadingComments.value = false;
+  } catch (error) {
+    console.error('获取评论失败:', error);
+    showToast('获取评论失败，请稍后再试');
+    loadingComments.value = false;
+  }
+};
+
+// 提交评论
+const submitComment = async () => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath);
+    return;
+  }
+  
+  if (!commentContent.value.trim() || submittingComment.value) {
+    return;
+  }
+  
+  submittingComment.value = true;
+  
+  try {
+    const id = route.params.id;
+    const data = {
+      content: commentContent.value.trim()
+    };
+    
+    // 这里应该调用提交评论的API
+    // const response = await commentLostFound(id, data);
+    
+    // 模拟API响应
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 成功后清空评论内容
+    commentContent.value = '';
+    
+    // 添加一条模拟评论到列表
+    const newComment = {
+      id: Date.now(),
+      content: data.content,
+      createTime: new Date().toISOString(),
+      author: {
+        id: userStore.userId,
+        name: userStore.nickname || '当前用户',
+        avatar: userStore.avatar || getDefaultAvatar()
+      }
+    };
+    
+    comments.value = [newComment, ...comments.value];
+    
+    // 更新评论计数
+    if (item.value.commentCount !== undefined) {
+      item.value.commentCount++;
+    } else {
+      item.value.commentCount = 1;
+    }
+    
+    showToast('评论成功');
+  } catch (error) {
+    console.error('提交评论失败:', error);
+    showToast('评论失败，请稍后再试');
+  } finally {
+    submittingComment.value = false;
+  }
+};
 
 // 计算当前用户是否是发布者
 const isCurrentUser = computed(() => {
@@ -253,51 +578,44 @@ const getStatusClass = (status) => {
   return statusMap[status] || 'status-pending'
 }
 
-// 格式化时间
-const formatTime = (time) => {
-  if (!time) return ''
+// 格式化时间为"几小时前"、"几天前"等形式
+const formatTimeAgo = (timestamp) => {
+  if (!timestamp) return '未知时间';
   
-  const date = new Date(time)
-  const now = new Date()
-  const diff = Math.floor((now - date) / 1000)
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now - date; // 毫秒差
   
-  // 小于1分钟
-  if (diff < 60) {
-    return '刚刚'
+  // 小于24小时显示几小时前
+  if (diff < 24 * 60 * 60 * 1000) {
+    const hours = Math.floor(diff / (60 * 60 * 1000));
+    if (hours === 0) {
+      const minutes = Math.floor(diff / (60 * 1000));
+      if (minutes === 0) {
+        return '刚刚';
+      }
+      return `${minutes}分钟前`;
+    }
+    return `${hours}小时前`;
   }
-  // 小于1小时
-  else if (diff < 3600) {
-    return Math.floor(diff / 60) + '分钟前'
+  
+  // 小于一周显示几天前
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    return `${days}天前`;
   }
-  // 小于24小时
-  else if (diff < 86400) {
-    return Math.floor(diff / 3600) + '小时前'
-  }
-  // 小于30天
-  else if (diff < 2592000) {
-    return Math.floor(diff / 86400) + '天前'
-  }
-  // 超过30天
-  else {
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const day = date.getDate().toString().padStart(2, '0')
-    return `${month}-${day}`
-  }
-}
+  
+  // 否则显示具体日期
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
 
-// 详细时间格式
-const formatDetailTime = (time) => {
-  if (!time) return ''
+// 格式化日期显示
+const formatDate = (timestamp) => {
+  if (!timestamp) return '未知日期';
   
-  const date = new Date(time)
-  const year = date.getFullYear()
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const day = date.getDate().toString().padStart(2, '0')
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  
-  return `${year}-${month}-${day} ${hours}:${minutes}`
-}
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
 
 // 生成模拟数据
 const generateMockData = (id) => {
@@ -377,138 +695,120 @@ const generateMockData = (id) => {
   };
 };
 
-// 获取失物招领详情
-const fetchLostFoundDetail = async () => {
-  loading.value = true
-  loadingStatus.value = '加载中...'
+// 解析评论数据
+const processComments = (data) => {
+  if (!data || !data.comments) return [];
+  
+  let commentData = data.comments;
+  
+  // 如果comments是字符串，尝试解析JSON
+  if (typeof commentData === 'string') {
+    try {
+      commentData = JSON.parse(commentData);
+    } catch (e) {
+      console.error('解析评论数据失败:', e);
+      commentData = [];
+    }
+  }
+  
+  // 如果不是数组，返回空数组
+  if (!Array.isArray(commentData)) {
+    return [];
+  }
+  
+  // 处理每个评论的数据
+  return commentData.map(comment => {
+    // 确保评论有正确的结构
+    const processedComment = {
+      id: comment.id || Math.random().toString(36).substr(2, 9),
+      content: comment.content || '',
+      createTime: comment.createTime || new Date().toISOString(),
+      user: {
+        id: comment.user?.id || comment.userId || 0,
+        nickname: comment.user?.nickname || comment.userName || '匿名用户',
+        avatar: comment.user?.avatar || comment.userAvatar || '/images/default-avatar.jpg'
+      },
+      replies: []
+    };
+    
+    // 处理回复
+    if (comment.replies) {
+      try {
+        // 如果回复是字符串，尝试解析
+        if (typeof comment.replies === 'string') {
+          processedComment.replies = JSON.parse(comment.replies);
+        } else if (Array.isArray(comment.replies)) {
+          processedComment.replies = comment.replies;
+        }
+      } catch (e) {
+        console.error('解析回复数据失败:', e);
+        processedComment.replies = [];
+      }
+    }
+    
+    return processedComment;
+  });
+};
+
+// 相关物品
+const relatedItems = ref([]);
+
+// 获取物品数据
+const fetchItemDetail = async () => {
+  loading.value = true;
   
   try {
-    const id = route.params.id
-    console.log('正在获取失物招领详情，ID:', id);
-    const res = await getLostFoundDetail(id)
+    const id = route.params.id;
+    console.log('获取物品详情，ID:', id);
     
-    if (res && res.code === 200 && res.data) {
-      console.log('获取失物招领详情成功:', res.data)
-      
-      // 处理评论数据，确保正确格式
-      if (res.data.comments) {
-        try {
-          // 如果评论是字符串（JSON），尝试解析
-          if (typeof res.data.comments === 'string') {
-            res.data.comments = JSON.parse(res.data.comments);
-          }
-          
-          // 确保评论是数组
-          if (!Array.isArray(res.data.comments)) {
-            res.data.comments = [];
-          }
-          
-          // 处理每条评论，确保格式正确
-          res.data.comments = res.data.comments.map(comment => {
-            // 确保评论的基础结构
-            const formattedComment = {
-              id: comment.id || Math.random().toString(36).substr(2, 9),
-              content: comment.content || '',
-              createTime: comment.createTime || new Date().toISOString(),
-              likeCount: comment.likeCount || 0,
-              isLiked: comment.isLiked || false,
-              author: {
-                id: comment.author?.id || 0,
-                name: comment.author?.name || '匿名用户',
-                avatar: comment.author?.avatar || 'https://picsum.photos/100/100'
-              },
-              replies: []
-            };
-            
-            // 处理回复
-            if (comment.replies) {
-              try {
-                // 如果回复是字符串（JSON），尝试解析
-                if (typeof comment.replies === 'string') {
-                  comment.replies = JSON.parse(comment.replies);
-                }
-                
-                if (Array.isArray(comment.replies)) {
-                  formattedComment.replies = comment.replies.map(reply => ({
-                    id: reply.id || Math.random().toString(36).substr(2, 9),
-                    content: reply.content || '',
-                    createTime: reply.createTime || new Date().toISOString(),
-                    author: {
-                      id: reply.author?.id || 0,
-                      name: reply.author?.name || '匿名用户',
-                      avatar: reply.author?.avatar || 'https://picsum.photos/100/100'
-                    },
-                    replyTo: reply.replyTo ? {
-                      id: reply.replyTo.id || 0,
-                      name: reply.replyTo.name || '匿名用户'
-                    } : null
-                  }));
-                }
-              } catch (e) {
-                console.error('解析评论回复失败:', e);
-                formattedComment.replies = [];
-              }
-            }
-            
-            return formattedComment;
-          });
-        } catch (e) {
-          console.error('解析评论数据失败:', e);
-          res.data.comments = [];
+    // 调用API获取物品详情
+    const response = await getLostFoundDetail(id);
+    console.log('物品详情API响应:', response);
+    
+    if (response && (response.code === 200 || response.success)) {
+      if (response.data) {
+        // 使用API返回的数据更新物品信息
+        item.value = {
+          ...response.data,
+          // 确保images是数组
+          images: ensureArray(response.data.images)
+        };
+        
+        // 初始化评论
+        if (!item.value.comments) {
+          item.value.comments = [];
         }
+        
+        loading.value = false;
       } else {
-        res.data.comments = [];
+        console.error('API返回的数据为空');
+        showError('获取物品详情失败，返回数据为空');
       }
-      
-      item.value = res.data;
-      
-      // 确保 images 属性存在且为数组
-      if (!item.value.images) {
-        item.value.images = []
-      } else if (typeof item.value.images === 'string') {
-        // 如果是字符串，尝试解析为数组
-        try {
-          item.value.images = JSON.parse(item.value.images)
-        } catch (e) {
-          item.value.images = [item.value.images]
-        }
-      }
-      
-      if (!item.value.relatedItems || !item.value.relatedItems.length) {
-        // 如果服务器没有返回相关物品，则生成一些
-        item.value.relatedItems = generateRelatedItems();
-      }
-      
-      // 启动自动轮播
-      nextTick(() => {
-        startAutoPlay();
-      });
     } else {
-      console.warn('获取失物招领详情响应不正确:', res)
-      // 使用模拟数据
-      item.value = generateMockData(id)
-      showToast('使用模拟数据显示')
-      
-      // 启动自动轮播
-      nextTick(() => {
-        startAutoPlay();
-      });
+      console.error('获取物品详情失败:', response);
+      showError('获取物品详情失败，请稍后重试');
     }
   } catch (error) {
-    console.error('获取失物招领详情失败:', error)
-    // 使用模拟数据
-    const id = route.params.id
-    item.value = generateMockData(id)
-    showToast('加载失败，已显示模拟数据')
-    
-    // 启动自动轮播
-    nextTick(() => {
-      startAutoPlay();
-    });
+    console.error('获取物品详情异常:', error);
+    showError('获取物品详情出错，请稍后重试');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
+
+// 确保是数组的辅助函数
+const ensureArray = (value) => {
+  if (!value) return [];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [value];
+    } catch (e) {
+      return [value];
+    }
+  }
+  return Array.isArray(value) ? value : [value];
+};
 
 // 切换关注状态
 const toggleFollow = async () => {
@@ -527,22 +827,21 @@ const toggleFollow = async () => {
 
 // 联系发布者
 const contactPublisher = () => {
-  console.log('contactPublisher clicked!') // 调试日志
-  
   if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
-    return
+    router.push('/login?redirect=' + route.fullPath);
+    return;
   }
   
-  if (isCurrentUser.value) {
-    showToast('不能联系自己')
-    return
+  if (item.value && item.value.publisherId) {
+    // 跳转到聊天页面
+    router.push(`/im/chat/${item.value.publisherId}`);
+  } else if (item.value && item.value.contactInfo) {
+    // 如果有联系信息，显示提示
+    showToast(`联系方式: ${item.value.contactInfo}`);
+  } else {
+    showToast('无法获取联系方式');
   }
-  
-  // 这里应该弹出联系方式选择弹窗
-  // 简化处理，直接跳转到聊天页面
-  goToChat(item.value.publisher.id)
-}
+};
 
 // 拨打电话
 const callPhone = (phone) => {
@@ -567,31 +866,20 @@ const goToChat = (userId) => {
 }
 
 // 更新物品状态
-const updateStatus = async (status) => {
-  if (!userStore.isLoggedIn) {
-    showToast('请先登录')
-    return
-  }
-  
-  if (!isCurrentUser.value) {
-    showToast('只有发布者才能更新状态')
-    return
-  }
-  
+const updateItemStatus = async () => {
   try {
-    const id = item.value.id
-    const res = await updateLostFoundStatus(id, status)
+    // 这里添加实际API调用
+    // await updateLostFoundStatus(route.params.id, newStatus.value);
     
-    if (res.code === 200) {
-      item.value.status = status
-      showStatusUpdatePopup.value = false
-      showToast('状态更新成功')
-    } else {
-      showToast('状态更新失败')
-    }
+    // 模拟API调用
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    item.value.status = newStatus.value;
+    showStatusUpdatePopup.value = false;
+    showToast('状态已更新');
   } catch (error) {
-    console.error('状态更新失败', error)
-    showToast('状态更新失败，请稍后重试')
+    console.error('更新状态失败:', error);
+    showToast('更新状态失败，请重试');
   }
 }
 
@@ -631,64 +919,6 @@ const replyComment = (comment, reply = null) => {
   }
   
   showComment()
-}
-
-// 提交评论
-const submitComment = async () => {
-  if (!userStore.isLoggedIn) {
-    router.push('/login?redirect=' + route.fullPath)
-    return
-  }
-  
-  if (!commentText.value.trim()) {
-    return
-  }
-  
-  try {
-    const id = item.value.id
-    const data = {
-      content: commentText.value,
-      replyToId: replyTo.value ? replyTo.value.id : null
-    }
-    
-    const res = await commentLostFound(id, data)
-    
-    if (res.code === 200) {
-      // 如果是回复评论
-      if (replyTo.value && replyTo.value.commentId) {
-        const comment = item.value.comments.find(c => c.id === replyTo.value.commentId)
-        if (comment) {
-          if (!comment.replies) {
-            comment.replies = []
-          }
-          // 确保回复数据格式正确
-          const replyData = {
-            ...res.data,
-            replyTo: {
-              id: replyTo.value.id,
-              name: replyTo.value.name
-            }
-          }
-          comment.replies.push(replyData)
-        }
-      } else {
-        // 如果是新评论
-        if (!item.value.comments) {
-          item.value.comments = []
-        }
-        item.value.comments.unshift(res.data)
-        item.value.commentCount = (item.value.commentCount || 0) + 1
-      }
-      
-      commentText.value = ''
-      replyTo.value = null
-      showCommentInput.value = false
-      showToast('留言成功')
-    }
-  } catch (error) {
-    console.error('留言提交失败', error)
-    showToast('留言失败，请稍后重试')
-  }
 }
 
 // 图片轮播相关功能
@@ -738,8 +968,18 @@ const closePreview = () => {
 
 // 分享物品
 const shareItem = () => {
-  console.log('shareItem clicked!') // 调试日志
-  showSharePopup.value = true
+  // 生成分享链接
+  const shareUrl = window.location.href;
+  
+  // 复制到剪贴板
+  navigator.clipboard.writeText(shareUrl)
+    .then(() => {
+      showToast('链接已复制到剪贴板');
+    })
+    .catch(err => {
+      console.error('复制失败:', err);
+      showToast('复制失败，请手动复制链接');
+    });
 }
 
 // 分享到指定平台
@@ -776,13 +1016,18 @@ const goToLostFoundDetail = (id) => {
 
 // 显示提示消息
 const showToast = (message) => {
-  toast.message = message
-  toast.show = true
+  // 这里使用一个简单的alert来模拟toast提示
+  // 实际生产环境中应该使用UI库的toast组件
+  alert(message);
+  
+  // 模拟toast效果，可根据实际UI库替换
+  toast.message = message;
+  toast.show = true;
   
   setTimeout(() => {
-    toast.show = false
-  }, 2000)
-}
+    toast.show = false;
+  }, 3000);
+};
 
 // 更新点赞功能
 const likeItem = async () => {
@@ -893,420 +1138,366 @@ const viewLocation = () => {
   }
 }
 
-// 组件挂载
-onMounted(() => {
-  fetchLostFoundDetail()
+// 解析图片数据
+const parsedImages = computed(() => {
+  if (!item.value || !item.value.images) return [];
   
-  // 添加调试事件
-  document.querySelector('.bottom-action-bar')?.addEventListener('click', (event) => {
-    console.log('点击了底部操作栏:', event.target);
-  });
-})
+  try {
+    // 如果已经是数组，直接使用
+    if (Array.isArray(item.value.images)) {
+      return item.value.images.map(img => {
+        // 处理数组中的字符串JSON
+        if (typeof img === 'string') {
+          if (img.startsWith('[') && img.includes('"')) {
+            try {
+              const parsed = JSON.parse(img);
+              return Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : img;
+            } catch (e) {
+              console.error('解析图片JSON字符串失败:', e);
+              return img;
+            }
+          }
+          return img;
+        }
+        return img;
+      });
+    }
+    
+    // 如果是字符串形式，尝试解析JSON
+    if (typeof item.value.images === 'string') {
+      try {
+        if (item.value.images.startsWith('[')) {
+          const parsed = JSON.parse(item.value.images);
+          return Array.isArray(parsed) ? parsed : [item.value.images];
+        }
+        return [item.value.images];
+      } catch (e) {
+        console.error('解析图片字符串失败:', e);
+        return [item.value.images];
+      }
+    }
+    
+    // 默认返回空数组
+    return [];
+  } catch (error) {
+    console.error('处理图片数据时出错:', error);
+    return [];
+  }
+});
 
-// 组件卸载前清理
-onBeforeUnmount(() => {
-  stopAutoPlay()
-})
+// 处理图片加载错误
+const handleImageError = (event) => {
+  // 替换为默认图片
+  event.target.src = getDefaultImage(item.value.type || 'found');
+};
+
+// 获取默认图片
+const getDefaultImage = (type) => {
+  if (type === 'lost') {
+    return '/images/default-lost.jpg';
+  }
+  return '/images/default-found.jpg';
+};
+
+// 获取默认头像
+const getDefaultAvatar = () => {
+  return '/images/default-avatar.jpg';
+};
+
+// 处理头像加载错误
+const handleAvatarError = (event) => {
+  event.target.src = getDefaultAvatar();
+};
+
+// 获取状态颜色
+const getStatusColor = (status) => {
+  if (!status || status === 'pending') return 'info';
+  if (status === 'found' || status === 'claimed') return 'success';
+  if (status === 'closed') return 'grey';
+  return 'info';
+};
+
+// 确保数据完整性
+onMounted(() => {
+  // 设置默认值，确保数据展示正常
+  if (!item.value.type) {
+    item.value.type = 'found'; // 默认为招领启事
+  }
+  
+  if (!item.value.category) {
+    item.value.category = '数码产品'; // 基于物品描述推断类别
+  }
+  
+  if (!item.value.status) {
+    item.value.status = 'pending'; // 默认为待认领状态
+  }
+
+  if (!item.value.lostFoundTime) {
+    // 使用创建时间或当前时间作为默认
+    item.value.lostFoundTime = item.value.createdAt || new Date().toISOString();
+  }
+  
+  if (!item.value.createdAt) {
+    item.value.createdAt = new Date().toISOString();
+  }
+  
+  if (!item.value.images) {
+    // 设置默认图片
+    item.value.images = ['https://img01.yzcdn.cn/vant/apple-1.jpg'];
+  }
+  
+  if (!comments.value) {
+    comments.value = [];
+  }
+  
+  // 加载详情数据
+  fetchItemDetail();
+  
+  // 加载评论
+  refreshComments();
+});
+
+// 提交举报函数
+const submitReport = async () => {
+  if (!userStore.isLoggedIn) {
+    router.push('/login?redirect=' + route.fullPath);
+    return;
+  }
+  
+  try {
+    // 构建举报数据
+    const reportData = {
+      targetId: route.params.id,
+      targetType: 'lostfound',
+      reason: reportReason.value,
+      detail: reportReason.value === 'other' ? reportDetail.value : '',
+    };
+    
+    console.log('提交举报:', reportData);
+    
+    // 这里添加实际API调用，暂时用setTimeout模拟
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 关闭举报对话框并重置表单
+    showReportDialog.value = false;
+    reportReason.value = 'fake';
+    reportDetail.value = '';
+    
+    // 显示成功提示
+    showToast('举报已提交，我们会尽快处理');
+  } catch (error) {
+    console.error('举报提交失败:', error);
+    showToast('举报提交失败，请稍后重试');
+  }
+};
+
+// 处理分享选择
+const onShareSelect = (option) => {
+  Toast(`已选择 ${option.name}`);
+  
+  if (option.name === '复制链接') {
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => {
+        Toast('链接已复制到剪贴板');
+      })
+      .catch(() => {
+        Toast('复制失败，请手动复制链接');
+      });
+  } else {
+    // 这里可以接入实际的分享SDK
+    Toast(`分享到${option.name}功能暂未接入，敬请期待`);
+  }
+  
+  showSharePopup.value = false;
+};
 </script>
 
 <style scoped>
 .lost-found-detail-page {
+  background-color: #f7f8fa;
   min-height: 100vh;
-  background-color: var(--background-secondary);
-  padding-top: calc(var(--header-height) + var(--safe-area-inset-top));
-  padding-bottom: calc(60px + var(--safe-area-inset-bottom));
-}
-
-.ios-header {
-  backdrop-filter: blur(10px);
-  background-color: rgba(255, 255, 255, 0.85);
-  border-bottom: 0.5px solid var(--separator-color);
+  padding-bottom: 50px;
 }
 
 .detail-container {
-  padding: 16px;
+  padding: 10px;
 }
 
-.ios-card {
-  background-color: white;
+.card-style {
+  margin: 12px 0;
   border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  border: 0.5px solid var(--separator-color);
-}
-
-.image-container {
-  height: 240px;
   overflow: hidden;
-  border-radius: 12px;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.mr-8 {
+  margin-right: 8px;
+}
+
+.image-wrapper {
+  border-radius: 8px 8px 0 0;
+  overflow: hidden;
+  margin-bottom: 2px;
+  box-shadow: 0 2px 12px rgba(100, 101, 102, 0.08);
 }
 
 .image-swiper {
-  height: 100%;
+  height: 230px;
 }
 
-.detail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.title-cell {
+  border-bottom: 1px solid #f5f5f5;
 }
 
-.item-header {
-  position: relative;
-  margin-bottom: 16px;
+.title-row {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+  font-weight: bold;
 }
 
 .item-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-  padding-right: 80px;
+  font-size: 18px;
   line-height: 1.3;
-}
-
-.ios-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 13px;
   font-weight: 500;
 }
 
-.ios-badge.open {
-  background-color: rgba(255, 149, 0, 0.1);
-  color: var(--warning-color);
-}
-
-.ios-badge.pending {
-  background-color: rgba(0, 122, 255, 0.1);
-  color: var(--primary-color);
-}
-
-.ios-badge.closed {
-  background-color: rgba(52, 199, 89, 0.1);
-  color: var(--success-color);
-}
-
-.item-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.ios-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--text-tertiary);
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 12px 0;
-}
-
 .description-text {
+  margin-top: 8px;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--text-secondary);
-  margin: 0;
-  white-space: pre-wrap;
+  color: #666;
+}
+
+.primary-action {
+  margin: 15px 12px;
 }
 
 .publisher-info {
   display: flex;
   align-items: center;
+  padding: 5px 0;
+}
+
+.publisher-cell {
+  padding: 10px 16px;
 }
 
 .publisher-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 24px;
-  object-fit: cover;
   margin-right: 12px;
-  border: 1px solid var(--separator-color);
 }
 
-.publisher-detail {
+.publisher-details {
   flex: 1;
 }
 
 .publisher-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: #333;
 }
 
-.publisher-time {
+.publish-time {
   font-size: 13px;
-  color: var(--text-tertiary);
+  color: #999;
   margin-top: 4px;
 }
 
-.contact-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background-color: var(--primary-color);
-  color: white;
-  border-radius: 16px;
-  font-size: 14px;
-  font-weight: 500;
+.action-grid {
+  margin: 0 12px;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 5px 0;
 }
 
-.contact-btn .ios-icon {
-  color: white;
+.favorite-active {
+  color: #ff9900;
 }
 
-.comments-list {
-  margin-bottom: 16px;
+.comments-section {
+  margin-top: 16px;
 }
 
 .comment-item {
-  display: flex;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 0.5px solid var(--separator-color);
+  padding: 16px;
+  border-bottom: 1px solid #f5f5f5;
 }
 
-.comment-item:last-child {
+.comment-last {
   border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.comment-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
-  object-fit: cover;
-  margin-right: 12px;
-}
-
-.comment-content {
-  flex: 1;
 }
 
 .comment-header {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
-.comment-user {
+.comment-author {
+  flex: 1;
+  margin-left: 12px;
+}
+
+.author-name {
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: #333;
 }
 
 .comment-time {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: #999;
+  margin-top: 2px;
 }
 
-.comment-text {
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.replies {
-  padding: 8px;
-  background-color: var(--background-tertiary);
-  border-radius: 8px;
-}
-
-.reply-item {
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.reply-item:last-child {
-  margin-bottom: 0;
-}
-
-.reply-user {
-  font-weight: 500;
-  color: var(--primary-color);
-  margin-right: 4px;
-}
-
-.reply-text {
-  color: var(--text-secondary);
-}
-
-.no-comments {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 0;
-  color: var(--text-tertiary);
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  opacity: 0.5;
-}
-
-.comment-input-container {
-  display: flex;
-  align-items: center;
-  margin-top: 16px;
-  background-color: var(--background-tertiary);
-  border-radius: 20px;
-  padding: 4px;
-}
-
-.ios-input {
-  flex: 1;
-  border: none;
-  background: none;
-  padding: 8px 12px;
-  font-size: 14px;
-  color: var(--text-primary);
-  outline: none;
-}
-
-.submit-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
-  background-color: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-}
-
-.submit-btn:disabled {
-  background-color: var(--text-tertiary);
-  opacity: 0.5;
-}
-
-.related-list {
-  display: flex;
-  overflow-x: auto;
-  gap: 12px;
-  padding-bottom: 8px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.related-list::-webkit-scrollbar {
-  display: none;
-}
-
-.related-item {
-  flex: 0 0 120px;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.related-image {
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-}
-
-.related-title {
-  font-size: 13px;
-  padding: 8px 4px;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bottom-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  padding: 12px 16px;
-  background-color: white;
-  border-top: 0.5px solid var(--separator-color);
-  z-index: 10;
-  padding-bottom: calc(12px + var(--safe-area-inset-bottom));
-}
-
-.action-button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 8px;
+.comment-content {
   font-size: 15px;
-  font-weight: 500;
+  line-height: 1.5;
+  color: #333;
+  margin-left: 48px; /* 与头像对齐 */
 }
 
-.share-btn {
-  margin-right: 12px;
-  background-color: rgba(0, 0, 0, 0.04);
-  color: var(--text-secondary);
+.comment-count {
+  font-weight: normal;
+  color: #999;
 }
 
-.primary-btn {
-  background-color: var(--primary-color);
-  color: white;
+.comment-input {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f5f5f5;
 }
 
-.action-icon {
-  width: 18px;
-  height: 18px;
+.empty-comment {
+  padding: 30px 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .ios-header {
-    background-color: rgba(30, 30, 30, 0.85);
-    border-bottom-color: rgba(255, 255, 255, 0.1);
+.text-gray {
+  color: #999;
+}
+
+.dialog-content {
+  padding: 16px;
+}
+
+.dialog-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.report-detail {
+  margin-top: 16px;
+}
+
+.loading {
+  animation: rotating 1s linear infinite;
+}
+
+@keyframes rotating {
+  from {
+    transform: rotate(0);
   }
-  
-  .ios-card {
-    background-color: rgba(50, 50, 50, 0.95);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .comment-input-container {
-    background-color: rgba(255, 255, 255, 0.08);
-  }
-  
-  .replies {
-    background-color: rgba(255, 255, 255, 0.08);
-  }
-  
-  .bottom-actions {
-    background-color: rgba(50, 50, 50, 0.95);
-    border-top-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .share-btn {
-    background-color: rgba(255, 255, 255, 0.1);
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

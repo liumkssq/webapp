@@ -220,22 +220,21 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch, onUnmounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import HeaderNavigation from '../components/common/HeaderNavigation.vue'
-import Toast from '../components/common/Toast.vue'
+import HeaderNavigation from '../../components/common/HeaderNavigation.vue'
+import Toast from '../../components/common/Toast.vue'
+import { useUserStore } from '../../store/user'
+import { useIMStore } from '../../store/im'
 import { 
-  getConversationDetail, 
-  sendMessage, 
-  markConversationAsRead, 
-  deleteConversation as apiDeleteConversation,
-  uploadChatImage,
-  uploadChatFile
-} from '../api/chat'
-import { useUserStore } from '../store/user'
+  getChatLog, 
+  putConversations,
+  wsActions
+} from '../../api/im'
 
 // 路由和状态
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const imStore = useIMStore()
 const currentUserId = computed(() => userStore.currentUser?.id || 0)
 
 // 组件引用
@@ -251,6 +250,7 @@ const conversation = ref({})
 const messages = ref([])
 const hasMoreMessages = ref(false)
 const loadingMore = ref(false)
+const conversationId = ref('')
 
 // 输入状态
 const messageText = ref('')
@@ -263,25 +263,23 @@ const showImagePreview = ref(false)
 const previewImageUrl = ref('')
 const showDeleteConfirm = ref(false)
 
-// 轮询定时器
-let pollTimer = null
-
 // 获取会话详情
 const fetchConversation = async () => {
   try {
     const userId = route.query.userId
-    if (!userId) {
+    conversationId.value = route.params.id || ''
+    
+    if (!conversationId.value && !userId) {
       router.replace('/chat')
       return
     }
     
-    const res = await getConversationDetail(userId)
-    if (res.data) {
-      conversation.value = res.data
-      messages.value = res.data.messages || []
+    if (conversationId.value) {
+      // 设置活跃会话
+      imStore.setActiveConversation(conversationId.value)
       
-      // 默认滚动到底部
-      scrollToBottom()
+      // 加载聊天记录
+      await fetchChatMessages()
     }
   } catch (error) {
     console.error('获取会话详情失败:', error)
@@ -289,11 +287,56 @@ const fetchConversation = async () => {
   }
 }
 
+// 加载聊天记录
+const fetchChatMessages = async () => {
+  try {
+    if (!conversationId.value) return
+    
+    const res = await getChatLog({
+      conversationId: conversationId.value,
+      count: 50
+    })
+    
+    if (res.code === 200 && res.data?.list) {
+      // 转换消息格式
+      const chatMessages = res.data.list.map(msg => ({
+        id: msg.id,
+        senderId: msg.sendId,
+        receiverId: msg.recvId,
+        content: msg.msgContent,
+        type: msg.msgType === 1 ? 'text' : 'image', // 简化处理，实际应该根据消息类型处理
+        createTime: msg.sendTime,
+        isRead: true // 简化处理，实际应根据已读状态
+      }))
+      
+      messages.value = chatMessages
+      
+      // 标记为已读
+      markAsRead()
+      
+      // 滚动到底部
+      scrollToBottom()
+      
+      // 设置是否有更多消息
+      hasMoreMessages.value = chatMessages.length >= 50
+    }
+  } catch (error) {
+    console.error('获取聊天记录失败:', error)
+    toast.value.show('获取聊天记录失败', 'error')
+  }
+}
+
 // 标记会话为已读
 const markAsRead = async () => {
   try {
-    if (conversation.value.id) {
-      await markConversationAsRead(conversation.value.id)
+    if (conversationId.value) {
+      await putConversations({
+        conversationList: {
+          [conversationId.value]: {
+            read: 1
+          }
+        }
+      })
     }
   } catch (error) {
     console.error('标记已读失败:', error)
@@ -302,15 +345,45 @@ const markAsRead = async () => {
 
 // 加载更多消息
 const loadMoreMessages = async () => {
-  // 在实际应用中，这里应该实现加载历史消息的逻辑
-  // 由于mock数据中已经包含了所有消息，这里模拟一个加载中状态
-  loadingMore.value = true
+  if (loadingMore.value || !hasMoreMessages.value) return
   
-  setTimeout(() => {
+  try {
+    loadingMore.value = true
+    
+    // 获取最早消息的时间作为结束时间
+    const earliestMessage = messages.value[0]
+    const endTime = earliestMessage ? earliestMessage.createTime : Date.now()
+    
+    const res = await getChatLog({
+      conversationId: conversationId.value,
+      endSendTime: endTime,
+      count: 20
+    })
+    
+    if (res.code === 200 && res.data?.list) {
+      // 转换消息格式
+      const chatMessages = res.data.list.map(msg => ({
+        id: msg.id,
+        senderId: msg.sendId,
+        receiverId: msg.recvId,
+        content: msg.msgContent,
+        type: msg.msgType === 1 ? 'text' : 'image',
+        createTime: msg.sendTime,
+        isRead: true
+      }))
+      
+      // 添加到消息列表前面
+      messages.value = [...chatMessages, ...messages.value]
+      
+      // 设置是否有更多消息
+      hasMoreMessages.value = chatMessages.length >= 20
+    }
+  } catch (error) {
+    console.error('加载更多消息失败:', error)
+    toast.value.show('加载更多消息失败', 'error')
+  } finally {
     loadingMore.value = false
-    hasMoreMessages.value = false
-    toast.value.show('没有更多消息了', 'info')
-  }, 1000)
+  }
 }
 
 // 发送文本消息
@@ -319,18 +392,36 @@ const sendTextMessage = async () => {
   if (!text) return
   
   try {
-    const res = await sendMessage(conversation.value.userId, {
+    // 创建消息对象
+    const message = {
+      id: Date.now().toString(), // 临时ID
+      senderId: currentUserId.value,
+      receiverId: conversation.value.userId,
       content: text,
-      type: 'text'
-    })
+      type: 'text',
+      createTime: Date.now(),
+      isRead: false
+    }
     
-    if (res.data) {
-      messages.value.push(res.data)
-      messageText.value = ''
-      showEmojiPicker.value = false
-      
-      // 滚动到底部
-      scrollToBottom()
+    // 先添加到本地，提供即时反馈
+    messages.value.push(message)
+    messageText.value = ''
+    showEmojiPicker.value = false
+    
+    // 滚动到底部
+    scrollToBottom()
+    
+    // 通过WebSocket发送消息
+    const receiverId = conversation.value.userId || route.query.userId
+    const success = imStore.sendChatMessage(
+      conversationId.value,
+      receiverId,
+      { type: 'text', content: text }
+    )
+    
+    if (!success) {
+      // 如果WebSocket发送失败，可以回退或使用HTTP API
+      toast.value.show('发送失败，请检查网络连接', 'error')
     }
   } catch (error) {
     console.error('发送消息失败:', error)
@@ -356,23 +447,33 @@ const handleImageSelected = async (event) => {
     // 显示上传中提示
     toast.value.show('图片上传中...', 'info')
     
-    // 上传图片
-    const res = await uploadChatImage(formData)
+    // TODO: 实现图片上传API
+    // 暂时使用模拟数据
+    const imageUrl = URL.createObjectURL(file)
     
-    if (res.data?.url) {
-      // 发送图片消息
-      const imageRes = await sendMessage(conversation.value.userId, {
-        content: res.data.url,
-        type: 'image'
-      })
-      
-      if (imageRes.data) {
-        messages.value.push(imageRes.data)
-        
-        // 滚动到底部
-        scrollToBottom()
-      }
+    // 发送图片消息
+    const message = {
+      id: Date.now().toString(),
+      senderId: currentUserId.value,
+      receiverId: conversation.value.userId,
+      content: imageUrl,
+      type: 'image',
+      createTime: Date.now(),
+      isRead: false
     }
+    
+    messages.value.push(message)
+    
+    // 滚动到底部
+    scrollToBottom()
+    
+    // 通过WebSocket发送消息
+    const receiverId = conversation.value.userId || route.query.userId
+    imStore.sendChatMessage(
+      conversationId.value,
+      receiverId,
+      { type: 'image', content: imageUrl }
+    )
   } catch (error) {
     console.error('图片上传失败:', error)
     toast.value.show('图片上传失败', 'error')
@@ -473,9 +574,16 @@ const toggleUserInfo = () => {
 // 删除会话
 const deleteConversation = async () => {
   try {
-    if (!conversation.value.id) return
+    if (!conversationId.value) return
     
-    await apiDeleteConversation(conversation.value.id)
+    await putConversations({
+      conversationList: {
+        [conversationId.value]: {
+          isShow: false
+        }
+      }
+    })
+    
     showDeleteConfirm.value = false
     toast.value.show('聊天已删除', 'success')
     
@@ -559,42 +667,28 @@ const scrollToBottom = () => {
   })
 }
 
-// 轮询新消息
-const startPolling = () => {
-  // 每5秒查询一次新消息
-  pollTimer = setInterval(async () => {
-    if (!conversation.value.userId) return
-    
-    try {
-      const res = await getConversationDetail(conversation.value.userId)
-      if (res.data && res.data.messages) {
-        // 检查是否有新消息
-        if (res.data.messages.length > messages.value.length) {
-          // 获取新消息
-          const newMessages = res.data.messages.slice(messages.value.length)
-          
-          // 添加新消息
-          messages.value = [...messages.value, ...newMessages]
-          
-          // 如果新消息不是自己发的，则滚动到底部
-          if (newMessages.some(msg => msg.senderId !== currentUserId.value)) {
-            scrollToBottom()
-          }
-        }
-      }
-    } catch (error) {
-      console.error('获取新消息失败:', error)
-    }
-  }, 5000)
+// 处理接收到的新消息
+const handleNewMessages = (newMessages) => {
+  if (!newMessages || newMessages.length === 0) return
+  
+  // 将新消息添加到列表
+  messages.value = [...messages.value, ...newMessages]
+  
+  // 滚动到底部
+  scrollToBottom()
+  
+  // 标记为已读
+  markAsRead()
 }
 
-// 停止轮询
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+// 监听WebSocket接收到的消息
+watch(() => imStore.connected, (connected) => {
+  if (connected) {
+    console.log('WebSocket已连接')
+  } else {
+    console.log('WebSocket已断开')
   }
-}
+})
 
 // 页面聚焦时标记为已读
 const handleVisibilityChange = () => {
@@ -603,30 +697,19 @@ const handleVisibilityChange = () => {
   }
 }
 
-// 监听消息变化
-watch(messages, () => {
-  // 检查是否有未读消息
-  const hasUnread = messages.value.some(msg => 
-    msg.receiverId === currentUserId.value && !msg.isRead
-  )
-  
-  // 如果有未读消息，标记为已读
-  if (hasUnread) {
-    markAsRead()
-  }
-}, { deep: true })
-
 onMounted(async () => {
   await fetchConversation()
-  markAsRead()
-  startPolling()
+  
+  // 初始化WebSocket
+  if (!imStore.connected && userStore.isLoggedIn) {
+    imStore.initWebSocket(userStore.currentUser.id)
+  }
   
   // 监听页面可见性变化
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onBeforeUnmount(() => {
-  stopPolling()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>

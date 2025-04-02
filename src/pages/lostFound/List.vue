@@ -70,7 +70,8 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, onActivated } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+import { getLostFoundList } from '@/api/lostFound'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
 import LostFoundList from '@/components/LostFoundList.vue'

@@ -69,13 +69,13 @@ class MockWebSocket {
     
     // 创建一个群聊
     const groupChat = {
-      id: `group_${generateId()}`,
+      id: 'group_g1', // 固定群ID
       type: 'group',
-      targetId: generateId(),
-      targetName: '项目交流群',
+      targetId: 'g1',
+      targetName: '校园交流群',
       targetAvatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "群")'),
       unreadCount: Mock.mock('@integer(0, 10)'),
-      memberCount: Mock.mock('@integer(5, 20)'),
+      memberCount: Mock.mock('@integer(15, 50)'),
       lastMessage: {
         id: generateId(),
         type: 'text',
@@ -549,6 +549,137 @@ if (mockAdapter) {
       }
     }]
   })
+
+  // 添加群聊列表Mock接口
+  mockAdapter.onGet('/v1/im/groups').reply(() => {
+    const groups = Array(5).fill().map((_, i) => ({
+      id: `g${i + 1}`,
+      name: Mock.mock(`@ctitle(3, 8)群`),
+      avatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "群")'),
+      memberCount: Mock.mock('@integer(3, 30)'),
+      notice: Mock.mock('@cparagraph(1, 3)')
+    }));
+    
+    // 添加一个固定的群聊
+    groups.unshift({
+      id: 'g1',
+      name: '校园交流群',
+      avatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "群")'),
+      memberCount: 42,
+      notice: '欢迎大家加入校园交流群，请遵守群规！'
+    });
+    
+    return [200, {
+      code: 200,
+      message: 'success',
+      data: {
+        list: groups,
+        total: groups.length
+      }
+    }];
+  });
+
+  // 添加好友列表Mock接口
+  mockAdapter.onGet('/v1/im/friend/list').reply(() => {
+    const friends = Array(10).fill().map((_, i) => ({
+      id: 10 + i,
+      name: Mock.mock('@cname'),
+      avatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")'),
+      online: Mock.mock('@boolean(6, 4)'),
+      remark: null
+    }));
+    
+    return [200, {
+      code: 200,
+      message: 'success',
+      data: friends
+    }];
+  });
+
+  // 添加创建群聊Mock接口
+  mockAdapter.onPost('/v1/im/groups').reply((config) => {
+    const requestData = JSON.parse(config.data);
+    
+    return [200, {
+      code: 200,
+      message: 'success',
+      data: {
+        groupId: 'g' + Mock.mock('@integer(100, 999)'),
+        groupName: requestData.name || '新建群聊'
+      }
+    }];
+  });
+
+  // 添加好友申请列表Mock接口
+  mockAdapter.onGet('/v1/im/friend/requests').reply(() => {
+    const requests = Array(Mock.Random.integer(0, 5)).fill().map((_, i) => ({
+      id: Mock.mock('@integer(1000, 9999)'),
+      userId: Mock.mock('@integer(100, 999)'),
+      userName: Mock.mock('@cname'),
+      userAvatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")'),
+      message: Mock.mock('@csentence(5, 20)'),
+      status: Mock.mock('@pick(["pending", "accepted", "rejected"])'),
+      createdAt: Mock.mock('@datetime("yyyy-MM-dd HH:mm:ss")')
+    }));
+    
+    return [200, {
+      code: 200,
+      message: 'success',
+      data: requests
+    }];
+  });
+
+  // 添加会话详情Mock接口
+  mockAdapter.onGet(new RegExp('/v1/im/conversations/.*')).reply((config) => {
+    // 从URL获取会话ID
+    const conversationId = config.url.split('/').pop();
+    
+    // 判断会话类型
+    const isGroup = conversationId.startsWith('group_');
+    const targetId = conversationId.split('_').pop();
+    
+    if (isGroup) {
+      // 群聊会话
+      const groupConversation = {
+        id: conversationId,
+        type: 'group',
+        targetId,
+        targetName: targetId === 'g1' ? '校园交流群' : `群聊${targetId}`,
+        targetAvatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "群")'),
+        memberCount: Mock.mock('@integer(3, 50)'),
+        createTime: Mock.mock('@datetime("yyyy-MM-dd HH:mm:ss")'),
+        notice: Mock.mock('@cparagraph(1, 2)'),
+        members: Array(10).fill().map((_, i) => ({
+          id: Mock.mock('@integer(1000, 9999)'),
+          name: Mock.mock('@cname'),
+          avatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")')
+        }))
+      };
+      
+      return [200, {
+        code: 200,
+        message: 'success',
+        data: groupConversation
+      }];
+    } else {
+      // 私聊会话
+      const privateConversation = {
+        id: conversationId,
+        type: 'private',
+        targetId,
+        targetName: Mock.mock('@cname'),
+        targetAvatar: Mock.mock('@image("100x100", "#4A7BF7", "#FFF", "头像")'),
+        lastActive: new Date(Date.now() - Mock.mock('@integer(0, 36000000)')).toISOString(),
+        createTime: Mock.mock('@datetime("yyyy-MM-dd HH:mm:ss")')
+      };
+      
+      return [200, {
+        code: 200,
+        message: 'success',
+        data: privateConversation
+      }];
+    }
+  });
 }
 
 // 重写浏览器WebSocket类，拦截WebSocket请求

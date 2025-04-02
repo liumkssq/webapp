@@ -12,146 +12,11 @@ import request from '@/utils/request'
  * @returns {Promise} Promise对象
  */
 export function getLostFoundList(params) {
-  console.log('调用getLostFoundList API，参数:', params);
-  
-  // 使用相对路径，让Vite代理生效
-  const apiUrl = `/api/lost-found/list`;
-  console.log('请求API:', apiUrl);
-  
   return request({
-    url: apiUrl,
+    url: '/api/lost-found/list',
     method: 'get',
     params
   })
-  .then(response => {
-    console.log('getLostFoundList API原始响应:', response);
-    
-    // 处理不同格式的响应
-    let processedResponse = response;
-    
-    // 如果是直接返回了数组
-    if (Array.isArray(response)) {
-      console.log('API直接返回了数组，包装为标准格式');
-      processedResponse = {
-        code: 200,
-        message: 'success',
-        data: {
-          list: response,
-          total: response.length
-        }
-      };
-    } 
-    // 如果response是对象但没有code，可能是直接返回了data对象
-    else if (response && !response.code && (response.list || Array.isArray(response))) {
-      console.log('API返回了data对象，包装为标准格式');
-      processedResponse = {
-        code: 200,
-        message: 'success',
-        data: Array.isArray(response) ? { list: response, total: response.length } : response
-      };
-    }
-    
-    // 确保有效的响应格式
-    if (processedResponse.code === 200 && processedResponse.data) {
-      // 确保data.list存在且是数组
-      if (!processedResponse.data.list && Array.isArray(processedResponse.data)) {
-        processedResponse.data = {
-          list: processedResponse.data,
-          total: processedResponse.data.length
-        };
-      }
-      
-      // 处理列表项
-      if (processedResponse.data.list && Array.isArray(processedResponse.data.list)) {
-        processedResponse.data.list = processedResponse.data.list.map(item => {
-          // 创建一个新对象，避免直接修改原对象
-          const processedItem = { ...item };
-          
-          // 处理特殊字符 \u0000
-          if (processedItem.type === '\u0000') {
-            processedItem.type = 'found'; // 默认为招领启事
-          }
-          
-          if (processedItem.status === '\u0000') {
-            processedItem.status = 'open'; // 默认为进行中
-          }
-          
-          // 处理图片字段
-          if (processedItem.images) {
-            // 如果images是字符串，尝试解析JSON
-            if (typeof processedItem.images === 'string') {
-              try {
-                if (processedItem.images.startsWith('[')) {
-                  processedItem.images = JSON.parse(processedItem.images);
-                } else {
-                  processedItem.images = [processedItem.images];
-                }
-              } catch (e) {
-                console.error('解析失物招领图片JSON失败:', e);
-                processedItem.images = [processedItem.images];
-              }
-            }
-            
-            // 如果是数组的第一项是JSON字符串
-            if (Array.isArray(processedItem.images) && processedItem.images.length > 0) {
-              const firstImage = processedItem.images[0];
-              if (typeof firstImage === 'string' && firstImage.includes('[')) {
-                try {
-                  const parsed = JSON.parse(firstImage);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    processedItem.images = parsed;
-                  }
-                } catch (e) {
-                  console.error('解析嵌套JSON失败:', e);
-                }
-              }
-            }
-            
-            // 设置imageUrl
-            if (Array.isArray(processedItem.images) && processedItem.images.length > 0) {
-              processedItem.imageUrl = processedItem.images[0];
-            }
-          }
-          
-          // 确保类型字段存在
-          if (!processedItem.type) {
-            processedItem.type = 'found'; // 默认为招领启事
-          }
-          
-          // 确保状态字段存在
-          if (!processedItem.status) {
-            processedItem.status = 'open'; // 默认为进行中
-          }
-          
-          // 确保发布者信息存在
-          if (!processedItem.publisher && processedItem.publisherName) {
-            processedItem.publisher = {
-              id: processedItem.publisherId || 0,
-              nickname: processedItem.publisherName,
-              avatar: processedItem.publisherAvatar || ''
-            };
-          }
-          
-          return processedItem;
-        });
-      }
-    }
-    
-    console.log('getLostFoundList API处理后的响应:', processedResponse);
-    return processedResponse;
-  })
-  .catch(error => {
-    console.error('获取失物招领列表失败:', error);
-    // 返回一个友好的错误响应
-    return {
-      code: 500,
-      message: error.message || '获取失物招领列表失败',
-      data: {
-        list: [],
-        total: 0
-      }
-    };
-  });
 }
 
 /**
@@ -160,10 +25,62 @@ export function getLostFoundList(params) {
  * @returns {Promise} Promise对象
  */
 export function getLostFoundDetail(id) {
+  console.log('调用获取失物招领详情API, id:', id);
+  
   return request({
     url: `/api/lost-found/detail/${id}`,
     method: 'get'
-  })
+  }).then(response => {
+    console.log('失物招领详情API响应:', response);
+    
+    // 确保响应有效
+    if (!response) {
+      console.error('API响应为空');
+      return { code: 500, msg: '获取详情失败', data: null };
+    }
+    
+    // 标准化响应格式
+    let result;
+    
+    // 处理不同的响应格式
+    if (response.code !== undefined) {
+      // 已经是标准格式
+      result = response;
+    } else if (typeof response === 'object') {
+      // 直接返回的数据对象
+      result = { code: 200, msg: 'success', data: response };
+    } else {
+      // 无法识别的格式
+      console.error('无法识别的API响应格式:', response);
+      result = { code: 500, msg: '数据格式错误', data: null };
+    }
+    
+    // 确保data字段存在
+    if (result.code === 200 && !result.data) {
+      result.data = {};
+    }
+    
+    // 处理图片数据
+    if (result.code === 200 && result.data) {
+      // 确保images是数组
+      if (!result.data.images) {
+        result.data.images = [];
+      } else if (typeof result.data.images === 'string') {
+        try {
+          result.data.images = JSON.parse(result.data.images);
+        } catch (e) {
+          result.data.images = [result.data.images];
+        }
+      }
+      
+      // 确保图片是数组格式
+      if (!Array.isArray(result.data.images)) {
+        result.data.images = [result.data.images];
+      }
+    }
+    
+    return result;
+  });
 }
 
 /**
@@ -192,7 +109,7 @@ export function getUserLostFound(params) {
  */
 export function publishLostFound(data) {
   return request({
-    url: '/api/lost-found',
+    url: '/api/lost-found/publish',
     method: 'post',
     data
   })
@@ -254,6 +171,18 @@ export function commentLostFound(id, data) {
 }
 
 /**
+ * 获取失物招领评论列表
+ * @param {number} id 失物招领ID
+ * @returns {Promise} Promise对象
+ */
+export function getLostFoundComments(id) {
+  return request({
+    url: `/api/lost-found/${id}/comments`,
+    method: 'get'
+  })
+}
+
+/**
  * 上传失物招领图片
  * @param {FormData} data 包含图片文件的FormData
  * @returns {Promise} Promise对象
@@ -290,5 +219,42 @@ export function unlikeLostFound(id) {
   return request({
     url: `/api/lost-found/${id}/unlike`,
     method: 'post'
+  })
+}
+
+/**
+ * 收藏失物招领
+ * @param {number} id 失物招领ID
+ * @returns {Promise} Promise对象
+ */
+export function favoriteLostFound(id) {
+  return request({
+    url: `/api/lost-found/${id}/favorite`,
+    method: 'post'
+  })
+}
+
+/**
+ * 取消收藏失物招领
+ * @param {number} id 失物招领ID
+ * @returns {Promise} Promise对象
+ */
+export function unfavoriteLostFound(id) {
+  return request({
+    url: `/api/lost-found/${id}/favorite`,
+    method: 'delete'
+  })
+}
+
+/**
+ * 举报失物招领内容
+ * @param {Object} data 举报数据
+ * @returns {Promise} Promise对象
+ */
+export function reportLostFound(data) {
+  return request({
+    url: '/v1/report',
+    method: 'post',
+    data
   })
 }

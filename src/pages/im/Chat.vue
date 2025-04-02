@@ -271,12 +271,13 @@ const shouldShowTime = (currentMsg, prevMsg) => {
 // 滚动到底部
 const scrollToBottom = (smooth = false) => {
   nextTick(() => {
-    if (messageListEl.value) {
-      messageListEl.value.scrollTo({
-        top: messageListEl.value.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto'
-      })
-    }
+    if (!messageListEl.value) return
+    
+    const scrollOptions = smooth ? { behavior: 'smooth' } : undefined
+    messageListEl.value.scrollTo({
+      top: messageListEl.value.scrollHeight,
+      ...scrollOptions
+    })
   })
 }
 
@@ -334,6 +335,217 @@ const loadMoreMessages = async () => {
   }
 }
 
+// 加载会话数据
+const loadConversation = async () => {
+  loading.value.conversation = true
+  try {
+    console.log(`正在加载会话数据，ID: ${conversationId.value}, 类型: ${props.conversationType}, 目标ID: ${props.targetId}`)
+    
+    // 如果是群聊并且ID是g1，使用mock数据
+    if (props.conversationType === 'group' && props.targetId === 'g1') {
+      console.log('使用mock群聊数据')
+      // 使用模拟数据
+      conversation.value = {
+        id: conversationId.value,
+        type: 'group',
+        targetId: props.targetId,
+        targetName: route.query.name || '校园交流群',
+        unreadCount: 0,
+        memberCount: 42,
+        members: Array(10).fill().map((_, i) => ({
+          id: 1000 + i,
+          name: `用户${1000 + i}`,
+          avatar: ''
+        }))
+      }
+      
+      // 加载消息
+      loadMessages(true)
+    } else {
+      // 正常API请求
+      const res = await getConversationDetail({ 
+        conversationId: conversationId.value 
+      })
+      
+      if (res.code === 200) {
+        conversation.value = res.data
+        
+        // 如果是私聊，加载对方资料
+        if (props.conversationType === 'private') {
+          loadUserDetail()
+        }
+        
+        // 加载消息
+        loadMessages(true)
+        
+        // 标记为已读
+        markRead()
+      } else {
+        console.error('获取会话详情失败:', res.message)
+      }
+    }
+  } catch (error) {
+    console.error('加载会话数据出错:', error)
+  } finally {
+    loading.value.conversation = false
+  }
+}
+
+// 加载消息历史
+const loadMessages = async (initial = false) => {
+  if (initial) {
+    loading.value.messages = true
+  } else if (loading.value.more) {
+    return
+  } else {
+    loading.value.more = true
+  }
+  
+  try {
+    // 模拟群聊数据
+    if (props.conversationType === 'group' && props.targetId === 'g1') {
+      console.log('加载mock群聊消息')
+      await simulateMockMessagesLoading(initial)
+      return
+    }
+    
+    // 确定起始时间
+    let startTime = null
+    if (!initial && messages.value.length > 0) {
+      startTime = messages.value[0].timestamp
+    }
+    
+    const res = await getMessageHistory({
+      conversationId: conversationId.value,
+      count: 20,
+      startSendTime: startTime
+    })
+    
+    if (res.code === 200) {
+      const newMessages = res.data.map(formatMessage)
+      
+      if (initial) {
+        messages.value = newMessages
+      } else {
+        messages.value = [...newMessages, ...messages.value]
+      }
+      
+      // 如果返回的消息数量少于请求数量，说明没有更多了
+      hasMoreMessages.value = newMessages.length >= 20
+    } else {
+      console.error('获取消息历史失败:', res.message)
+    }
+  } catch (error) {
+    console.error('加载消息历史出错:', error)
+  } finally {
+    if (initial) {
+      loading.value.messages = false
+    } else {
+      loading.value.more = false
+    }
+    
+    // 如果是初始加载，滚动到底部
+    if (initial) {
+      scrollToBottom()
+    }
+  }
+}
+
+// 模拟加载群聊消息
+const simulateMockMessagesLoading = async (initial) => {
+  // 模拟延迟
+  await new Promise(resolve => setTimeout(resolve, 800))
+  
+  // 生成随机模拟消息
+  const mockMessages = []
+  const messageCount = initial ? 20 : 10
+  const users = [
+    { id: 1001, name: '李明', avatar: '' },
+    { id: 1002, name: '张华', avatar: '' },
+    { id: 1003, name: '王芳', avatar: '' },
+    { id: 1004, name: '赵强', avatar: '' },
+    { id: 1005, name: '刘洋', avatar: '' },
+    { id: userStore.userInfo.id, name: userStore.userInfo.nickname || '我', avatar: userStore.userInfo.avatar }
+  ]
+  
+  const messageTypes = ['text', 'text', 'text', 'text', 'text', 'image']
+  const now = new Date()
+  
+  for (let i = 0; i < messageCount; i++) {
+    const userIndex = Math.floor(Math.random() * users.length)
+    const user = users[userIndex]
+    const isSelf = user.id === userStore.userInfo.id
+    
+    // 随机选择消息类型
+    const type = messageTypes[Math.floor(Math.random() * messageTypes.length)]
+    
+    // 随机生成消息内容
+    let content = ''
+    if (type === 'text') {
+      const texts = [
+        '大家有谁知道图书馆今天开门吗？',
+        '明天的活动取消了吗？',
+        '有人要一起去上课吗？',
+        '谁有数学作业的答案啊？',
+        '下课后我们去踢球吧！',
+        '食堂今天的菜真不错',
+        '谁有这本书的电子版？',
+        '考试推迟到下周了',
+        '我找到了一个不错的学习资料',
+        '今天的课真是太难了'
+      ]
+      content = texts[Math.floor(Math.random() * texts.length)]
+    } else if (type === 'image') {
+      const imageUrls = [
+        'https://picsum.photos/300/200',
+        'https://picsum.photos/300/300',
+        'https://picsum.photos/400/300'
+      ]
+      content = imageUrls[Math.floor(Math.random() * imageUrls.length)]
+    }
+    
+    // 创建消息对象
+    const message = {
+      id: `mock_${Date.now()}_${i}`,
+      conversationId: conversationId.value,
+      type,
+      content,
+      senderId: user.id,
+      senderName: user.name,
+      senderAvatar: user.avatar,
+      timestamp: new Date(now - (initial ? (messageCount - i) * 300000 : (60000000 + i * 300000))).toISOString(),
+      status: 'sent',
+      isRead: true,
+      isRevoked: false,
+      isSelf
+    }
+    
+    mockMessages.push(message)
+  }
+  
+  // 更新消息列表
+  if (initial) {
+    messages.value = mockMessages
+  } else {
+    messages.value = [...mockMessages, ...messages.value]
+  }
+  
+  // 如果是初始加载，则滚动到底部
+  if (initial) {
+    hasMoreMessages.value = true
+    scrollToBottom()
+  } else {
+    // 假设只有50条历史消息
+    hasMoreMessages.value = messages.value.length < 50
+  }
+  
+  if (initial) {
+    loading.value.messages = false
+  } else {
+    loading.value.more = false
+  }
+}
+
 // 获取会话详情
 const fetchConversation = async () => {
   loading.value.conversation = true
@@ -377,24 +589,6 @@ const fetchTargetUser = async (userId) => {
     }
   } catch (error) {
     console.error('获取用户信息失败', error)
-  }
-}
-
-// 获取消息历史
-const fetchMessages = async () => {
-  loading.value.messages = true
-  
-  try {
-    const result = await imStore.loadMessages(conversationId.value, { page: 1, limit: 20 })
-    messages.value = result.messages || []
-    hasMoreMessages.value = result.hasMore
-    
-    // 滚动到底部
-    scrollToBottom(true)
-  } catch (error) {
-    console.error('获取消息历史失败', error)
-  } finally {
-    loading.value.messages = false
   }
 }
 
@@ -517,31 +711,78 @@ const clearChatHistory = async () => {
   }
 }
 
-// 消息发送事件
-const onMessageSent = async (text) => {
-  if (!text || !conversation.value) return
+// 发送消息
+const onMessageSent = async (content, type = 'text') => {
+  if (!content || !conversation.value) return
+  
+  // 创建消息对象
+  const message = {
+    id: `local_${Date.now()}`,
+    conversationId: conversationId.value,
+    type,
+    content,
+    senderId: userStore.userInfo.id,
+    senderName: userStore.userInfo.nickname || userStore.userInfo.username,
+    senderAvatar: userStore.userInfo.avatar,
+    timestamp: new Date().toISOString(),
+    status: 'sending',
+    isSelf: true
+  }
+  
+  // 添加到消息列表
+  messages.value.push(message)
+  
+  // 滚动到底部
+  scrollToBottom()
+  
+  // 如果是模拟群聊，直接更新状态
+  if (props.conversationType === 'group' && props.targetId === 'g1') {
+    // 延迟模拟发送过程
+    setTimeout(() => {
+      // 更新消息状态为已发送
+      const msgIndex = messages.value.findIndex(m => m.id === message.id)
+      if (msgIndex > -1) {
+        messages.value[msgIndex].status = 'sent'
+      }
+    }, 500)
+    return
+  }
   
   try {
     loading.value.sending = true
     
-    // 通过imStore发送消息
-    const currentUserId = userStore.userId
-    const message = await imStore.sendMessageToConversation({
-      conversationId: conversationId.value,
-      type: 'text',
-      content: text,
-      senderId: currentUserId,
-      senderName: userStore.userInfo?.nickname || userStore.userInfo?.username || '我',
-      senderAvatar: userStore.userInfo?.avatar,
-      timestamp: new Date().toISOString()
-    })
+    // 根据消息类型发送
+    let result
+    if (type === 'text') {
+      result = await sendTextMessage({
+        conversationId: conversationId.value,
+        receiverId: props.targetId,
+        content
+      })
+    } else if (type === 'image') {
+      result = await sendImageMessage({
+        conversationId: conversationId.value,
+        receiverId: props.targetId,
+        imageUrl: content
+      })
+    }
     
-    if (message) {
-      // 消息已通过store添加到列表
-      scrollToBottom(true)
+    if (result && result.code === 200) {
+      // 更新消息状态
+      const msgIndex = messages.value.findIndex(m => m.id === message.id)
+      if (msgIndex > -1) {
+        messages.value[msgIndex] = {
+          ...messages.value[msgIndex],
+          id: result.data.messageId || messages.value[msgIndex].id,
+          status: 'sent'
+        }
+      }
+    } else {
+      handleMessageError(message.id)
     }
   } catch (error) {
-    console.error('发送消息失败', error)
+    console.error('发送消息失败:', error)
+    handleMessageError(message.id)
   } finally {
     loading.value.sending = false
   }
@@ -794,17 +1035,18 @@ watch(() => imStore.messageCache[conversationId.value], (newMessages) => {
   }
 }, { deep: true })
 
-// 组件挂载
-onMounted(() => {
-  // 初始化聊天
-  initChat()
+// 生命周期钩子
+onMounted(async () => {
+  console.log('Chat组件已挂载', props)
+  // 加载会话数据
+  await loadConversation()
   
-  // 注册WebSocket事件
-  registerWebSocketEvents()
+  // 注册WebSocket消息监听
+  setupMessageListeners()
   
-  // 初始化IMStore状态
-  if (!imStore.isWebSocketConnected) {
-    imStore.initWebSocket()
+  // 添加滚动事件监听器
+  if (messageListEl.value) {
+    messageListEl.value.addEventListener('scroll', handleScroll)
   }
 })
 
@@ -819,6 +1061,84 @@ onBeforeUnmount(() => {
   // 重置当前会话
   imStore.setCurrentConversation(null)
 })
+
+// 设置消息监听器
+const setupMessageListeners = () => {
+  console.log('设置WebSocket消息监听')
+  
+  // 在真实环境中应该监听WebSocket消息
+  // 这里仅为mock环境添加一个模拟的新消息接收功能
+  if (props.conversationType === 'group' && props.targetId === 'g1') {
+    // 每30秒可能收到一条新消息
+    const timer = setInterval(() => {
+      if (Math.random() > 0.7) { // 30%的概率
+        console.log('模拟接收新消息')
+        const users = [
+          { id: 1001, name: '李明', avatar: '' },
+          { id: 1002, name: '张华', avatar: '' },
+          { id: 1003, name: '王芳', avatar: '' },
+          { id: 1004, name: '赵强', avatar: '' }
+        ]
+        
+        const randomUser = users[Math.floor(Math.random() * users.length)]
+        const texts = [
+          '刚刚在图书馆看到你了',
+          '谁有明天的课表?',
+          '食堂排队的好长啊',
+          '今晚有人一起去自习吗?',
+          '明天是不是要交作业啊?'
+        ]
+        
+        const newMessage = {
+          id: `mock_${Date.now()}`,
+          conversationId: conversationId.value,
+          type: 'text',
+          content: texts[Math.floor(Math.random() * texts.length)],
+          senderId: randomUser.id,
+          senderName: randomUser.name,
+          senderAvatar: randomUser.avatar,
+          timestamp: new Date().toISOString(),
+          status: 'sent',
+          isRead: true,
+          isRevoked: false,
+          isSelf: false
+        }
+        
+        // 添加新消息
+        messages.value.push(newMessage)
+        
+        // 滚动到底部
+        nextTick(() => {
+          scrollToBottom()
+        })
+      }
+    }, 30000)
+    
+    // 组件卸载时清除定时器
+    onBeforeUnmount(() => {
+      clearInterval(timer)
+    })
+  }
+}
+
+// 格式化消息对象
+const formatMessage = (msg) => {
+  return {
+    ...msg,
+    isSelf: isMessageFromSelf(msg, userStore.userInfo.id)
+  }
+}
+
+// 处理消息错误
+const handleMessageError = (messageId) => {
+  const msgIndex = messages.value.findIndex(m => m.id === messageId)
+  if (msgIndex > -1) {
+    messages.value[msgIndex] = {
+      ...messages.value[msgIndex],
+      status: 'failed'
+    }
+  }
+}
 </script>
 
 <style scoped>

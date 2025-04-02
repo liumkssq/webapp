@@ -44,6 +44,11 @@ export default defineConfig({
         changeOrigin: true,
         // rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // // IM服务代理
+      // '/v1': {
+      //   target: 'http://localhost:8998',
+      //   changeOrigin: true,
+      // },
     },
   },
   build: {

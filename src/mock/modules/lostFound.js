@@ -556,8 +556,8 @@ Mock.mock(/\/api\/lost-found\/list/, 'get', (options) => {
 })
 
 // 获取详情
-Mock.mock(/\/api\/lost-found\/detail\/\d+/, 'get', (options) => {
-  const id = options.url.match(/\/detail\/(\d+)/)[1]
+Mock.mock(/\/api\/lost-found\/detail\/(\d+)/, 'get', (options) => {
+  const id = options.url.match(/\/lost-found\/detail\/(\d+)/)[1]
   const item = mockLostFound.list.find(item => item.id === parseInt(id))
   
   if (!item) {
@@ -760,109 +760,20 @@ Mock.mock(/\/api\/lost-found\/\d+\/unlike/, 'post', (options) => {
 
 // 失物招领模块
 const lostFoundMock = {
-  // 获取失物招领列表
-  'GET /api/lost-found/list': config => {
-    const { page = 1, limit = 10, type, status, sort, keywords } = getUrlParams(config.url)
-    
-    // 生成列表数据
-    const items = generateLostFoundItems(30) // 生成30条数据
-    
-    // 根据type过滤
-    let filteredItems = items
-    if (type && type !== 'all') {
-      filteredItems = items.filter(item => item.type === type)
-    }
-    
-    // 根据status过滤
-    if (status && status !== 'all') {
-      filteredItems = filteredItems.filter(item => item.status === status)
-    }
-    
-    // 根据关键词搜索
-    if (keywords) {
-      const keyword = keywords.toLowerCase()
-      filteredItems = filteredItems.filter(
-        item =>
-          item.title.toLowerCase().includes(keyword) ||
-          item.description.toLowerCase().includes(keyword) ||
-          item.location.toLowerCase().includes(keyword)
-      )
-    }
-    
-    // 排序
-    if (sort === 'latest') {
-      filteredItems.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-    } else if (sort === 'hot') {
-      filteredItems.sort((a, b) => b.viewCount - a.viewCount)
-    }
-    
-    // 分页
-    const pageData = generateListPageData(filteredItems, Number(page), Number(limit))
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: pageData
-    }
-  },
-  
-  // 获取失物招领详情
-  'GET /api/lost-found/detail/:id': config => {
-    const { id } = config.params
-    const items = generateLostFoundItems(30)
-    const item = items.find(item => item.id === Number(id))
-    
-    if (!item) {
-      return {
-        code: 404,
-        message: '未找到该失物招领信息',
-        data: null
-      }
-    }
-    
-    // 添加评论数据
-    item.comments = Array(Math.floor(Math.random() * 5))
-      .fill()
-      .map((_, i) => ({
-        id: i + 1,
-        content: `这是第${i + 1}条评论`,
-        createTime: new Date(Date.now() - Math.floor(Math.random() * 24 * 60 * 60 * 1000)).toISOString(),
-        user: {
-          id: i + 2,
-          nickname: `用户${i + 2}`,
-          avatar: `https://picsum.photos/id/${i + 101}/100/100`
-        }
-      }))
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: item
-    }
-  },
-  
-  // 获取用户发布的失物招领列表
-  'GET /api/lost-found/user/:id': config => {
-    // 确保config.params存在
-    const id = config?.params?.id || config.url.match(/\/user\/(\d+)/)?.[1]
-    // 安全地从URL中提取参数，提供默认值
-    const { page = 1, limit = 10 } = config.params || getUrlParams(config.url) || {}
-    
-    // 生成列表数据
-    const items = generateLostFoundItems(15).map(item => {
-      item.publisher.id = Number(id)
-      return item
-    })
-    
-    // 分页
-    const pageData = generateListPageData(items, Number(page), Number(limit))
-    
-    return {
-      code: 200,
-      message: '获取成功',
-      data: pageData
-    }
-  }
+  'GET /api/lost-found/list': getLostFoundList,
+  'GET /api/lost-found/detail/:id': getLostFoundDetail,
+  'POST /api/lost-found/publish': publishLostFound,
+  'PUT /api/lost-found/:id': updateLostFound,
+  'DELETE /api/lost-found/:id': deleteLostFound,
+  'PUT /api/lost-found/:id/status': updateLostFoundStatus,
+  'POST /api/lost-found/:id/comment': commentLostFound,
+  'GET /api/lost-found/:id/comments': getLostFoundComments,
+  'POST /api/lost-found/images': uploadLostFoundImages,
+  'POST /api/lost-found/:id/like': likeLostFound,
+  'POST /api/lost-found/:id/unlike': unlikeLostFound,
+  'POST /api/lost-found/:id/favorite': favoriteLostFound,
+  'DELETE /api/lost-found/:id/favorite': unfavoriteLostFound,
+  'POST /api/lost-found/:id/report': reportLostFound
 }
 
 export default lostFoundMock

@@ -1,602 +1,319 @@
-/**
- * IM聊天相关的状态管理
- */
+// IM Store - 管理WebSocket连接和消息状态
 import { defineStore } from 'pinia'
-import { ref, computed, reactive } from 'vue'
-import { WebSocketClient } from '@/utils/websocket'
-import { 
-  getConversationList, 
-  getMessageHistory, 
-  sendTextMessage, 
-  sendImageMessage, 
-  sendFileMessage,
-  markAsRead, 
-  getUnreadCount,
-  initWebSocketConnection,
-  closeWebSocketConnection,
-  addWebSocketListener,
-  removeWebSocketListener
-} from '@/api/im'
-import { useUserStore } from './user'
+import { ref, computed } from 'vue'
+import { getWebSocketUrl, wsActions } from '@/api/im'
 
 /**
- * 聊天对话状态管理
+ * IM Store - 管理WebSocket连接和消息状态
  */
 export const useIMStore = defineStore('im', () => {
-  // WebSocket客户端实例
-  const wsClient = ref(null)
-  const isWebSocketConnected = ref(false)
-  const reconnecting = ref(false)
+  // WebSocket连接
+  const ws = ref(null)
+  const connected = ref(false)
+  const connecting = ref(false)
+  const reconnectCount = ref(0)
+  const maxReconnectAttempts = 5
+  const userId = ref(null)
   
-  // 存储聊天数据
+  // 消息队列 - 当WebSocket未连接时缓存消息
+  const messageQueue = ref([])
+  
+  // 当前会话
+  const activeConversationId = ref(null)
+  
+  // 会话列表
   const conversations = ref([])
-  const messageCache = reactive({}) // 格式: { conversationId: [messages] }
-  const hasMoreMessages = reactive({}) // 格式: { conversationId: boolean }
-  const unreadCounts = reactive({}) // 格式: { conversationId: number }
-  const currentConversation = ref(null)
   
-  // 在线用户缓存
-  const onlineUsers = ref(new Set())
-  
-  // 事件监听器
-  const eventListeners = reactive({
-    new_message: [],
-    typing: [],
-    message_recall: [],
-    user_online: [],
-    user_offline: [],
-    group_created: [],
-    group_updated: [],
-    group_member_joined: [],
-    group_member_left: [],
-  })
-  
-  // 用户store
-  const userStore = useUserStore()
-  
-  // 计算属性
-  const totalUnreadCount = computed(() => {
-    return Object.values(unreadCounts).reduce((total, count) => total + count, 0)
-  })
-  
-  const sortedConversations = computed(() => {
-    return [...conversations.value].sort((a, b) => {
-      // 置顶的排在前面
-      if (a.isSticky && !b.isSticky) return -1
-      if (!a.isSticky && b.isSticky) return 1
-      
-      // 按照最后消息时间排序
-      const aTime = a.lastMessage?.timestamp ? new Date(a.lastMessage.timestamp).getTime() : 0
-      const bTime = b.lastMessage?.timestamp ? new Date(b.lastMessage.timestamp).getTime() : 0
-      return bTime - aTime
-    })
-  })
-  
-  const isUserOnline = (userId) => {
-    return onlineUsers.value.has(String(userId))
-  }
-  
-  // WebSocket连接初始化
-  const initWebSocket = async () => {
-    if (wsClient.value && isWebSocketConnected.value) {
-      console.log('WebSocket已连接')
-      return
-    }
+  // 创建WebSocket连接
+  const initWebSocket = (currentUserId) => {
+    // 如果已经连接或正在连接，返回
+    if (connected.value || connecting.value) return
     
     try {
-      // 获取用户信息
-      const token = userStore.token
-      const userId = userStore.userId
+      // 设置用户ID
+      userId.value = currentUserId
+      connecting.value = true
       
-      if (!token || !userId) {
-        console.error('无法初始化WebSocket: 未登录')
-        return
-      }
+      // 创建WebSocket连接
+      const wsUrl = getWebSocketUrl(currentUserId)
+      ws.value = new WebSocket(wsUrl)
       
-      // 创建WebSocket客户端
-      wsClient.value = new WebSocketClient({
-        url: import.meta.env.VITE_WS_URL || `${window.location.origin.replace('http', 'ws')}/api/ws`,
-        params: { token, userId },
-        onOpen: handleSocketOpen,
-        onClose: handleSocketClose,
-        onError: handleSocketError,
-        onMessage: handleSocketMessage,
-        debug: process.env.NODE_ENV === 'development'
-      })
-      
-      // 连接WebSocket
-      await wsClient.value.connect()
-      
-      // 加载会话列表
-      await loadConversations()
-    } catch (error) {
-      console.error('初始化WebSocket失败', error)
-      reconnectWebSocket()
-    }
-  }
-  
-  // 重新连接WebSocket
-  const reconnectWebSocket = async () => {
-    if (reconnecting.value) return
-    
-    reconnecting.value = true
-    
-    try {
-      await wsClient.value?.disconnect()
-      wsClient.value = null
-      isWebSocketConnected.value = false
-      
-      // 延迟重连
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      await initWebSocket()
-    } catch (error) {
-      console.error('重连WebSocket失败', error)
-    } finally {
-      reconnecting.value = false
-    }
-  }
-  
-  // WebSocket事件处理
-  const handleSocketOpen = () => {
-    console.log('WebSocket连接成功')
-    isWebSocketConnected.value = true
-  }
-  
-  const handleSocketClose = () => {
-    console.log('WebSocket连接关闭')
-    isWebSocketConnected.value = false
-    
-    // 尝试重连
-    reconnectWebSocket()
-  }
-  
-  const handleSocketError = (error) => {
-    console.error('WebSocket错误', error)
-    isWebSocketConnected.value = false
-    
-    // 尝试重连
-    reconnectWebSocket()
-  }
-  
-  const handleSocketMessage = (message) => {
-    try {
-      const data = JSON.parse(message)
-      const { type, payload } = data
-      
-      console.log('收到WebSocket消息', { type, payload })
-      
-      switch (type) {
-        case 'new_message':
-          handleNewMessage(payload)
-          break
-        case 'typing':
-          handleTypingStatus(payload)
-          break
-        case 'message_recall':
-          handleMessageRecall(payload)
-          break
-        case 'user_online':
-          handleUserOnline(payload)
-          break
-        case 'user_offline':
-          handleUserOffline(payload)
-          break
-        case 'group_created':
-        case 'group_updated':
-        case 'group_member_joined':
-        case 'group_member_left':
-          handleGroupEvent(type, payload)
-          break
-        default:
-          console.log('未处理的WebSocket消息类型', type)
-      }
-      
-      // 触发事件监听器
-      triggerEvent(type, payload)
-    } catch (error) {
-      console.error('处理WebSocket消息失败', error)
-    }
-  }
-  
-  // 消息处理函数
-  const handleNewMessage = (payload) => {
-    const { conversationId, message } = payload
-    
-    // 如果不在缓存中，创建新数组
-    if (!messageCache[conversationId]) {
-      messageCache[conversationId] = []
-    }
-    
-    // 检查消息是否已存在
-    const exists = messageCache[conversationId].some(msg => msg.id === message.id)
-    if (!exists) {
-      // 添加到消息缓存
-      messageCache[conversationId].push(message)
-      
-      // 更新会话的最后一条消息
-      updateConversationLastMessage(conversationId, message)
-      
-      // 如果不是当前会话或者当前聊天窗口没有激活，增加未读数
-      if (
-        !currentConversation.value || 
-        currentConversation.value.id !== conversationId ||
-        document.hidden
-      ) {
-        unreadCounts[conversationId] = (unreadCounts[conversationId] || 0) + 1
-      }
-    }
-  }
-  
-  const handleTypingStatus = (payload) => {
-    // 处理正在输入状态
-    console.log('用户正在输入', payload)
-  }
-  
-  const handleMessageRecall = (payload) => {
-    const { conversationId, messageId } = payload
-    
-    // 查找并更新消息
-    if (messageCache[conversationId]) {
-      const message = messageCache[conversationId].find(msg => msg.id === messageId)
-      if (message) {
-        message.isRevoked = true
-        message.content = ''
-      }
-    }
-    
-    // 如果是最后一条消息，更新会话预览
-    const conversation = conversations.value.find(conv => conv.id === conversationId)
-    if (conversation && conversation.lastMessage && conversation.lastMessage.id === messageId) {
-      conversation.lastMessage.isRevoked = true
-      conversation.lastMessage.content = '该消息已撤回'
-    }
-  }
-  
-  const handleUserOnline = (payload) => {
-    const { userId } = payload
-    onlineUsers.value.add(String(userId))
-  }
-  
-  const handleUserOffline = (payload) => {
-    const { userId } = payload
-    onlineUsers.value.delete(String(userId))
-  }
-  
-  const handleGroupEvent = (type, payload) => {
-    // 处理群组相关事件
-    loadConversations()
-  }
-  
-  // 更新会话的最后一条消息
-  const updateConversationLastMessage = (conversationId, message) => {
-    const conversation = conversations.value.find(conv => conv.id === conversationId)
-    if (conversation) {
-      conversation.lastMessage = message
-      
-      // 更新会话排序
-      conversations.value = [...conversations.value]
-    } else {
-      // 如果会话不存在，可能是新会话，重新加载会话列表
-      loadConversations()
-    }
-  }
-  
-  // 加载会话列表
-  const loadConversations = async () => {
-    try {
-      const response = await getConversationList()
-      
-      if (response.code === 200) {
-        conversations.value = response.data.list || []
+      // 连接打开
+      ws.value.onopen = () => {
+        console.log('WebSocket连接已建立')
+        connected.value = true
+        connecting.value = false
+        reconnectCount.value = 0
         
-        // 初始化未读数
-        conversations.value.forEach(conv => {
-          unreadCounts[conv.id] = conv.unreadCount || 0
-        })
+        // 发送在线状态
+        sendOnlineStatus()
+        
+        // 发送队列中的消息
+        processPendingMessages()
       }
+      
+      // 接收消息
+      ws.value.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          handleIncomingMessage(data)
     } catch (error) {
-      console.error('加载会话列表失败', error)
-    }
-  }
-  
-  // 加载会话消息
-  const loadMessages = async (conversationId, options = {}) => {
-    try {
-      const params = {
-        page: 1,
-        limit: 20,
-        ...options
-      }
-      
-      const response = await getMessageHistory(conversationId, params)
-      
-      if (response.code === 200) {
-        messageCache[conversationId] = response.data.list || []
-        hasMoreMessages[conversationId] = response.data.hasMore
-        return {
-          messages: messageCache[conversationId],
-          hasMore: hasMoreMessages[conversationId]
+          console.error('解析WebSocket消息失败:', error)
         }
       }
       
-      return { messages: [], hasMore: false }
-    } catch (error) {
-      console.error('加载会话消息失败', error)
-      return { messages: [], hasMore: false }
-    }
-  }
-  
-  // 加载更多会话消息
-  const loadMoreMessages = async (conversationId) => {
-    if (!hasMoreMessages[conversationId]) return false
-    
-    const currentMessages = messageCache[conversationId] || []
-    const currentPage = Math.floor(currentMessages.length / 20) + 1
-    
-    try {
-      const response = await getMessageHistory(conversationId, {
-        page: currentPage,
-        limit: 20
-      })
-      
-      if (response.code === 200) {
-        const newMessages = response.data.list || []
+      // 连接关闭
+      ws.value.onclose = () => {
+        console.log('WebSocket连接已关闭')
+        connected.value = false
+        connecting.value = false
         
-        if (newMessages.length > 0) {
-          messageCache[conversationId] = [...newMessages, ...currentMessages]
-        }
-        
-        hasMoreMessages[conversationId] = response.data.hasMore
-        
-        return {
-          messages: messageCache[conversationId],
-          hasMore: hasMoreMessages[conversationId]
+        // 尝试重新连接
+        if (reconnectCount.value < maxReconnectAttempts) {
+          // 增加重连计数并使用指数退避算法
+          const delay = Math.min(1000 * Math.pow(2, reconnectCount.value), 30000)
+          setTimeout(() => {
+            reconnectCount.value++
+            initWebSocket(userId.value)
+          }, delay)
         }
       }
       
-      return { messages: currentMessages, hasMore: false }
+      // 连接错误
+      ws.value.onerror = (error) => {
+        console.error('WebSocket连接错误:', error)
+        connecting.value = false
+      }
     } catch (error) {
-      console.error('加载更多消息失败', error)
-      return { messages: currentMessages, hasMore: false }
-    }
-  }
-  
-  // 设置当前会话
-  const setCurrentConversation = (conversation) => {
-    currentConversation.value = conversation
-    
-    // 如果有当前会话，将其未读数清零
-    if (conversation) {
-      unreadCounts[conversation.id] = 0
-    }
-  }
-  
-  // 标记会话已读
-  const readConversation = (conversationId) => {
-    unreadCounts[conversationId] = 0
-  }
-  
-  // 发送消息
-  const sendMessageToConversation = async (messageData) => {
-    if (!messageData.conversationId || !isWebSocketConnected.value) {
-      console.error('无法发送消息: WebSocket未连接或会话ID为空')
-      return null
-    }
-    
-    try {
-      // 根据消息类型发送
-      let response
-      const { conversationId, type, content } = messageData
-      
-      switch (type) {
-        case 'text':
-          response = await sendTextMessage(conversationId, content)
-          break
-        case 'image':
-          response = await sendImageMessage(conversationId, content)
-          break
-        case 'file':
-          response = await sendFileMessage(conversationId, content)
-          break
-        default:
-          console.error('不支持的消息类型', type)
-          return null
-      }
-      
-      if (response.code === 200) {
-        const message = response.data
-        
-        // 添加到消息缓存
-        if (!messageCache[conversationId]) {
-          messageCache[conversationId] = []
-        }
-        
-        messageCache[conversationId].push(message)
-        
-        // 更新会话的最后一条消息
-        updateConversationLastMessage(conversationId, message)
-        
-        return message
-      }
-      
-      return null
-    } catch (error) {
-      console.error('发送消息失败', error)
-      return null
-    }
-  }
-  
-  // 重发消息
-  const resendMessage = async (message) => {
-    try {
-      // 将消息标记为正在发送
-      message.sendStatus = 'sending'
-      
-      // 根据消息类型重发
-      const { conversationId, type, content } = message
-      
-      let response
-      switch (type) {
-        case 'text':
-          response = await sendTextMessage(conversationId, content)
-          break
-        case 'image':
-          response = await sendImageMessage(conversationId, content)
-          break
-        case 'file':
-          response = await sendFileMessage(conversationId, content)
-          break
-        default:
-          console.error('不支持的消息类型', type)
-          message.sendStatus = 'failed'
-          return false
-      }
-      
-      if (response.code === 200) {
-        // 更新消息状态
-        Object.assign(message, response.data)
-        return true
-      }
-      
-      message.sendStatus = 'failed'
-      return false
-    } catch (error) {
-      console.error('重发消息失败', error)
-      message.sendStatus = 'failed'
-      return false
-    }
-  }
-  
-  // 删除会话
-  const deleteConversation = async (conversationId) => {
-    try {
-      // 发送删除会话请求
-      // const response = await deleteConversationApi(conversationId)
-      
-      // 从列表中移除
-      conversations.value = conversations.value.filter(conv => conv.id !== conversationId)
-      
-      // 清空消息缓存
-      delete messageCache[conversationId]
-      delete hasMoreMessages[conversationId]
-      delete unreadCounts[conversationId]
-      
-      return true
-    } catch (error) {
-      console.error('删除会话失败', error)
-      return false
-    }
-  }
-  
-  // 发送消息
-  const sendMessage = async (conversationId, type, content) => {
-    return sendMessageToConversation({
-      conversationId,
-      type,
-      content,
-      senderId: userStore.userId,
-      senderName: userStore.userInfo?.nickname || userStore.userInfo?.username || '我',
-      senderAvatar: userStore.userInfo?.avatar,
-      timestamp: new Date().toISOString()
-    })
-  }
-  
-  // 发送输入状态
-  const sendTypingStatus = (conversationId) => {
-    if (!wsClient.value || !isWebSocketConnected.value) return
-    
-    wsClient.value.send(JSON.stringify({
-      type: 'typing',
-      payload: {
-        conversationId,
-        userId: userStore.userId,
-        timestamp: Date.now()
-      }
-    }))
-  }
-  
-  // 事件注册与触发
-  const on = (eventName, callback) => {
-    if (!eventListeners[eventName]) {
-      eventListeners[eventName] = []
-    }
-    eventListeners[eventName].push(callback)
-  }
-  
-  const off = (eventName, callback) => {
-    if (!eventListeners[eventName]) return
-    
-    eventListeners[eventName] = eventListeners[eventName].filter(cb => cb !== callback)
-  }
-  
-  const triggerEvent = (eventName, data) => {
-    if (!eventListeners[eventName]) return
-    
-    for (const callback of eventListeners[eventName]) {
-      try {
-        callback(data)
-      } catch (error) {
-        console.error(`执行${eventName}事件回调时出错`, error)
-      }
+      console.error('创建WebSocket连接失败:', error)
+      connecting.value = false
     }
   }
   
   // 关闭WebSocket连接
-  const disconnect = () => {
-    if (wsClient.value) {
-      wsClient.value.disconnect()
-      wsClient.value = null
+  const closeWebSocket = () => {
+    if (ws.value && (connected.value || connecting.value)) {
+      ws.value.close()
+      ws.value = null
+      connected.value = false
+      connecting.value = false
     }
-    
-    isWebSocketConnected.value = false
-    
-    // 清空数据
-    conversations.value = []
-    Object.keys(messageCache).forEach(key => delete messageCache[key])
-    Object.keys(hasMoreMessages).forEach(key => delete hasMoreMessages[key])
-    Object.keys(unreadCounts).forEach(key => delete unreadCounts[key])
-    currentConversation.value = null
-    onlineUsers.value.clear()
   }
   
-  // 返回状态与方法
+  // 发送在线状态
+  const sendOnlineStatus = () => {
+    if (!connected.value || !ws.value) return false
+    
+    try {
+      const message = {
+        action: wsActions.USER_ONLINE,
+        user_id: userId.value
+      }
+      
+      ws.value.send(JSON.stringify(message))
+      return true
+    } catch (error) {
+      console.error('发送在线状态失败:', error)
+      return false
+    }
+  }
+  
+  // 发送聊天消息
+  const sendChatMessage = (conversationId, receiverId, message) => {
+    if (!userId.value) return false
+    
+    const chatMessage = {
+      action: wsActions.CONVERSATION_CHAT,
+      conversation_id: conversationId,
+      send_id: userId.value,
+      recv_id: receiverId,
+      msg_type: message.type === 'text' ? 1 : 2, // 1:文本 2:图片
+      msg_content: message.content
+    }
+    
+    // 如果WebSocket已连接，直接发送
+    if (connected.value && ws.value) {
+      try {
+        ws.value.send(JSON.stringify(chatMessage))
+        return true
+      } catch (error) {
+        console.error('发送消息失败:', error)
+        // 发送失败，加入队列
+        messageQueue.value.push(chatMessage)
+        return false
+      }
+    } else {
+      // WebSocket未连接，加入队列
+      messageQueue.value.push(chatMessage)
+      return false
+    }
+  }
+  
+  // 处理发送队列中的消息
+  const processPendingMessages = () => {
+    if (!connected.value || !ws.value || messageQueue.value.length === 0) return
+    
+    // 复制队列并清空原队列
+    const pendingMessages = [...messageQueue.value]
+    messageQueue.value = []
+    
+    // 发送所有待发送消息
+    pendingMessages.forEach(message => {
+      try {
+        ws.value.send(JSON.stringify(message))
+      } catch (error) {
+        console.error('发送队列消息失败:', error)
+        // 发送失败，重新加入队列
+        messageQueue.value.push(message)
+      }
+    })
+  }
+  
+  // 处理收到的消息
+  const handleIncomingMessage = (data) => {
+    if (!data || !data.action) return
+    
+    switch (data.action) {
+      case wsActions.PUSH:
+        // 处理推送消息
+        handlePushMessage(data)
+        break
+      default:
+        console.log('收到未知类型的消息:', data)
+    }
+  }
+  
+  // 处理推送消息
+  const handlePushMessage = (data) => {
+    if (!data.data) return
+    
+    // 根据消息类型处理
+    switch (data.type) {
+      case 'new_message':
+        // 新消息
+        handleNewMessage(data.data)
+        break
+      case 'read_message':
+        // 消息已读
+        handleReadMessage(data.data)
+        break
+      case 'new_conversation':
+        // 新会话
+        handleNewConversation(data.data)
+        break
+      default:
+        console.log('收到未知类型的推送:', data)
+    }
+  }
+  
+  // 处理新消息
+  const handleNewMessage = (message) => {
+    // 更新会话列表中的最新消息
+    updateConversationWithMessage(message)
+    
+    // 如果是当前活跃会话，更新消息列表
+    if (message.conversation_id === activeConversationId.value) {
+      // 这里可以触发一个事件通知UI更新
+      // 或者在UI组件中监听特定的状态变化
+    }
+  }
+  
+  // 处理消息已读状态
+  const handleReadMessage = (data) => {
+    // 更新会话的已读状态
+    const { conversation_id } = data
+    const conversationIndex = conversations.value.findIndex(
+      c => c.id === conversation_id
+    )
+    
+    if (conversationIndex !== -1) {
+      conversations.value[conversationIndex].unreadCount = 0
+    }
+  }
+  
+  // 处理新会话
+  const handleNewConversation = (conversation) => {
+    // 检查会话是否已存在
+    const exists = conversations.value.some(c => c.id === conversation.id)
+    if (!exists) {
+      conversations.value.push(conversation)
+    }
+  }
+  
+  // 更新会话的最新消息
+  const updateConversationWithMessage = (message) => {
+    const { conversation_id, send_id, recv_id, msg_content, msg_type, send_time } = message
+    
+    // 查找会话
+    const conversationIndex = conversations.value.findIndex(
+      c => c.id === conversation_id
+    )
+    
+    if (conversationIndex !== -1) {
+      // 更新现有会话
+      const conversation = conversations.value[conversationIndex]
+      
+      // 更新最新消息
+      conversation.lastMessage = {
+        content: msg_content,
+        type: msg_type,
+        sendTime: send_time
+      }
+      
+      // 如果不是自己发的消息且不是当前会话，增加未读数
+      if (send_id !== userId.value && conversation_id !== activeConversationId.value) {
+        conversation.unreadCount = (conversation.unreadCount || 0) + 1
+      }
+      
+      // 移动到列表顶部
+      const updatedConversation = {...conversation}
+      conversations.value.splice(conversationIndex, 1)
+      conversations.value.unshift(updatedConversation)
+    } else {
+      // 如果会话不存在，可能需要获取最新的会话列表
+      // 这里可以触发重新获取会话列表的操作
+    }
+  }
+  
+  // 设置当前活跃会话
+  const setActiveConversation = (conversationId) => {
+    activeConversationId.value = conversationId
+    
+    // 重置该会话的未读消息计数
+    const conversationIndex = conversations.value.findIndex(
+      c => c.id === conversationId
+    )
+    
+    if (conversationIndex !== -1) {
+      conversations.value[conversationIndex].unreadCount = 0
+    }
+  }
+  
+  // 设置会话列表
+  const setConversations = (newConversations) => {
+    conversations.value = newConversations
+  }
+  
+  // 计算未读消息总数
+  const totalUnreadCount = computed(() => {
+    return conversations.value.reduce((total, conversation) => {
+      return total + (conversation.unreadCount || 0)
+    }, 0)
+  })
+  
   return {
     // 状态
-    isWebSocketConnected,
+    connected,
+    connecting,
     conversations,
-    messageCache,
-    hasMoreMessages,
-    unreadCounts,
+    activeConversationId,
     totalUnreadCount,
-    currentConversation,
-    sortedConversations,
-    onlineUsers,
     
-    // 工具方法
-    isUserOnline,
-    
-    // WebSocket操作
+    // 方法
     initWebSocket,
-    disconnect,
-    reconnectWebSocket,
-    
-    // 消息操作
-    loadConversations,
-    loadMessages,
-    loadMoreMessages,
-    sendMessage,
-    sendMessageToConversation,
-    resendMessage,
-    sendTypingStatus,
-    
-    // 会话操作
-    setCurrentConversation,
-    readConversation,
-    deleteConversation,
-    
-    // 事件监听
-    on,
-    off
+    closeWebSocket,
+    sendChatMessage,
+    setActiveConversation,
+    setConversations
   }
 })

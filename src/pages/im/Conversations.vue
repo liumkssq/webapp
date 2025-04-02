@@ -271,13 +271,33 @@ const navigateToFriendRequests = () => {
 
 // 导航到聊天界面
 const navigateToChat = (conversation) => {
-  const route = {
-    path: conversation.type === 'group' 
-      ? `/im/group/${conversation.targetId}` 
-      : `/im/chat/${conversation.targetId}`,
-    query: { name: conversation.targetInfo?.name }
+  console.log('点击会话导航:', conversation);
+  
+  // 确保targetId存在
+  if (!conversation.targetId && !conversation.id) {
+    showToast('会话信息不完整');
+    return;
   }
-  router.push(route)
+  
+  // 构建targetId，确保是字符串类型
+  const targetId = String(conversation.targetId || conversation.id);
+  const type = conversation.type || 'private';
+  
+  // 直接使用window.location而不是router
+  const chatUrl = type === 'group' 
+    ? `/im/group/${targetId}` 
+    : `/im/chat/${targetId}`;
+  
+  const queryParams = new URLSearchParams({
+    name: conversation.targetInfo?.name || '聊天',
+    t: Date.now() // 添加时间戳防止缓存
+  }).toString();
+  
+  const fullUrl = `${chatUrl}?${queryParams}`;
+  console.log('导航到URL:', fullUrl);
+  
+  // 使用window.location直接跳转
+  window.location.href = fullUrl;
 }
 
 // 加载会话列表
@@ -300,7 +320,25 @@ const fetchConversations = async (isRefresh = false) => {
     const response = await getConversationList(params)
     
     if (response.code === 200) {
-      const newConversations = response.data
+      // 从conversationList对象转换为数组形式
+      const conversationMap = response.data?.conversationList || {}
+      const newConversations = Object.entries(conversationMap).map(([id, conv]) => {
+        return {
+          id,
+          targetId: conv.targetId,
+          type: conv.chatType === 1 ? 'private' : 'group',
+          unreadCount: conv.unread || 0,
+          lastMessage: {
+            content: '...',
+            time: Date.now()
+          },
+          targetInfo: {
+            id: conv.targetId,
+            name: `用户${conv.targetId}`, // 实际应该从用户服务获取用户信息
+            avatar: `https://api.dicebear.com/6.x/avataaars/svg?seed=user${conv.targetId}`
+          }
+        }
+      })
       
       if (isRefresh) {
         conversations.value = newConversations
@@ -308,9 +346,10 @@ const fetchConversations = async (isRefresh = false) => {
         conversations.value = [...conversations.value, ...newConversations]
       }
       
-      if (newConversations.length < pageSize.value) {
-        finished.value = true
-      } else {
+      // 由于没有分页信息，我们根据返回的会话数量判断是否还有更多
+      finished.value = newConversations.length < pageSize.value
+      
+      if (newConversations.length > 0) {
         page.value++
       }
     } else {
