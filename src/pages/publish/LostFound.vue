@@ -16,7 +16,7 @@
       </div>
       <div class="nav-title">{{ isLost ? '发布失物寻找' : '发布拾物归还' }}</div>
       <div class="publish-btn" @click="publishLostFound" :class="{ disabled: !isFormValid }">
-        发布
+        {{ isPublishing ? '发布中...' : '发布' }}
       </div>
     </div>
     
@@ -33,7 +33,9 @@
         :class="{ active: formType === 'lost' }"
         @click="formType = 'lost'"
       >
-        <div class="option-icon lost-icon"></div>
+        <div class="option-icon">
+          <span class="icon-lost">🔍</span>
+        </div>
         <div class="option-label">寻物启事</div>
       </div>
       
@@ -42,13 +44,16 @@
         :class="{ active: formType === 'found' }"
         @click="formType = 'found'"
       >
-        <div class="option-icon found-icon"></div>
+        <div class="option-icon">
+          <span class="icon-found">💪</span>
+        </div>
         <div class="option-label">招领启事</div>
       </div>
     </div>
     
     <!-- 表单内容 -->
-    <div class="form-container">
+    <transition name="form-fade" mode="out-in">
+    <div class="form-container" :key="formType">
       <!-- 标题 -->
       <div class="form-section">
         <div class="section-title">标题 <span class="required">*</span></div>
@@ -77,25 +82,36 @@
       
       <!-- 物品图片 -->
       <div class="form-section">
-        <div class="section-title">物品图片</div>
-        <div class="images-grid">
-          <div
-            v-for="(image, index) in lostFoundForm.images"
-            :key="index"
-            class="image-item"
-          >
-            <img :src="image.url" :alt="`图片${index+1}`" class="preview-image">
-            <div class="delete-image" @click="removeImage(index)">
-              <i class="icon-close"></i>
+        <div class="section-title">物品图片 <span class="optional">(选填)</span></div>
+        <div class="images-upload-container">
+          <div class="images-grid">
+            <div
+              v-for="(image, index) in lostFoundForm.images"
+              :key="index"
+              class="image-item"
+            >
+              <img :src="image.url" :alt="`图片${index+1}`" class="preview-image">
+              <div class="image-index">{{ index + 1 }}</div>
+              <div class="delete-image" @click="removeImage(index)">
+                <i class="icon-close"></i>
+              </div>
+            </div>
+            
+            <div class="add-image-btn" v-if="lostFoundForm.images.length < 4" @click="addImage">
+              <i class="icon-camera"></i>
+              <span>上传图片</span>
             </div>
           </div>
+          <div class="image-counter" v-if="lostFoundForm.images.length > 0">
+            {{ lostFoundForm.images.length }}/4
+          </div>
+          <div class="images-tip">添加图片可以帮助对方更快找到你的物品</div>
           
-          <div class="add-image-btn" v-if="lostFoundForm.images.length < 4" @click="addImage">
-            <i class="icon-camera"></i>
-            <span>{{ lostFoundForm.images.length }}/4</span>
+          <div class="ai-image-analysis" v-if="lostFoundForm.images.length > 0" @click="analyzeImages">
+            <i class="icon-ai"></i>
+            <span>AI分析物品特征</span>
           </div>
         </div>
-        <div class="images-tip">最多上传4张图片，可以帮助对方更快找到你</div>
       </div>
       
       <!-- 描述 -->
@@ -118,12 +134,63 @@
           {{ formType === 'lost' ? '丢失地点' : '拾取地点' }} 
           <span class="required">*</span>
         </div>
-        <location-field
-          v-model="locationData"
-          :placeholder="formType === 'lost' ? '在哪里丢失的？' : '在哪里拾取的？'"
-          :required="true"
-          @update:model-value="handleLocationUpdate"
-        />
+        
+        <!-- 预设地点选项 -->
+        <div class="location-options">
+          <div 
+            v-for="option in locationOptions" 
+            :key="option"
+            class="location-option"
+            :class="{ active: lostFoundForm.location === option }"
+            @click="selectLocation(option)"
+          >
+            {{ option }}
+          </div>
+        </div>
+        
+        <!-- 自定义地点输入 -->
+        <div class="custom-location-input" v-if="showCustomLocationInput">
+          <div class="input-container">
+            <input 
+              type="text" 
+              v-model="customLocation" 
+              placeholder="请输入详细地点" 
+              class="text-input"
+            >
+          </div>
+          <div class="location-actions">
+            <button class="cancel-btn" @click="cancelCustomLocation">取消</button>
+            <button class="confirm-btn" @click="confirmCustomLocation">确认</button>
+          </div>
+        </div>
+        
+        <!-- 地图选择按钮 -->
+        <div class="map-selection" v-if="!showCustomLocationInput">
+          <div 
+            class="map-select-btn"
+            @click="navigateToLocationPicker"
+          >
+            <i class="icon-map"></i>
+            <span>{{ lostFoundForm.location ? '修改地点' : '在地图上选择位置' }}</span>
+          </div>
+          
+          <div 
+            class="custom-location-btn"
+            @click="showCustomLocationInput = true"
+          >
+            <i class="icon-edit"></i>
+            <span>手动输入</span>
+          </div>
+        </div>
+        
+        <!-- 已选位置信息展示 -->
+        <div class="selected-location-display" v-if="lostFoundForm.location && !showCustomLocationInput">
+          <i class="icon-location"></i>
+          <div class="location-text">{{ lostFoundForm.location }}</div>
+          <div class="clear-location" @click="clearLocation">
+            <i class="icon-close"></i>
+          </div>
+        </div>
       </div>
       
       <!-- 丢失/拾取时间 -->
@@ -187,6 +254,7 @@
         </div>
       </div>
     </div>
+    </transition>
     
     <!-- 分类选择器弹窗 -->
     <div class="category-picker" v-if="showCategoryPicker">
@@ -200,13 +268,15 @@
         </div>
         
         <div class="picker-body">
-          <div 
-            v-for="category in categoryOptions" 
-            :key="category" 
-            class="picker-item"
-            @click="selectCategory(category)"
-          >
-            {{ category }}
+          <div class="picker-options">
+            <div 
+              v-for="category in categoryOptions" 
+              :key="category" 
+              class="picker-item"
+              @click="selectCategory(category)"
+            >
+              {{ category }}
+            </div>
           </div>
         </div>
       </div>
@@ -224,18 +294,25 @@
         </div>
         
         <div class="date-selection">
-          <!-- 日期选择器模拟 -->
-          <div class="date-input-group">
-            <input 
-              type="date" 
-              v-model="dateInput" 
-              class="date-input"
-            >
-            <input 
-              type="time" 
-              v-model="timeInput" 
-              class="time-input"
-            >
+          <!-- 日期时间选择 -->
+          <div class="date-input-container">
+            <div class="date-label">选择日期</div>
+            <div class="date-input-group">
+              <input 
+                type="date" 
+                v-model="dateInput" 
+                class="date-input"
+              >
+            </div>
+            
+            <div class="date-label">选择时间</div>
+            <div class="date-input-group">
+              <input 
+                type="time" 
+                v-model="timeInput" 
+                class="time-input"
+              >
+            </div>
           </div>
           
           <div class="quick-dates">
@@ -252,7 +329,7 @@
             </div>
           </div>
           
-          <button class="confirm-date-btn" @click="confirmDateTime">确认</button>
+          <button class="confirm-date-btn" @click="confirmDateTime">确认选择</button>
         </div>
       </div>
     </div>
@@ -328,7 +405,7 @@ const categoryOptions = [
 
 // 地点选项
 const locationOptions = [
-  '图书馆', '教学楼', '食堂', '宿舍楼', '操场', '校门口', '其他'
+  '图书馆', '自习室', '实验室', '教学楼', '食堂', '宿舍楼', '操场', '校门口', '体育馆', '会议室', '办公楼', '其他'
 ]
 
 // 联系方式选项
@@ -364,6 +441,9 @@ const toast = reactive({
   show: false,
   message: ''
 })
+
+// 发布状态
+const isPublishing = ref(false)
 
 // 表单是否有效
 const isFormValid = computed(() => {
@@ -405,27 +485,76 @@ const removeImage = (index) => {
   lostFoundForm.images.splice(index, 1)
 }
 
+// AI分析图片
+const analyzeImages = () => {
+  showToast('AI正在分析图片...')
+  
+  // 模拟等待时间，实际应用中应调用AI分析API
+  setTimeout(() => {
+    const descriptions = [
+      '这是一个蓝色的钱包，量身设计，有多个卡位和一个拾节部分。',
+      '这是一部白色iPhone手机，屏幕完好，右下角有一个小碰痕。',
+      '这是一副金属框架眼镜，圆形镜片，镜腿上有品牌标志。',
+      '这是一个黑色电脑包，带有肩带和多个功能口袋，拉链完好。'
+    ]
+    
+    // 根据图片数量随机生成分析结果
+    const analysisResult = lostFoundForm.images.map((_, i) => {
+      return descriptions[i % descriptions.length]
+    }).join('\n')
+    
+    // 将AI分析结果添加到物品描述中
+    if (lostFoundForm.description) {
+      lostFoundForm.description += '\n\nAI分析结果:\n' + analysisResult
+    } else {
+      lostFoundForm.description = 'AI分析结果:\n' + analysisResult
+    }
+    
+    showToast('AI分析完成')
+  }, 1500)
+}
+
 // 选择分类
 const selectCategory = (category) => {
   lostFoundForm.category = category
   showCategoryPicker.value = false
 }
 
-// 选择地点
+// 选择预设地点
 const selectLocation = (location) => {
   lostFoundForm.location = location
-  showLocationPicker.value = false
+  // 清空坐标，因为预设地点没有确切坐标
+  lostFoundForm.locationCoords = null
+}
+
+// 显示自定义地点输入标志
+const showCustomLocationInput = ref(false)
+
+// 自定义地点输入内容
+// customLocation 变量已在上面声明过
+
+// 清除选择的地点
+const clearLocation = () => {
+  lostFoundForm.location = ''
+  lostFoundForm.locationCoords = null
 }
 
 // 确认自定义地点
 const confirmCustomLocation = () => {
   if (customLocation.value.trim()) {
-    lostFoundForm.location = customLocation.value
-    showLocationPicker.value = false
+    lostFoundForm.location = customLocation.value.trim()
+    lostFoundForm.locationCoords = null // 清空坐标
+    showCustomLocationInput.value = false
     customLocation.value = ''
   } else {
     showToast('请输入地点')
   }
+}
+
+// 取消自定义地点输入
+const cancelCustomLocation = () => {
+  showCustomLocationInput.value = false
+  customLocation.value = ''
 }
 
 // 选择快速日期
@@ -523,13 +652,20 @@ const publishLostFound = async () => {
     return
   }
   
-  // 验证用户是否登录
-  if (!userStore.isLoggedIn) {
-    router.push('/login')
+  // 防止重复点击
+  if (isPublishing.value) {
     return
   }
   
+  isPublishing.value = true
+  
   try {
+    // 验证用户是否登录
+    if (!userStore.isLoggedIn) {
+      router.push('/login')
+      return
+    }
+    
     showToast('发布中...')
     
     // 打印完整的表单数据
@@ -585,6 +721,7 @@ const publishLostFound = async () => {
     if (!response) {
       console.error('API响应为空')
       showToast('发布失败：服务器响应为空')
+      isPublishing.value = false
       return
     }
     
@@ -620,6 +757,8 @@ const publishLostFound = async () => {
   } catch (error) {
     console.error('发布失物招领异常:', error)
     showToast('发布失败：' + (error.message || '请重试'))
+  } finally {
+    isPublishing.value = false
   }
 }
 
@@ -856,3 +995,804 @@ const navigateToLocationPicker = () => {
   });
 };
 </script>
+
+<style scoped>
+/* iOS风格全局样式 */
+.publish-lost-found-page {
+  background-color: #f2f2f7;
+  min-height: 100vh;
+  padding-bottom: 100px; /* 增加底部边距，确保内容可以完全滚动 */
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  color: #1c1c1e;
+  position: relative;
+  overflow-y: auto; /* 确保页面可滚动 */
+  -webkit-overflow-scrolling: touch; /* 添加iOS平滑滚动 */
+}
+
+/* iOS风格状态栏 */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 16px;
+  background-color: #f2f2f7;
+  height: 24px;
+  font-weight: 600;
+}
+
+.status-icons {
+  display: flex;
+  gap: 8px;
+}
+
+/* iOS风格导航栏 */
+.navigation-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(209, 209, 214, 0.5);
+  position: sticky;
+  top: 24px;
+  z-index: 100;
+}
+
+.back-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #007aff;
+}
+
+.icon-back::before {
+  content: "\2190";
+  font-size: 18px;
+}
+
+.nav-title {
+  font-size: 17px;
+  font-weight: 600;
+  flex: 1;
+  text-align: center;
+}
+
+.publish-btn {
+  padding: 6px 12px;
+  background-color: #007aff;
+  color: white;
+  font-weight: 500;
+  border-radius: 18px;
+  font-size: 15px;
+  transition: opacity 0.2s;
+}
+
+.publish-btn.disabled {
+  opacity: 0.6;
+}
+
+/* AI助手按钮 */
+.ai-assistant-btn {
+  background-color: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 16px;
+  border-radius: 16px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
+}
+
+.ai-assistant-btn:active {
+  transform: scale(0.98);
+  background-color: rgba(0, 122, 255, 0.15);
+}
+
+.icon-ai::before {
+  content: "\2728";
+  font-size: 16px;
+}
+
+/* 表单类型切换 */
+.form-type-switch {
+  display: flex;
+  background-color: #f2f2f7;
+  border-radius: 12px;
+  margin: 16px;
+  padding: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.type-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+  gap: 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  font-size: 15px;
+  font-weight: 500;
+  color: #8e8e93;
+}
+
+.type-option.active {
+  background-color: #fff;
+  color: #007aff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.option-icon {
+  width: 20px;
+  height: 20px;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 表单容器样式 */
+.form-container {
+  padding: 0 16px;
+}
+
+.form-section {
+  margin-bottom: 24px;
+  background-color: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #1c1c1e;
+  display: flex;
+  align-items: center;
+}
+
+.required {
+  color: #ff3b30;
+  margin-left: 4px;
+}
+
+.optional {
+  color: #8e8e93;
+  font-size: 14px;
+  font-weight: normal;
+}
+
+/* 图片上传相关样式 */
+.images-upload-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.images-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.image-item {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%; /* 保持宽高比为1:1 */
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.preview-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.image-index {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.delete-image {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(0, 0, 0, 0.6);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.icon-close {
+  font-size: 16px;
+  color: white;
+}
+
+.add-image-btn {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%;
+  background-color: #f2f2f7;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px dashed #c7c7cc;
+  transition: all 0.2s;
+}
+
+.add-image-btn:active {
+  background-color: #e5e5ea;
+}
+
+.icon-camera {
+  position: absolute;
+  top: 35%;
+  width: 24px;
+  height: 24px;
+  color: #8e8e93;
+}
+
+.icon-camera::before {
+  content: "📷";
+  font-size: 20px;
+}
+
+.add-image-btn span {
+  position: absolute;
+  top: 60%;
+  font-size: 12px;
+  color: #8e8e93;
+}
+
+.image-counter {
+  font-size: 13px;
+  color: #8e8e93;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  text-align: right;
+}
+
+.images-tip {
+  font-size: 13px;
+  color: #8e8e93;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.ai-image-analysis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-radius: 8px;
+  background-color: rgba(0, 122, 255, 0.05);
+  color: #007aff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ai-image-analysis:active {
+  background-color: rgba(0, 122, 255, 0.1);
+}
+
+/* 位置选择相关样式 */
+.location-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 3px 0;
+}
+
+.location-option {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background-color: #f2f2f7;
+  font-size: 14px;
+  color: #8e8e93;
+  font-weight: 500;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.location-option:active {
+  transform: scale(0.97);
+}
+
+.location-option.active {
+  background-color: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  border: 1px solid rgba(0, 122, 255, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.1);
+}
+
+.map-selection {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.map-select-btn, .custom-location-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-radius: 12px;
+  background-color: rgba(0, 122, 255, 0.05);
+  color: #007aff;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.25s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 122, 255, 0.15);
+}
+
+.map-select-btn:active, .custom-location-btn:active {
+  background-color: rgba(0, 122, 255, 0.1);
+  transform: scale(0.98);
+}
+
+.map-select-btn {
+  margin-right: 10px;
+}
+
+.icon-map::before {
+  content: "🗺️";
+  font-size: 16px;
+}
+
+.icon-edit::before {
+  content: "✏️";
+  font-size: 16px;
+}
+
+.icon-location::before {
+  content: "📍";
+  font-size: 18px;
+  color: #007aff;
+}
+
+.custom-location-input {
+  margin-top: 12px;
+}
+
+.location-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cancel-btn, .confirm-btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+.cancel-btn {
+  background-color: #f2f2f7;
+  color: #8e8e93;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.cancel-btn:active {
+  background-color: #e5e5ea;
+}
+
+.confirm-btn {
+  background-color: #007aff;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 122, 255, 0.2);
+}
+
+.confirm-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 122, 255, 0.2);
+}
+
+.selected-location-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  background-color: rgba(0, 122, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 122, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.location-text {
+  flex: 1;
+  font-size: 14px;
+  color: #1c1c1e;
+}
+
+.clear-location {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8e8e93;
+}
+
+.icon-close::before {
+  content: "\00d7";
+  font-size: 24px;
+  color: #8e8e93;
+}
+
+/* 提示信息 */
+.toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 15px;
+  z-index: 1100;
+  max-width: 80%;
+  text-align: center;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 表单切换动画 */
+.form-fade-enter-active,
+.form-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.form-fade-enter-from,
+.form-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.form-fade-enter-to,
+.form-fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 选择器样式 */
+.category-picker, .date-picker {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 1000;
+  animation: slide-up 0.3s ease;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.picker-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  animation: fade-in 0.3s ease;
+}
+
+.picker-content {
+  position: relative;
+  background-color: #fff;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 1001;
+}
+
+.picker-header {
+  padding: 16px;
+  border-bottom: 1px solid rgba(209, 209, 214, 0.3);
+  position: relative;
+}
+
+.picker-title {
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.picker-close {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
+}
+
+.picker-close:active {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.picker-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+}
+
+.picker-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.picker-item {
+  padding: 14px 10px;
+  background-color: #f2f2f7;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 15px;
+  color: #1c1c1e;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
+}
+
+.picker-item:active {
+  background-color: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  transform: scale(0.98);
+}
+
+/* 日期选择器样式 */
+.date-selection {
+  padding: 16px;
+}
+
+.date-input-container {
+  margin-bottom: 20px;
+}
+
+.date-label {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #1c1c1e;
+}
+
+.date-input-group {
+  margin-bottom: 16px;
+}
+
+.date-input, .time-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(60, 60, 67, 0.1);
+  background-color: #fff;
+  font-size: 16px;
+  color: #1c1c1e;
+  outline: none;
+  appearance: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.date-input:focus, .time-input:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.25);
+}
+
+.quick-dates {
+  margin-bottom: 20px;
+}
+
+.quick-date-title {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 10px;
+  color: #1c1c1e;
+}
+
+.quick-date-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick-date-option {
+  padding: 10px 14px;
+  background-color: #f2f2f7;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #1c1c1e;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
+}
+
+.quick-date-option:active {
+  background-color: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  transform: scale(0.98);
+}
+
+.confirm-date-btn {
+  width: 100%;
+  padding: 14px;
+  background-color: #007aff;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(0, 122, 255, 0.2);
+  transition: all 0.2s;
+  margin-top: 16px;
+  margin-bottom: 8px; /* 添加底部边距，防止被底部安全区域遮挡 */
+}
+
+.confirm-date-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 122, 255, 0.2);
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .publish-lost-found-page {
+    background-color: #1c1c1e;
+    color: #ffffff;
+  }
+  
+  .status-bar, .navigation-bar {
+    background-color: #1c1c1e;
+  }
+  
+  .navigation-bar {
+    border-bottom-color: rgba(84, 84, 88, 0.65);
+  }
+  
+  .form-section {
+    background-color: #2c2c2e;
+    box-shadow: none;
+  }
+  
+  .text-input, .contact-input, .reward-input-wrapper, .category-select, .date-time-select {
+    border-bottom-color: #38383a;
+    color: #ffffff;
+  }
+  
+  .text-textarea {
+    background-color: #38383a;
+    border-color: #38383a;
+    color: #ffffff;
+  }
+  
+  .location-option {
+    background-color: #38383a;
+  }
+  
+  .selected-category, .selected-date-time, .location-text {
+    color: #ffffff;
+  }
+  
+  .form-type-switch {
+    background-color: #2c2c2e;
+  }
+  
+  .type-option {
+    color: #8e8e93;
+  }
+  
+  .type-option.active {
+    background-color: #38383a;
+  }
+  
+  /* 选择器暗黑模式 */
+  .picker-content {
+    background-color: #2c2c2e;
+  }
+  
+  .picker-mask {
+    background-color: rgba(0, 0, 0, 0.7);
+  }
+  
+  .picker-header {
+    border-bottom-color: rgba(84, 84, 88, 0.65);
+  }
+  
+  .picker-title {
+    color: #ffffff;
+  }
+  
+  .picker-item {
+    background-color: #38383a;
+    color: #ffffff;
+    border-color: rgba(84, 84, 88, 0.65);
+  }
+  
+  .picker-item:active {
+    background-color: rgba(10, 132, 255, 0.2);
+  }
+  
+  /* 日期选择器暗黑模式 */
+  .date-label,
+  .quick-date-title {
+    color: #ffffff;
+  }
+  
+  .date-input,
+  .time-input {
+    background-color: #38383a;
+    border-color: rgba(84, 84, 88, 0.65);
+    color: #ffffff;
+  }
+  
+  .quick-date-option {
+    background-color: #38383a;
+    color: #ffffff;
+    border-color: rgba(84, 84, 88, 0.65);
+  }
+}
+</style>

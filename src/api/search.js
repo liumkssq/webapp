@@ -28,10 +28,11 @@ export function globalSearch(params) {
  * @returns {Promise} Promise对象
  */
 export function searchProducts(params) {
+  const searchParams = { ...params, type: 'product' }
   return request({
-    url: '/api/search/products',
+    url: '/api/search',
     method: 'get',
-    params
+    params: searchParams
   })
 }
 
@@ -46,10 +47,11 @@ export function searchProducts(params) {
  * @returns {Promise} Promise对象
  */
 export function searchArticles(params) {
+  const searchParams = { ...params, type: 'article' }
   return request({
-    url: '/api/search/articles',
+    url: '/api/search',
     method: 'get',
-    params
+    params: searchParams
   })
 }
 
@@ -57,17 +59,26 @@ export function searchArticles(params) {
  * 搜索失物招领
  * @param {Object} params 搜索参数
  * @param {string} params.keyword 搜索关键词
- * @param {string} params.type 类型：lost, found
+ * @param {string} params.type 失物招领子类型：lost, found
  * @param {string} params.sort 排序方式
  * @param {number} params.page 页码
  * @param {number} params.limit 每页数量
  * @returns {Promise} Promise对象
  */
 export function searchLostFound(params) {
+  // 原来的 type 参数是 lost 或 found，改名为 subtype
+  const { type: subtype, ...otherParams } = params
+  const searchParams = { 
+    ...otherParams, 
+    type: 'lostfound',
+    // 如果有子类型，保留为 subtype 参数
+    ...(subtype ? { subtype } : {})
+  }
+  
   return request({
-    url: '/api/search/lostfound',
+    url: '/api/search',
     method: 'get',
-    params
+    params: searchParams
   })
 }
 
@@ -80,10 +91,11 @@ export function searchLostFound(params) {
  * @returns {Promise} Promise对象
  */
 export function searchUsers(params) {
+  const searchParams = { ...params, type: 'user' }
   return request({
-    url: '/api/search/users',
+    url: '/api/search',
     method: 'get',
-    params
+    params: searchParams
   })
 }
 

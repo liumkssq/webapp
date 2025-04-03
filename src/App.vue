@@ -11,7 +11,9 @@
         @leave="onLeave"
         @after-leave="afterLeave"
       >
-        <component :is="Component" class="page-component" />
+        <keep-alive include="Results">
+          <component :is="Component" class="page-component" />
+        </keep-alive>
       </transition>
     </router-view>
     <AppMessage />

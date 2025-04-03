@@ -65,94 +65,39 @@
         @action="router.push('/search')"
       />
       
-      <!-- 商品列表 -->
-      <div class="product-list" v-else-if="currentTab === 'product'">
-        <div 
-          v-for="item in results" 
-          :key="item.id" 
-          class="product-item"
-          @click="goToDetail('product', item.id)"
-        >
-          <div class="product-image">
-            <img :src="item.images[0]" :alt="item.title">
-          </div>
-          <div class="product-info">
-            <div class="product-title">{{ item.title }}</div>
-            <div class="product-price">¥{{ item.price }}</div>
-            <div class="product-desc">{{ item.description }}</div>
-            <div class="product-meta">
-              <span class="seller-info">{{ item.seller.name }}</span>
-              <span class="product-time">{{ formatTime(item.createTime) }}</span>
-            </div>
+      <!-- 搜索结果列表 -->
+      <div class="results-list" v-else>
+        <div v-if="results.length > 0" class="results-header">
+          <!-- 搜索结果数量提示 -->
+          <div class="results-count">
+            <span class="results-number">{{ results.length }}</span> 条{{ getTabLabel(currentTab) }}结果
           </div>
         </div>
-      </div>
-      
-      <!-- 文章列表 -->
-      <div class="article-list" v-else-if="currentTab === 'article'">
-        <div 
-          v-for="item in results" 
-          :key="item.id" 
-          class="article-item"
-          @click="goToDetail('article', item.id)"
-        >
-          <div class="article-content">
-            <div class="article-title">{{ item.title }}</div>
-            <div class="article-text">{{ item.content }}</div>
-            <div class="article-images" v-if="item.images && item.images.length > 0">
-              <img 
-                v-for="(image, index) in item.images.slice(0, 3)" 
-                :key="index" 
-                :src="image" 
-                alt="文章图片"
-              >
-            </div>
-            <div class="article-meta">
-              <span class="author-info">{{ item.author.nickname }}</span>
-              <span class="article-stats">
-                <i class="icon-like"></i> {{ item.likes }}
-                <i class="icon-comment"></i> {{ item.comments }}
-              </span>
-              <span class="article-time">{{ formatTime(item.publishTime) }}</span>
-            </div>
+        
+            <!-- 直接渲染商品项 (确保能显示) -->
+        <div v-for="(item, index) in results" :key="item.id || index" class="product-item" 
+             style="margin-bottom: 16px; padding: 16px; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" 
+             @click="goToDetail(currentTab, item.id)">
+          <h3 style="margin-top: 0; font-size: 18px; font-weight: 600;">{{ item.title }}</h3>
+          <p style="color: #666; font-size: 15px;">{{ item.content || item.description }}</p>
+          <div v-if="item.images && item.images.length" style="display: flex; gap: 8px; margin: 10px 0; overflow-x: auto;">
+            <img v-for="(img, imgIndex) in item.images" :key="imgIndex" :src="img" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; color: #666; margin-top: 10px;">
+            <span>{{ formatTime(item.createdAt || new Date().toISOString()) }}</span>
+            <span style="color: #ff3b30; font-weight: 600;">查看详情 ></span>
           </div>
         </div>
-      </div>
-      
-      <!-- 失物招领列表 -->
-      <div class="lost-found-list" v-else-if="currentTab === 'lostFound'">
-        <div 
-          v-for="item in results" 
-          :key="item.id" 
-          class="lost-found-item"
-          @click="goToDetail('lostFound', item.id)"
-        >
-          <div class="lost-found-badge" :class="item.type">
-            {{ item.type === 'lost' ? '丢失' : '招领' }}
-          </div>
-          <div class="lost-found-content">
-            <div class="lost-found-title">{{ item.title }}</div>
-            <div class="lost-found-desc">{{ item.description }}</div>
-            <div class="lost-found-images" v-if="item.images && item.images.length > 0">
-              <img 
-                v-for="(image, index) in item.images.slice(0, 2)" 
-                :key="index" 
-                :src="image" 
-                alt="物品图片"
-              >
-            </div>
-            <div class="lost-found-info">
-              <div class="lost-found-meta">
-                <span class="location">{{ item.location }}</span>
-                <span class="category">{{ item.category }}</span>
-                <span class="time">{{ formatTime(item.lostFoundTime) }}</span>
-              </div>
-              <div class="lost-found-status" :class="item.status">
-                {{ item.status === 'open' ? '未解决' : '已解决' }}
-              </div>
-            </div>
-          </div>
-        </div>
+
+        <!-- 第二种方式: 使用 SearchResultItem 组件
+        <search-result-item
+          v-for="item in results"
+          :key="item.id || item._id"
+          :item="item"
+          :type="currentTab"
+          @click="goToDetail(currentTab, item.id || item._id)"
+        />
+        -->
       </div>
       
       <!-- 加载更多 -->
@@ -168,21 +113,46 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+<script setup name="Results">
+import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import SearchResultItem from '@/components/search/SearchResultItem.vue'
+import { globalSearch, searchProducts, searchArticles, searchLostFound } from '@/api/search'
+import { useSearchResultsStore } from '@/store/searchResults'
+
+// 调试辅助函数
+const logInfo = (message, data) => {
+  console.log(`%c ${message}`, 'background: #34c759; color: white; padding: 2px 4px; border-radius: 4px;', data)
+}
 
 const router = useRouter()
 const route = useRoute()
 
-// 搜索关键词
-const searchKeyword = ref('')
+// 使用 Pinia 存储搜索结果
+const searchStore = useSearchResultsStore()
 
-// 当前选中的分类标签
+// 搜索关键词 - 使用 ref 并与 store 关联
+const searchKeyword = ref('')
+watch(searchKeyword, (newVal) => {
+  searchStore.setKeyword(newVal)
+})
+
+// 当前选中的分类标签 - 使用 ref 并与 store 关联
 const currentTab = ref('product')
+watch(currentTab, (newVal) => {
+  searchStore.setCurrentTab(newVal)
+})
+
+// 搜索结果 - 使用 ref 以兼容现有代码
+const results = ref([])
+// 同步数据
+watch(() => searchStore.results, (newVal) => {
+  results.value = newVal
+  logInfo('从 store 更新结果到 results ref:', results.value)
+}, { immediate: true })
 
 // 标签列表
 const tabs = [
@@ -205,17 +175,20 @@ const activeFilters = ref({
   category: false
 })
 
-// 搜索结果
-const results = ref([])
-
 // 加载状态
 const loading = ref(true)
 const loadingMore = ref(false)
 
-// 分页
-const page = ref(1)
+// 分页 - 使用计算属性从 store 获取
+const page = computed({
+  get: () => searchStore.page,
+  set: (val) => searchStore.setPage(val)
+})
 const pageSize = ref(10)
-const hasMore = ref(true)
+const hasMore = computed({
+  get: () => searchStore.hasMore,
+  set: (val) => searchStore.setHasMore(val)
+})
 
 // 获取标签名称
 const getTabLabel = (tabValue) => {
@@ -289,80 +262,141 @@ const fetchResults = async () => {
   if (!searchKeyword.value) return
   
   loading.value = true
+  // 直接使用 ref 重置搜索状态
   page.value = 1
+  results.value = []
+  // 同步到 store
+  searchStore.setPage(1)
+  searchStore.clearResults()
+  
+  logInfo('开始搜索:', searchKeyword.value)
   
   try {
-    let apiUrl = ''
-    let params = {
+    let response
+    const params = {
       keyword: searchKeyword.value,
-      page: page.value,
-      size: pageSize.value
+      page: 1, // 始终使用第1页
+      limit: pageSize.value
     }
     
-    // 根据当前标签确定API路径
+    // 根据当前标签确定API调用
     switch (currentTab.value) {
       case 'product':
-        // 模拟API调用数据
-        setTimeout(() => {
-          results.value = Array(10).fill().map((_, i) => ({
-            id: `p${i+1}`,
-            title: `搜索商品 ${searchKeyword.value} ${i+1}`,
-            description: '这是一个与搜索关键词相关的商品描述...',
-            price: Math.floor(Math.random() * 1000) + 10,
-            originalPrice: Math.floor(Math.random() * 2000) + 100,
-            images: ['https://via.placeholder.com/200'],
-            seller: {
-              name: `卖家${i+1}`,
-              avatar: 'https://via.placeholder.com/50'
-            },
-            createTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString()
-          }))
-          loading.value = false
-          hasMore.value = true
-        }, 800)
+        response = await searchProducts(params)
+        logInfo('产品搜索响应:', response)
         break
         
       case 'article':
-        // 模拟API调用数据
-        setTimeout(() => {
-          results.value = Array(10).fill().map((_, i) => ({
-            id: `a${i+1}`,
-            title: `关于${searchKeyword.value}的文章 ${i+1}`,
-            content: '这是一篇与搜索关键词相关的文章内容...',
-            images: i % 2 === 0 ? ['https://via.placeholder.com/120', 'https://via.placeholder.com/120'] : [],
-            likes: Math.floor(Math.random() * 100),
-            comments: Math.floor(Math.random() * 30),
-            author: {
-              nickname: `作者${i+1}`
-            },
-            publishTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString()
-          }))
-          loading.value = false
-          hasMore.value = true
-        }, 800)
+        response = await searchArticles(params)
         break
         
       case 'lostFound':
-        // 模拟API调用数据
-        setTimeout(() => {
-          results.value = Array(10).fill().map((_, i) => ({
-            id: `lf${i+1}`,
-            title: `${i % 2 === 0 ? '丢失' : '招领'}：${searchKeyword.value} ${i+1}`,
-            description: '这是一条与搜索关键词相关的失物招领信息...',
-            type: i % 2 === 0 ? 'lost' : 'found',
-            status: i % 3 === 0 ? 'closed' : 'open',
-            category: ['证件', '电子产品', '书籍', '钱包/钥匙', '服装'][i % 5],
-            location: ['图书馆', '教学楼', '食堂', '宿舍楼', '操场'][i % 5],
-            images: i % 3 === 0 ? ['https://via.placeholder.com/100', 'https://via.placeholder.com/100'] : [],
-            lostFoundTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString()
-          }))
-          loading.value = false
-          hasMore.value = true
-        }, 800)
+        // 如果有子类型，添加到参数中
+        if (route.query.subtype) {
+          params.subtype = route.query.subtype
+        }
+        response = await searchLostFound(params)
         break
+        
+      default:
+        // 全局搜索
+        response = await globalSearch(params)
+    }
+    
+    if (response && response.list) {
+      logInfo('收到搜索响应 - list字段:', response.list)
+      // 对数据进行预处理，重点是保留原始字段，并处理图片
+      const processedResults = response.list.map(item => {
+        const newItem = { ...item };
+        
+        // 处理图片字段
+        try {
+          if (item.image) {
+            if (typeof item.image === 'string') {
+              try {
+                // 尝试解析JSON字符串
+                newItem.images = JSON.parse(item.image);
+                logInfo('解析图片JSON成功:', newItem.images)
+              } catch (e) {
+                // 如果不是JSON，将其作为单个图片URL
+                newItem.images = [item.image];
+                console.error('解析图片失败，使用原始字符串:', e);
+              }
+            } else if (Array.isArray(item.image)) {
+              // 如果已经是数组，直接使用
+              newItem.images = item.image;
+            }
+          } else {
+            newItem.images = [];
+          }
+        } catch (e) {
+          console.error('处理图片字段错误:', e);
+          newItem.images = [];
+        }
+        
+        // 根据内容类型添加需要的字段
+        if (currentTab.value === 'product') {
+          newItem.description = item.content || '';
+          newItem.price = item.price || item.extra?.price || 0;
+          newItem.seller = item.seller || { name: '未知卖家' };
+          newItem.createTime = item.createdAt || new Date().toISOString();
+        }
+        
+        return newItem;
+      });
+      
+      logInfo('处理后的商品数据:', processedResults);
+      
+      // 处理失物招领类型（如果需要）
+      let finalResults = processedResults;
+      if (currentTab.value === 'lostFound') {
+        // 确保等同的数据结构
+        finalResults = processedResults.map(item => ({
+          ...item,
+          type: item.lostFoundType || (item.isLost ? 'lost' : 'found'),
+          status: item.status || 'open'
+        }));
+      }
+      
+      // 先直接设置到 ref，再存入store
+      results.value = finalResults;
+      logInfo('设置搜索结果到 results.value:', results.value)
+      searchStore.setResults(finalResults);
+      
+      // 根据total、page和limit计算是否有更多数据
+      const hasMoreData = response.total > 0 
+        ? (1 * pageSize.value) < response.total 
+        : response.list.length === pageSize.value;
+      hasMore.value = hasMoreData;
+      searchStore.setHasMore(hasMoreData);
+    } else if (response && response.code === 0 && response.data) {
+      // 兼容原有的API响应格式
+      let resultItems = response.data.items || []
+      
+      // 处理不同类型的数据转换（如果需要）
+      if (currentTab.value === 'lostFound') {
+        // 确保等同的数据结构
+        resultItems = resultItems.map(item => ({
+          ...item,
+          type: item.lostFoundType || (item.isLost ? 'lost' : 'found'),
+          status: item.status || 'open'
+        }))
+      }
+      
+      // 将结果存入store
+      searchStore.setResults(resultItems);
+      searchStore.setHasMore(response.data.hasMore || false);
+    } else {
+      // 如果API响应失败，使用空数组
+      searchStore.setResults([]);
+      searchStore.setHasMore(false);
+      console.error('获取搜索结果失败', response)
     }
   } catch (error) {
     console.error('获取搜索结果失败', error)
+    searchStore.setResults([]);
+    searchStore.setHasMore(false);
+  } finally {
     loading.value = false
   }
 }
@@ -375,69 +409,119 @@ const loadMore = async () => {
   page.value++
   
   try {
-    // 模拟加载更多数据
-    setTimeout(() => {
-      const newResults = Array(10).fill().map((_, i) => {
-        const index = results.value.length + i
+    let response
+    const params = {
+      keyword: searchKeyword.value,
+      page: page.value,
+      limit: pageSize.value
+    }
+    
+    // 根据当前标签确定API调用
+    switch (currentTab.value) {
+      case 'product':
+        response = await searchProducts(params)
+        break
         
-        switch (currentTab.value) {
-          case 'product':
-            return {
-              id: `p${index+1}`,
-              title: `搜索商品 ${searchKeyword.value} ${index+1}`,
-              description: '这是一个与搜索关键词相关的商品描述...',
-              price: Math.floor(Math.random() * 1000) + 10,
-              originalPrice: Math.floor(Math.random() * 2000) + 100,
-              images: ['https://via.placeholder.com/200'],
-              seller: {
-                name: `卖家${index+1}`,
-                avatar: 'https://via.placeholder.com/50'
-              },
-              createTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString()
-            }
-            
-          case 'article':
-            return {
-              id: `a${index+1}`,
-              title: `关于${searchKeyword.value}的文章 ${index+1}`,
-              content: '这是一篇与搜索关键词相关的文章内容...',
-              images: index % 2 === 0 ? ['https://via.placeholder.com/120', 'https://via.placeholder.com/120'] : [],
-              likes: Math.floor(Math.random() * 100),
-              comments: Math.floor(Math.random() * 30),
-              author: {
-                nickname: `作者${index+1}`
-              },
-              publishTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString()
-            }
-            
-          case 'lostFound':
-            return {
-              id: `lf${index+1}`,
-              title: `${index % 2 === 0 ? '丢失' : '招领'}：${searchKeyword.value} ${index+1}`,
-              description: '这是一条与搜索关键词相关的失物招领信息...',
-              type: index % 2 === 0 ? 'lost' : 'found',
-              status: index % 3 === 0 ? 'closed' : 'open',
-              category: ['证件', '电子产品', '书籍', '钱包/钥匙', '服装'][index % 5],
-              location: ['图书馆', '教学楼', '食堂', '宿舍楼', '操场'][index % 5],
-              images: index % 3 === 0 ? ['https://via.placeholder.com/100', 'https://via.placeholder.com/100'] : [],
-              lostFoundTime: new Date(Date.now() - Math.floor(Math.random() * 10) * 86400000).toISOString()
-            }
-            
-          default:
-            return {}
+      case 'article':
+        response = await searchArticles(params)
+        break
+        
+      case 'lostFound':
+        // 如果有子类型，添加到参数中
+        if (route.query.subtype) {
+          params.subtype = route.query.subtype
         }
-      })
+        response = await searchLostFound(params)
+        break
+        
+      default:
+        // 全局搜索
+        response = await globalSearch(params)
+    }
+    
+    if (response && response.list) {
+      // 对新数据进行预处理，重点是保留原始字段，并处理图片
+      let newItems = response.list.map(item => {
+        const newItem = { ...item };
+        
+        // 处理图片字段
+        try {
+          if (item.image) {
+            if (typeof item.image === 'string') {
+              try {
+                // 尝试解析JSON字符串
+                newItem.images = JSON.parse(item.image);
+              } catch (e) {
+                // 如果不是JSON，将其作为单个图片URL
+                newItem.images = [item.image];
+              }
+            } else if (Array.isArray(item.image)) {
+              // 如果已经是数组，直接使用
+              newItem.images = item.image;
+            }
+          } else {
+            newItem.images = [];
+          }
+        } catch (e) {
+          console.error('处理图片字段错误:', e);
+          newItem.images = [];
+        }
+        
+        // 根据内容类型添加需要的字段
+        if (currentTab.value === 'product') {
+          newItem.description = item.content || '';
+          newItem.price = item.price || item.extra?.price || 0;
+          newItem.seller = item.seller || { name: '未知卖家' };
+          newItem.createTime = item.createdAt || new Date().toISOString();
+        }
+        
+        return newItem;
+      });
       
-      results.value = [...results.value, ...newResults]
-      loadingMore.value = false
+      console.log('加载更多: 处理后的商品数据:', newItems);
       
-      // 模拟加载到尽头
-      if (page.value >= 3) {
-        hasMore.value = false
+      // 处理失物招领类型（如果需要）
+      if (currentTab.value === 'lostFound') {
+        // 确保等同的数据结构
+        newItems = newItems.map(item => ({
+          ...item,
+          type: item.lostFoundType || (item.isLost ? 'lost' : 'found'),
+          status: item.status || 'open'
+        }));
       }
-    }, 1000)
+      
+      // 使用store添加更多结果
+      searchStore.addResults(newItems);
+      
+      // 根据total、page和limit计算是否有更多数据
+      searchStore.setHasMore(response.total > 0 
+        ? (page.value * pageSize.value) < response.total 
+        : response.list.length === pageSize.value);
+    } else if (response && response.code === 0 && response.data) {
+      // 兼容原有的API响应格式
+      let newItems = response.data.items || []
+      
+      // 处理不同类型的数据转换（如果需要）
+      if (currentTab.value === 'lostFound') {
+        // 确保等同的数据结构
+        newItems = newItems.map(item => ({
+          ...item,
+          type: item.lostFoundType || (item.isLost ? 'lost' : 'found'),
+          status: item.status || 'open'
+        }))
+      }
+      
+      // 使用store添加更多结果
+      searchStore.addResults(newItems);
+      searchStore.setHasMore(response.data.hasMore || false);
+    } else {
+      console.error('加载更多失败', response)
+      searchStore.setHasMore(false);
+    }
   } catch (error) {
     console.error('加载更多失败', error)
+    searchStore.setHasMore(false);
+  } finally {
     loadingMore.value = false
   }
 }
@@ -464,22 +548,349 @@ const clearSearch = () => {
 
 // 跳转到详情页
 const goToDetail = (type, id) => {
+  console.log('跳转到详情页:', type, id);
   let path = ''
   
   switch (type) {
     case 'product':
-      path = `/product/${id}`
+      path = `/product/detail/${id}`
       break
     case 'article':
-      path = `/article/${id}`
+      path = `/article/detail/${id}`
       break
     case 'lostFound':
-      path = `/lost-found/${id}`
+      path = `/lost-found/detail/${id}`
+      break
+    default:
+      console.warn('未知的类型:', type);
+      // 如果类型不匹配，尝试使用默认路径
+      if (id) {
+        path = `/product/detail/${id}`; // 默认使用产品路径
+      }
       break
   }
   
   if (path) {
-    router.push(path)
+    console.log('将跳转到路径:', path);
+    router.push(path);
+  } else {
+    console.error('无效路径，无法跳转');
   }
 }
 </script>
+
+<style scoped>
+.search-results-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.search-container {
+  display: flex;
+  padding: 12px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.search-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background-color: rgba(142, 142, 147, 0.12);
+  border-radius: 10px;
+  padding: 0 12px;
+  margin-right: 10px;
+  height: 36px;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+  outline: none;
+  font-size: 17px;
+  color: #000;
+}
+
+.icon-search {
+  color: #8e8e93;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.icon-search::before {
+  content: "\1F50D";
+}
+
+.icon-clear {
+  color: #8e8e93;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: rgba(142, 142, 147, 0.3);
+  font-size: 12px;
+}
+
+.icon-clear::before {
+  content: "\2715";
+}
+
+.search-btn {
+  background-color: #007aff;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  height: 36px;
+  transition: background-color 0.2s ease;
+}
+
+.search-btn:active {
+  background-color: #0062cc;
+}
+
+/* 分类标签 */
+.category-tabs {
+  display: flex;
+  overflow-x: auto;
+  padding: 12px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.category-tabs::-webkit-scrollbar {
+  display: none; /* Chrome & Safari */
+}
+
+.tab-item {
+  padding: 6px 16px;
+  margin-right: 12px;
+  white-space: nowrap;
+  border-radius: 16px;
+  font-size: 14px;
+  background-color: rgba(142, 142, 147, 0.12);
+  color: #8e8e93;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.tab-item.active {
+  background-color: #007aff;
+  color: white;
+}
+
+/* 筛选条件 */
+.filter-bar {
+  display: flex;
+  padding: 8px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+  font-size: 13px;
+  color: #8e8e93;
+  cursor: pointer;
+}
+
+.filter-item.active {
+  color: #007aff;
+}
+
+.icon-arrow-down {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.icon-arrow-down::before {
+  content: "\25BC";
+}
+
+/* 结果容器 */
+.results-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 加载中 */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(0, 122, 255, 0.2);
+  border-top-color: #007aff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  margin-top: 12px;
+  color: #8e8e93;
+  font-size: 14px;
+}
+
+/* 结果列表 */
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.results-header {
+  margin-bottom: 12px;
+}
+
+.results-count {
+  font-size: 15px;
+  color: #8e8e93;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+}
+
+.results-number {
+  font-weight: 600;
+  color: #007aff;
+  margin-right: 2px;
+}
+
+/* 增强搜索结果项延迟加载动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.search-result-item {
+  animation: fadeIn 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+.search-result-item:nth-child(1) { animation-delay: 0.05s; }
+.search-result-item:nth-child(2) { animation-delay: 0.1s; }
+.search-result-item:nth-child(3) { animation-delay: 0.15s; }
+.search-result-item:nth-child(4) { animation-delay: 0.2s; }
+.search-result-item:nth-child(5) { animation-delay: 0.25s; }
+
+/* 加载更多 */
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.load-more-btn {
+  background-color: transparent;
+  border: 1px solid #007aff;
+  color: #007aff;
+  border-radius: 20px;
+  padding: 8px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.load-more-btn:active {
+  background-color: rgba(0, 122, 255, 0.1);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .search-results-page {
+    background-color: #1c1c1e;
+  }
+  
+  .search-container,
+  .category-tabs,
+  .filter-bar {
+    background-color: #2c2c2e;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .search-bar {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .search-input {
+    color: #ffffff;
+  }
+  
+  .icon-clear {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .tab-item {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .filter-item {
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .loading-text {
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .loading-spinner {
+    border-color: rgba(10, 132, 255, 0.2);
+    border-top-color: #0a84ff;
+  }
+  
+  .load-more-btn {
+    border-color: #0a84ff;
+    color: #0a84ff;
+  }
+  
+  .load-more-btn:active {
+    background-color: rgba(10, 132, 255, 0.1);
+  }
+}
+
+/* 响应式适配 */
+@media (min-width: 768px) {
+  .search-container,
+  .category-tabs,
+  .filter-bar,
+  .results-container {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+</style>
