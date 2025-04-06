@@ -31,6 +31,7 @@ declare module 'vue' {
     HotSearch: typeof import('./components/search/HotSearch.vue')['default']
     ImageAnalyzer: typeof import('./components/ai/ImageAnalyzer.vue')['default']
     InlineMap: typeof import('./components/map/InlineMap/index.vue')['default']
+    IosTop: typeof import('./components/Ios/IosTop.vue')['default']
     LocationField: typeof import('./components/form/LocationField.vue')['default']
     LocationSelector: typeof import('./components/map/LocationSelector/index.vue')['default']
     LostFoundItem: typeof import('./components/lostFound/LostFoundItem.vue')['default']

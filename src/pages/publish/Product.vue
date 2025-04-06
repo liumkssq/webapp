@@ -1,13 +1,7 @@
 <template>
   <div class="publish-product-page">
     <!-- iOS风格顶部状态栏 -->
-    <div class="status-bar">
-      <span class="time">9:41</span>
-      <div class="status-icons">
-        <span>5G</span>
-        <span>100%</span>
-      </div>
-    </div>
+    <IosTop />
     
     <!-- 导航栏 -->
     <div class="navigation-bar">
@@ -277,7 +271,7 @@ import { useUserStore } from '@/store/user'
 import { showToast } from 'vant'
 import ImageAnalyzer from '@/components/ai/ImageAnalyzer.vue'
 import ContentGenerator from '@/components/ai/ContentGenerator.vue'
-
+import IosTop from '@/components/Ios/IosTop.vue'
 const router = useRouter()
 const userStore = useUserStore()
 

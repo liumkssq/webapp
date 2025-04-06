@@ -1,16 +1,7 @@
 <template>
   <div class="mine-page">
     <!-- iOS风格状态栏 -->
-    <div class="ios-status-bar">
-      <div class="status-bar-content">
-        <span class="time">{{ currentTime }}</span>
-        <div class="status-icons">
-          <span class="signal"><i class="signal-bar"></i><i class="signal-bar"></i><i class="signal-bar"></i><i class="signal-bar"></i></span>
-          <span class="wifi"><svg-icon name="wifi" size="14" /></span>
-          <span class="battery"><svg-icon name="battery" size="14" />100%</span>
-        </div>
-      </div>
-    </div>
+    <IosTop />
     
     <div class="user-header">
       <div class="user-info" @click="goToProfile">
@@ -130,7 +121,7 @@ import { useMessageStore } from '@/store/message'
 import FooterNavigation from '@/components/common/FooterNavigation.vue'
 import { getUserStats, logout } from '@/api/user'
 import { getSafeImageUrl, DEFAULT_AVATAR } from '@/utils/defaultImages'
-
+import IosTop from '@/components/Ios/IosTop.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const messageStore = useMessageStore()
