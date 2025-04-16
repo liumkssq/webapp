@@ -14,7 +14,8 @@ const routes = [
     name: 'Login',
     component: () => import('../pages/auth/Login.vue'),
     meta: {
-      requiresGuest: true
+      requiresGuest: true,
+      title: '登录'
     }
   },
   {
@@ -22,8 +23,15 @@ const routes = [
     name: 'Register',
     component: () => import('../pages/auth/Register.vue'),
     meta: {
-      requiresGuest: true
+      requiresGuest: true,
+      title: '注册'
     }
+  },
+  {
+    path: '/cart',
+    name: 'Cart',
+    component: () => import('../pages/cart/Cart.vue'),
+    meta: { requiresAuth: true, title: '购物车' }
   },
   {
     path: '/forgot-password',
@@ -297,6 +305,77 @@ const routes = [
     }
   },
   {
+    path: '/user/products',
+    name: 'UserProducts',
+    component: () => import('../pages/user/MyProducts.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的商品',
+      description: '查看和管理我发布的商品'
+    }
+  },
+  {
+    path: '/user/lost-found',
+    name: 'UserLostFound',
+    component: () => import('../pages/user/LostFound.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的失物招领',
+      description: '查看和管理我发布的失物招领'
+    }
+  },
+  {
+    path: '/user/articles',
+    name: 'UserArticles',
+    component: () => import('../pages/user/Articles.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的文章',
+      description: '查看和管理我发布的文章'
+    }
+  },
+  {
+    path: '/user/favorites',
+    name: 'UserFavorites',
+    component: () => import('../pages/user/Favorites.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的收藏',
+      description: '查看和管理我的收藏'
+    }
+  },
+  {
+    path: '/user/orders',
+    name: 'UserOrders',
+    component: () => import('../pages/user/Orders.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的订单',
+      description: '查看和管理我的订单'
+    }
+  },
+  {
+    path: '/user/order/:id',
+    name: 'UserOrderDetail',
+    component: () => import('../pages/user/OrderDetail.vue'),
+    props: true,
+    meta: {
+      requiresAuth: true,
+      title: '订单详情',
+      description: '查看订单详细信息'
+    }
+  },
+  {
+    path: '/user/address',
+    name: 'UserAddress',
+    component: () => import('../pages/user/Address.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的地址',
+      description: '查看和管理我的地址'
+    }
+  },
+  {
     path: '/user/:id',
     name: 'UserHomepage',
     component: () => import('../pages/user/Profile.vue'),
@@ -392,8 +471,46 @@ const routes = [
       description: '个人中心'
     }
   },
+
+  // Add placeholder routes
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('../pages/notification/Notifications.vue'),
+    meta: { requiresAuth: true, title: '通知中心' }
+  },
+  {
+    path: '/wallet',
+    name: 'Wallet',
+    component: () => import('../pages/wallet/Wallet.vue'),
+    meta: { requiresAuth: true, title: '我的钱包' }
+  },
+  {
+    path: '/history',
+    name: 'History',
+    component: () => import('../pages/NotFound.vue'), // Placeholder
+    meta: { requiresAuth: true, title: '浏览历史' }
+  },
+  {
+    path: '/identity',
+    name: 'Identity',
+    component: () => import('../pages/NotFound.vue'), // Placeholder
+    meta: { requiresAuth: true, title: '身份认证' }
+  },
+  {
+    path: '/coupons',
+    name: 'Coupons',
+    component: () => import('../pages/NotFound.vue'), // Placeholder
+    meta: { requiresAuth: true, title: '我的优惠券' }
+  },
+  {
+    path: '/drafts',
+    name: 'Drafts',
+    component: () => import('../pages/NotFound.vue'), // Placeholder
+    meta: { requiresAuth: true, title: '草稿箱' }
+  },
   
-  // 404页面
+  // 404页面 (Must be last)
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',

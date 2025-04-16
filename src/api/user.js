@@ -1,7 +1,6 @@
-import request from '@/utils/request'
+import request from '@/utils/request';
 
-import { defineStore } from 'pinia'
-import { cleanupImageUrl } from '@/utils/defaultImages'
+import { cleanupImageUrl } from '@/utils/defaultImages';
 
 /**
  * 账号密码登录
@@ -187,42 +186,54 @@ export function adminLogin() {
 
 /**
  * 用户注册
- * @param {object} data 注册信息
+ * @param {object} data 注册信息 (now includes campus fields)
  * @param {string} data.username 用户名
  * @param {string} data.password 密码
  * @param {string} data.phone 手机号
  * @param {string} data.verificationCode 验证码
+ * @param {string} [data.campus] 校区
+ * @param {string} [data.college] 学院
+ * @param {string} [data.major] 专业
+ * @param {number} [data.enrollmentYear] 入学年份
+ * @param {string} [data.userRole] 用户角色
+ * @param {string} [data.studentId] 学号
  * @returns {Promise} Promise对象
  */
 export function register(data) {
-  console.log('发起注册请求，参数:', data);
-  
+  console.log('发起注册请求，参数:', data); // Log will now show campus fields
+
+  // Ensure enrollmentYear is sent as a number if present
+  const requestData = { ...data };
+  if (requestData.enrollmentYear) {
+      requestData.enrollmentYear = parseInt(requestData.enrollmentYear);
+  } else {
+      // Send null or omit if not provided, depending on backend expectation
+      delete requestData.enrollmentYear;
+  }
+
   return request({
     url: '/api/user/register',
     method: 'post',
-    data
+    data: requestData // Send the extended data object
   })
   .then(response => {
     console.log('注册请求成功响应:', response);
+    // Existing success handling logic
     return response;
   })
   .catch(error => {
     console.error('注册请求失败详情:', error);
     console.error('错误响应数据:', error.response?.data);
-    
-    // 处理特定的错误情况并提供更有用的信息
+
+    // Existing error handling logic
     if (error.response) {
       const errorData = error.response.data || {};
-      
-      // 创建一个标准的错误响应格式
       return {
         code: error.response.status,
         message: errorData.message || getErrorMessage(error.response.status),
         data: null
       };
     }
-    
-    // 其他类型的错误
     return {
       code: 500,
       message: error.message || '注册失败，请稍后重试',
@@ -346,6 +357,12 @@ export function getUserInfo() {
         avatar: response.data.avatar || '',
         backgroundImage: response.data.backgroundImage || '',
         bio: response.data.bio || '',
+        campus: response.data.campus || '',
+        college: response.data.college || '',
+        major: response.data.major || '',
+        enrollmentYear: response.data.enrollmentYear || null,
+        userRole: response.data.userRole || 'student',
+        studentId: response.data.studentId || '',
         school: response.data.school || '',
         // 处理字段名称差异
         followerCount: response.data.followerCount || response.data.followersCount || 0,
@@ -411,6 +428,12 @@ export function getUserProfile(id) {
         avatar: response.data.avatar || '',
         backgroundImage: response.data.backgroundImage || '',
         bio: response.data.bio || '',
+        campus: response.data.campus || '',
+        college: response.data.college || '',
+        major: response.data.major || '',
+        enrollmentYear: response.data.enrollmentYear || null,
+        userRole: response.data.userRole || 'student',
+        studentId: response.data.studentId || '',
         school: response.data.school || '',
         // 处理字段名称差异
         followerCount: response.data.followerCount || response.data.followersCount || 0,
@@ -448,14 +471,41 @@ export function getUserProfile(id) {
 /**
  * 更新用户信息
  * @param {object} data 用户信息
+ * @param {string} [data.nickname] 昵称
+ * @param {string} [data.gender] 性别
+ * @param {string} [data.bio] 个人简介
+ * @param {string} [data.campus] 校区
+ * @param {string} [data.college] 学院/部门
+ * @param {string} [data.major] 专业
+ * @param {number} [data.enrollmentYear] 入学年份
+ * @param {string} [data.userRole] 用户角色
+ * @param {string} [data.studentId] 学号
  * @returns {Promise} Promise对象
  */
 export function updateUserInfo(data) {
+  // 处理enrollmentYear字段，确保是数字类型
+  const requestData = { ...data };
+  if (requestData.enrollmentYear) {
+    requestData.enrollmentYear = parseInt(requestData.enrollmentYear);
+  }
+  
   return request({
     url: '/api/user/info',
     method: 'put',
-    data
+    data: requestData
   })
+  .then(response => {
+    console.log('更新用户信息响应:', response);
+    return response;
+  })
+  .catch(error => {
+    console.error('更新用户信息失败:', error);
+    return {
+      code: 500,
+      message: error.message || '更新用户信息失败，请稍后重试',
+      data: null
+    };
+  });
 }
 
 /**

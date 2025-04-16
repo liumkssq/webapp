@@ -1,404 +1,209 @@
 <template>
-  <div class="notification-list">
-    <!-- 无通知提示 -->
-    <div class="empty-notification" v-if="notifications.length === 0 && !loading">
-      <i class="icon-notification-empty"></i>
-      <p>暂无通知</p>
-    </div>
-    
-    <!-- 通知列表 -->
-    <div v-for="(notification, index) in notifications" :key="notification.id" class="notification-container">
-      <!-- 日期分组标题 -->
-      <div 
-        class="date-header" 
-        v-if="index === 0 || shouldGroupByDate(notifications[index-1].createTime, notification.createTime)"
-      >
-        {{ formatDateHeader(notification.createTime) }}
-      </div>
-      
-      <!-- 通知项 -->
-      <SwipeListItem
-        :itemId="notification.id"
-        itemType="notification"
-        :actions="['delete', 'mark']"
-        :favorited="notification.isRead"
-        @delete="handleDeleteNotification"
-        @favorite="handleToggleRead"
-      >
-        <div 
-          class="notification-item" 
-          :class="{ 'unread': !notification.isRead }"
-          @click="handleNotificationClick(notification)"
-        >
-          <!-- 图标 -->
-          <div class="notification-icon" :class="getIconClass(notification.type)">
-            <i :class="getIconName(notification.type)"></i>
-          </div>
-          
-          <!-- 内容 -->
-          <div class="notification-content">
-            <!-- 标题 -->
-            <div class="notification-title">
-              {{ notification.title }}
-            </div>
-            
-            <!-- 描述 -->
-            <div class="notification-desc" v-if="notification.content">
-              {{ notification.content }}
-            </div>
-            
-            <!-- 时间 -->
-            <div class="notification-time">
-              {{ formatTime(notification.createTime) }}
-            </div>
-          </div>
-          
-          <!-- 未读标记 -->
-          <div class="unread-dot" v-if="!notification.isRead"></div>
-        </div>
-      </SwipeListItem>
-    </div>
-    
-    <!-- 加载更多 -->
-    <div class="load-more" v-if="hasMore" @click="loadMore">
-      <div class="loading-spinner" v-if="loading"></div>
-      <span v-else>加载更多</span>
-    </div>
+  <div class="notification-list-container">
+    <van-list
+      v-model:loading="loading"
+      :finished="finished"
+      finished-text="没有更多通知了"
+      @load="loadMore"
+      :error="error"
+      error-text="加载失败，点击重试"
+      :immediate-check="false" 
+    >
+      <NotificationItem
+        v-for="item in notifications"
+        :key="item.id"
+        :notification="item"
+        @click="handleItemClick"
+        @mark-read="handleMarkSingleRead"
+      />
+    </van-list>
+    <van-empty
+      v-if="!loading && notifications.length === 0 && !error"
+      description="暂无通知"
+      image-size="80"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import SwipeListItem from '../SwipeListItem.vue';
-import { markNotificationRead, deleteNotification } from '@/api/notification';
+import { ref, watch, onMounted, defineProps, defineEmits, defineExpose } from 'vue';
+import { useRouter } from 'vue-router';
+import { List as VanList, Empty as VanEmpty, Loading as VanLoading, showToast } from 'vant';
+import NotificationItem from './NotificationItem.vue';
+import { getNotifications, markNotificationsAsRead, markAllNotificationsAsRead } from '@/api/notification';
 
 const props = defineProps({
-  // 通知列表
-  notifications: {
-    type: Array,
-    default: () => []
-  },
-  // 是否有更多通知
-  hasMore: {
-    type: Boolean,
-    default: false
-  },
-  // 是否正在加载
-  loading: {
-    type: Boolean,
-    default: false
+  type: {
+    type: String,
+    required: true // e.g., 'all', 'interaction', 'system'
   }
 });
 
-const emit = defineEmits(['load-more', 'notification-click', 'delete', 'mark-read']);
+const router = useRouter();
+const notifications = ref([]);
+const loading = ref(false);
+const finished = ref(false);
+const error = ref(null);
+const page = ref(1);
+const limit = ref(15); // 每页加载数量
 
-// 处理通知点击
-const handleNotificationClick = (notification) => {
+const emit = defineEmits(['update-counts']); // 定义事件
+
+// 加载更多数据
+const loadMore = async () => {
+  if (loading.value || finished.value) return;
+  
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const params = {
+      type: props.type,
+      page: page.value,
+      limit: limit.value
+    };
+    console.log(`[NotificationList-${props.type}] Loading page ${page.value}`);
+    const response = await getNotifications(params);
+
+    if (response.code === 200) {
+      const newNotifications = response.data?.list || [];
+      notifications.value.push(...newNotifications);
+      console.log(`[NotificationList-${props.type}] Loaded ${newNotifications.length} items.`);
+      
+      // 更新分页状态
+      page.value++;
+      if (!response.data?.list || response.data.list.length < limit.value) {
+        finished.value = true;
+        console.log(`[NotificationList-${props.type}] Reached end.`);
+      }
+    } else {
+      throw new Error(response.message || '加载通知失败');
+    }
+  } catch (err) {
+    console.error(`[NotificationList-${props.type}] Failed to load notifications:`, err);
+    error.value = err.message || '网络错误';
+    // Vant List 会显示 error-text
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 重置并加载第一页
+const resetAndLoad = () => {
+  console.log(`[NotificationList-${props.type}] Resetting and loading first page.`);
+  notifications.value = [];
+  page.value = 1;
+  finished.value = false;
+  error.value = null;
+  loading.value = false; // Ensure loading is false before initial load if needed
+  // Use nextTick if immediate-check=false causes issues
+  // nextTick(() => {
+     loadMore();
+  // });
+};
+
+// 处理单个通知点击
+const handleItemClick = async (notification) => {
+  console.log('Notification clicked:', notification);
+  // 先标记为已读 (如果未读)
   if (!notification.isRead) {
-    handleToggleRead({
-      itemId: notification.id,
-      value: true
-    });
+     await handleMarkSingleRead(notification.id, false); // Don't show toast on click-read
   }
-  emit('notification-click', notification);
-};
-
-// 处理删除通知
-const handleDeleteNotification = (data) => {
-  emit('delete', data.itemId);
-};
-
-// 处理切换已读状态
-const handleToggleRead = (data) => {
-  emit('mark-read', {
-    id: data.itemId,
-    isRead: data.value
-  });
-};
-
-// 加载更多通知
-const loadMore = () => {
-  if (!props.loading && props.hasMore) {
-    emit('load-more');
+  
+  // 执行跳转
+  if (notification.targetUrl) {
+    if (notification.targetUrl.startsWith('/')) {
+        router.push(notification.targetUrl);
+    } else {
+        // Handle external links if necessary
+        window.location.href = notification.targetUrl;
+    }
+  } else {
+    console.warn('Notification has no targetUrl for navigation.');
   }
 };
 
-// 获取通知图标类名
-const getIconClass = (type) => {
-  const typeMap = {
-    'system': 'system-icon',
-    'follow': 'follow-icon',
-    'like': 'like-icon',
-    'comment': 'comment-icon',
-    'message': 'message-icon',
-    'mention': 'mention-icon'
-  };
-  return typeMap[type] || 'default-icon';
+// 处理单个标记已读 (由Item组件触发或点击时调用)
+const handleMarkSingleRead = async (notificationId, showFeedback = true) => {
+   const notificationIndex = notifications.value.findIndex(n => n.id === notificationId);
+   if (notificationIndex === -1 || notifications.value[notificationIndex].isRead) {
+     return; // Already read or not found
+   }
+
+   try {
+    const response = await markNotificationsAsRead({ ids: [notificationId] });
+    if (response.code === 200) {
+      // 更新本地状态
+      notifications.value[notificationIndex].isRead = true;
+       if (showFeedback) {
+            showToast('已标记为已读');
+       }
+       emit('update-counts'); // 通知父组件更新计数
+    } else {
+       throw new Error(response.message || '标记已读失败');
+    }
+   } catch (err) {
+       console.error('Failed to mark notification as read:', err);
+       if (showFeedback) {
+           showToast(err.message || '标记已读时出错');
+       }
+   }
 };
 
-// 获取通知图标名称
-const getIconName = (type) => {
-  const typeMap = {
-    'system': 'icon-system',
-    'follow': 'icon-user-plus',
-    'like': 'icon-heart',
-    'comment': 'icon-comment',
-    'message': 'icon-message',
-    'mention': 'icon-at'
-  };
-  return typeMap[type] || 'icon-notification';
+// 暴露给父组件调用的方法: 标记此列表所有项为已读
+const markAllRead = async () => {
+  console.log(`[NotificationList-${props.type}] Marking all as read.`);
+  const unreadIds = notifications.value.filter(n => !n.isRead).map(n => n.id);
+  if (unreadIds.length === 0) {
+    // Don't show toast if triggered silently, maybe return a status?
+    // showToast('没有未读通知');
+    return true; // Indicate nothing to mark, but not an error
+  }
+  
+  try {
+    // Use the specific API for the current type if needed, or the general one
+    const response = await markAllNotificationsAsRead({ type: props.type }); 
+    if (response.code === 200) {
+      // 更新本地所有项状态
+      notifications.value = notifications.value.map(n => ({ ...n, isRead: true }));
+      showToast('全部标记成功');
+      emit('update-counts'); // 通知父组件更新计数
+      return true; // Indicate success
+    } else {
+      throw new Error(response.message || '全部标记失败');
+    }
+  } catch (err) {
+    console.error('Failed to mark all as read:', err);
+    showToast(err.message || '全部标记时出错');
+    return false; // Indicate failure
+  }
 };
 
-// 格式化时间
-const formatTime = (time) => {
-  const date = new Date(time);
-  const now = new Date();
-  
-  // 计算时间差（毫秒）
-  const diff = now.getTime() - date.getTime();
-  
-  // 小于1分钟显示"刚刚"
-  if (diff < 60 * 1000) {
-    return '刚刚';
+// 监听类型变化，重新加载
+watch(() => props.type, (newType, oldType) => {
+  if (newType !== oldType) {
+    resetAndLoad();
   }
-  
-  // 小于1小时显示"x分钟前"
-  if (diff < 60 * 60 * 1000) {
-    return `${Math.floor(diff / (60 * 1000))}分钟前`;
-  }
-  
-  // 小于24小时显示"x小时前"
-  if (diff < 24 * 60 * 60 * 1000) {
-    return `${Math.floor(diff / (60 * 60 * 1000))}小时前`;
-  }
-  
-  // 小于7天显示"x天前"
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    return `${Math.floor(diff / (24 * 60 * 60 * 1000))}天前`;
-  }
-  
-  // 今年内显示"月-日"
-  if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
-  }
-  
-  // 其他显示"年-月-日"
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
-};
+});
 
-// 判断是否需要按日期分组
-const shouldGroupByDate = (prevTime, currTime) => {
-  const prev = new Date(prevTime);
-  const curr = new Date(currTime);
-  
-  // 如果日期不同，需要分组
-  return prev.toDateString() !== curr.toDateString();
-};
+// 组件挂载时加载第一页
+onMounted(() => {
+  resetAndLoad();
+});
 
-// 格式化日期头部
-const formatDateHeader = (time) => {
-  const date = new Date(time);
-  const now = new Date();
-  
-  // 当天显示"今天"
-  if (date.toDateString() === now.toDateString()) {
-    return '今天';
-  }
-  
-  // 昨天显示"昨天"
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) {
-    return '昨天';
-  }
-  
-  // 本周内显示"周几"
-  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  const dayDiff = Math.floor((now - date) / (24 * 60 * 60 * 1000));
-  if (dayDiff < 7) {
-    return weekdays[date.getDay()];
-  }
-  
-  // 今年内显示"月-日"
-  if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
-  }
-  
-  // 其他显示"年-月-日"
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
-};
+// 暴露方法给父组件
+defineExpose({
+  markAllRead,
+  refresh: resetAndLoad // Provide a refresh method
+});
+
 </script>
 
 <style scoped>
-.notification-list {
-  padding: var(--spacing-md);
+.notification-list-container {
+  min-height: 200px; /* Ensure container has height for empty/loading states */
+  position: relative; /* Needed if using absolute positioning inside */
 }
 
-.notification-container {
-  margin-bottom: var(--spacing-sm);
-}
-
-.date-header {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  padding: var(--spacing-sm) 0;
-  margin-top: var(--spacing-md);
-}
-
-.notification-item {
-  display: flex;
-  align-items: flex-start;
-  padding: var(--spacing-md);
-  background-color: var(--surface);
-  border-radius: var(--radius-md);
-  position: relative;
-  transition: background-color 0.2s;
-}
-
-.unread {
-  background-color: var(--surface-highlight);
-}
-
-.notification-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: var(--background-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: var(--spacing-md);
-  flex-shrink: 0;
-}
-
-.notification-icon i {
-  font-size: var(--font-size-lg);
-  color: var(--text-primary);
-}
-
-.system-icon {
-  background-color: var(--blue-light);
-}
-
-.system-icon i {
-  color: var(--blue);
-}
-
-.follow-icon {
-  background-color: var(--green-light);
-}
-
-.follow-icon i {
-  color: var(--green);
-}
-
-.like-icon {
-  background-color: var(--red-light);
-}
-
-.like-icon i {
-  color: var(--red);
-}
-
-.comment-icon {
-  background-color: var(--purple-light);
-}
-
-.comment-icon i {
-  color: var(--purple);
-}
-
-.message-icon {
-  background-color: var(--primary-light-color);
-}
-
-.message-icon i {
-  color: var(--primary-color);
-}
-
-.mention-icon {
-  background-color: var(--orange-light);
-}
-
-.mention-icon i {
-  color: var(--orange);
-}
-
-.notification-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.notification-title {
-  font-size: var(--font-size-md);
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
-  font-weight: 500;
-}
-
-.unread .notification-title {
-  font-weight: 600;
-}
-
-.notification-desc {
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  margin-bottom: var(--spacing-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.notification-time {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
-}
-
-.unread-dot {
-  position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--primary-color);
-}
-
-.empty-notification {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-tertiary);
-  padding: var(--spacing-xl) 0;
-}
-
-.empty-notification i {
-  font-size: 48px;
-  margin-bottom: var(--spacing-md);
-}
-
-.load-more {
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  padding: var(--spacing-md) 0;
-  cursor: pointer;
-}
-
-.loading-spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--separator-color);
-  border-radius: 50%;
-  border-top-color: var(--primary-color);
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* Add styles for loading/error states if needed */
 </style> 

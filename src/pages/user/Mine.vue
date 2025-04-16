@@ -27,8 +27,17 @@
           </template>
         </div>
       </div>
-      <div class="settings-icon" @click="goToSettings">
-        <svg-icon name="settings" size="24" />
+      <!-- Header Actions: Settings, Cart, Notifications -->
+      <div class="header-actions">
+        <div class="header-icon" @click="goToCart">
+          <svg-icon name="shopping-cart" size="24" />
+        </div>
+        <div class="header-icon" @click="goToNotifications">
+          <svg-icon name="bell" size="24" />
+        </div>
+        <div class="header-icon" @click="goToSettings">
+           <svg-icon name="settings" size="24" />
+        </div>
       </div>
     </div>
 
@@ -81,9 +90,34 @@
       <div class="function-section">
         <div class="section-title">我的工具</div>
         <div class="function-items">
-          <div class="function-item" @click="goToAddressList">
+          <div class="function-item" @click="goToWallet">
+            <svg-icon name="credit-card" size="24" />
+            <span>我的钱包</span>
+            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
+          </div>
+           <div class="function-item" @click="goToAddressList">
             <svg-icon name="map-pin" size="24" />
             <span>收货地址</span>
+            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
+          </div>
+          <div class="function-item" @click="goToHistory">
+            <svg-icon name="clock" size="24" />
+            <span>浏览历史</span>
+            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
+          </div>
+          <div class="function-item" @click="goToIdentity">
+            <svg-icon name="shield-check" size="24" />
+            <span>身份认证</span>
+            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
+          </div>
+           <div class="function-item" @click="goToCoupons">
+            <svg-icon name="tag" size="24" />
+            <span>我的优惠券</span>
+            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
+          </div>
+           <div class="function-item" @click="goToDrafts">
+            <svg-icon name="file-text" size="24" />
+            <span>草稿箱</span>
             <svg-icon name="chevron-right" size="16" class="arrow-icon" />
           </div>
           <div class="function-item" @click="goToCustomerService">
@@ -269,6 +303,42 @@ const goToFeedback = () => {
 const goToAbout = () => {
   router.push('/about')
 }
+
+// Add new navigation functions
+const goToCart = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/cart'); // Placeholder path
+};
+
+const goToNotifications = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/notifications'); // Placeholder path
+};
+
+const goToWallet = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/wallet'); // Placeholder path
+};
+
+const goToHistory = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/history'); // Placeholder path
+};
+
+const goToIdentity = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/identity'); // Placeholder path
+};
+
+const goToCoupons = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/coupons'); // Placeholder path
+};
+
+const goToDrafts = () => {
+  if (!isLoggedIn.value) return goToLogin();
+  router.push('/drafts'); // Placeholder path
+};
 
 const handleLogout = async () => {
   try {
@@ -679,4 +749,30 @@ onUnmounted(() => {
 .function-item:nth-child(4), .stat-item:nth-child(4) { animation-delay: 0.2s; }
 .function-item:nth-child(5) { animation-delay: 0.25s; }
 .function-item:nth-child(6) { animation-delay: 0.3s; }
+
+/* Add styles for header action icons */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Adjust gap as needed */
+}
+
+.header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(5px);
+  color: white; /* Ensure icons are white */
+}
+
+.header-icon:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1); /* Example hover effect */
+}
 </style>

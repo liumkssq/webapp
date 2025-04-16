@@ -74,6 +74,71 @@
           </div>
         </div>
         
+        <hr class="divider"/>
+        <h2 class="section-title">校园信息 (可选)</h2>
+
+        <div class="form-item">
+          <label>用户角色</label>
+          <select v-model="registerForm.userRole">
+            <option value="student">学生</option>
+            <option value="faculty">教职工</option>
+            <option value="staff">职员</option>
+            <option value="alumni">校友</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+
+        <div class="form-item">
+          <label>所属校区</label>
+          <select v-model="registerForm.campus">
+            <option disabled value="">请选择校区</option>
+            <option v-for="campus in nchuCampuses" :key="campus" :value="campus">
+              {{ campus }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-item">
+          <label>所属学院/部门</label>
+          <select v-model="registerForm.college">
+            <option disabled value="">请选择学院/部门</option>
+            <option v-for="college in nchuColleges" :key="college" :value="college">
+              {{ college }}
+            </option>
+            <option value="其他部门">其他部门</option>
+          </select>
+        </div>
+
+        <div class="form-item" v-if="isStudentOrAlumni">
+          <label>专业</label>
+          <select v-model="registerForm.major">
+            <option disabled value="">请选择专业</option>
+            <option v-for="major in nchuMajors" :key="major" :value="major">
+              {{ major }}
+            </option>
+            <option value="其他">其他(请在简介中注明)</option>
+          </select>
+        </div>
+
+        <div class="form-item" v-if="isStudentOrAlumni">
+          <label>入学年份</label>
+          <select v-model="registerForm.enrollmentYear">
+            <option disabled :value="null">请选择入学年份</option>
+            <option v-for="year in enrollmentYears" :key="year" :value="year">
+              {{ year }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-item" v-if="registerForm.userRole === 'student'">
+          <label>学号 (可选)</label>
+          <input
+            type="text"
+            v-model="registerForm.studentId"
+            placeholder="请输入学号"
+          />
+        </div>
+
         <div class="terms-agreement">
           <input type="checkbox" id="agreement" v-model="registerForm.agreement" required />
           <label for="agreement">我已阅读并同意 <a href="#" @click.prevent="showTerms">服务条款</a> 和 <a href="#" @click.prevent="showPrivacy">隐私政策</a></label>
@@ -117,7 +182,13 @@ const registerForm = reactive({
   verificationCode: '',
   password: '',
   confirmPassword: '',
-  agreement: false
+  agreement: false,
+  campus: '',
+  college: '',
+  major: '',
+  enrollmentYear: null,
+  userRole: 'student',
+  studentId: ''
 })
 
 // 加载状态
@@ -252,6 +323,12 @@ const handleRegister = async () => {
     return;
   }
   
+  // 验证入学年份
+  if (registerForm.enrollmentYear && (registerForm.enrollmentYear < 1980 || registerForm.enrollmentYear > new Date().getFullYear())) {
+    messageStore.showError('请输入有效的入学年份');
+    return;
+  }
+  
   try {
     registerLoading.value = true;
     
@@ -259,14 +336,26 @@ const handleRegister = async () => {
       username: registerForm.username,
       phone: registerForm.phone,
       verificationCode: registerForm.verificationCode,
-      password: registerForm.password
+      password: registerForm.password,
+      campus: registerForm.campus,
+      college: registerForm.college,
+      major: registerForm.major,
+      enrollmentYear: registerForm.enrollmentYear ? parseInt(registerForm.enrollmentYear) : null,
+      userRole: registerForm.userRole,
+      studentId: registerForm.studentId
     });
     
     const response = await register({
       username: registerForm.username,
       phone: registerForm.phone,
       verificationCode: registerForm.verificationCode,
-      password: registerForm.password
+      password: registerForm.password,
+      campus: registerForm.campus,
+      college: registerForm.college,
+      major: registerForm.major,
+      enrollmentYear: registerForm.enrollmentYear ? parseInt(registerForm.enrollmentYear) : null,
+      userRole: registerForm.userRole,
+      studentId: registerForm.studentId
     });
     
     console.log('收到注册响应:', response);
@@ -349,7 +438,12 @@ const handleRegisterSuccess = (data) => {
       nickname: data.nickname || data.username,
       avatar: data.avatar || '',
       phone: data.phone || '',
-      // 其他用户字段...
+      campus: data.campus || '',
+      college: data.college || '',
+      major: data.major || '',
+      enrollmentYear: data.enrollmentYear || null,
+      userRole: data.userRole || 'student',
+      studentId: data.studentId || registerForm.studentId
     };
     
     // 确保有token
@@ -395,6 +489,64 @@ const showPrivacy = () => {
   // 这里可以实现弹窗显示隐私政策
   alert('隐私政策内容')
 }
+
+// --- Nanchang Hangkong University Data ---
+const nchuCampuses = ref([
+  '前湖校区',
+  '上海路校区',
+  // 添加其他校区（如果需要）
+]);
+
+const nchuColleges = ref([
+  '航空制造工程学院',
+  '环境与化学工程学院',
+  '材料科学与工程学院',
+  '信息工程学院',
+  '经济管理学院',
+  '文法学院',
+  '艺术与设计学院',
+  '马克思主义学院',
+  '体育学院',
+  '飞行器工程学院(试飞)',
+  '国际教育学院',
+  '软件学院',
+  '测试与光电工程学院',
+  '数学与物理学院',
+  '外国语学院',
+  '航空服务与音乐学院', // Example: Add more colleges
+  '创新创业学院',
+  // ... 添加南昌航空大学所有学院 ...
+]);
+
+// --- Simplified Major List (Expand this!) ---
+const nchuMajors = ref([
+    '飞行器制造工程', '材料成型及控制工程', '环境工程',
+    '化学工程与工艺', '应用化学', '材料科学与工程', '金属材料工程',
+    '电子信息工程', '通信工程', '自动化', '计算机科学与技术',
+    '软件工程', '网络工程', '物联网工程', '国际经济与贸易',
+    '市场营销', '会计学', '财务管理', '法学', '英语', '日语',
+    '视觉传达设计', '环境设计', '产品设计', '动画', '音乐学',
+    '体育教育', '飞行技术', '飞行器动力工程', '测控技术与仪器',
+    '光电信息科学与工程', '信息与计算科学', '数学与应用数学',
+    // --- Add many more majors here ---
+]);
+
+// --- Generate Enrollment Years ---
+const currentYear = new Date().getFullYear();
+const enrollmentYears = computed(() => {
+  const years = [];
+  // Generate years from current year back to, say, 1980
+  for (let year = currentYear; year >= 1980; year--) {
+    years.push(year);
+  }
+  return years;
+});
+
+// Computed property to check if role requires student-specific fields
+const isStudentOrAlumni = computed(() => {
+    return ['student', 'alumni'].includes(registerForm.userRole);
+});
+// ---------------------------------------
 </script>
 
 <style scoped>
@@ -595,5 +747,51 @@ input:focus {
     margin: 20px 15px;
     padding: 15px;
   }
+}
+
+/* Add styles for the new section */
+.divider {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 25px 0;
+}
+
+.section-title {
+  font-size: 16px;
+  color: #555;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+/* Style for the select dropdown to match input fields */
+.form-item select {
+  width: 100%;
+  height: 44px; /* Match iOS input height style */
+  padding: 0 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  background-color: #f5f5f5;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23999' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 15px center;
+  background-size: 16px 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-sizing: border-box; /* Ensure consistent box model */
+}
+
+.form-item select:focus {
+  outline: none;
+  border-color: #007aff;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+/* Ensure inputs and selects have consistent styling */
+.form-item input, .form-item select {
+  box-sizing: border-box;
 }
 </style>
