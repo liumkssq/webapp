@@ -199,13 +199,9 @@
         <span class="tab-text">消息</span>
         <van-badge v-if="unreadChatCount > 0" :content="unreadChatCount" />
       </div>
-      <div class="tab-item" @click="router.push('/im/contacts')">
+      <div class="tab-item" @click="router.push('/im/friend-requests')">
         <van-icon name="friends-o" size="24" />
         <span class="tab-text">联系人</span>
-      </div>
-      <div class="tab-item" @click="router.push('/im/friend-requests')">
-        <van-icon name="add-o" size="24" />
-        <span class="tab-text">新朋友</span>
         <van-badge v-if="newFriendRequestsCount > 0" :content="newFriendRequestsCount" />
       </div>
       <div class="tab-item" @click="router.push('/im/groups')">
@@ -369,7 +365,7 @@ const fetchConversations = async (isRefresh = false) => {
   }
   
   try {
-      loading.value = true;
+    loading.value = true;
     
     // 使用更可靠的API
     const response = await getConversations();

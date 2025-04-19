@@ -1,0 +1,278 @@
+﻿<template>
+  <div class="conversation-detail">
+    <!-- 瀵艰埅鏍?-->
+    <van-nav-bar
+      :title="targetUserName"
+      left-arrow
+      fixed
+      placeholder
+      @click-left="onClickLeft"
+      @click-right="showActions = true"
+    >
+      <template #right>
+        <van-icon name="ellipsis" size="18" />
+      </template>
+    </van-nav-bar>
+    
+    <!-- 娑堟伅鍒楄〃 -->
+    <message-list
+      ref="messageListRef"
+      class="message-list"
+      :messages="messages"
+      :current-user-id="currentUserId"
+      :loading="loading"
+      :has-more="hasMore"
+      @load-earlier="loadEarlierMessages"
+      @retry="retryMessage"
+      @delete="showDeleteConfirm"
+    />
+    
+    <!-- 杈撳叆妗?-->
+    <chat-input
+      :loading-image="loadingImage"
+      :loading-voice="loadingVoice"
+      @send-text="sendTextMessage"
+      @send-image="sendImageMessage"
+      @send-voice="sendVoiceMessage"
+      @send-location="sendLocationMessage"
+      @send-product="sendProductMessage"
+      @send-emoji="sendEmojiMessage"
+    />
+    
+    <!-- 鎿嶄綔鑿滃崟 -->
+    <van-action-sheet
+      v-model:show="showActions"
+      :actions="actions"
+      cancel-text="鍙栨秷"
+      close-on-click-action
+      @select="onSelectAction"
+    />
+    
+    <!-- 纭鍒犻櫎娑堟伅 -->
+    <van-dialog
+      v-model:show="showDeleteDialog"
+      title="鍒犻櫎娑堟伅"
+      message="纭畾瑕佸垹闄よ繖鏉℃秷鎭悧锛?
+      show-cancel-button
+      @confirm="confirmDeleteMessage"
+    />
+    
+    <!-- 纭娓呯┖浼氳瘽 -->
+    <van-dialog
+      v-model:show="showClearDialog"
+      title="娓呯┖鑱婂ぉ璁板綍"
+      message="纭畾娓呯┖鎵€鏈夎亰澶╄褰曞悧锛熸鎿嶄綔涓嶅彲鎾ら攢銆?
+      show-cancel-button
+      @confirm="confirmClearMessages"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { showToast, showLoadingToast, closeToast } from 'vant'
+import { useIntervalFn } from '@vueuse/core'
+import MessageList from '@/components/im/MessageList.vue'
+import ChatInput from '@/components/im/ChatInput.vue'
+import {
+  getConversationDetail,
+  getChatLog,
+  sendTextMessage as apiSendText,
+  sendImageMessage as apiSendImage,
+  sendVoiceMessage as apiSendVoice,
+  markAsRead,
+  deleteMessage as apiDeleteMessage,
+  clearMessages as apiClearMessages
+} from '@/api/im'
+
+const route = useRoute()
+const router = useRouter()
+const conversationId = computed(() => Number(route.params.id))
+const targetUserName = computed(() => route.query.name || '浼氳瘽')
+const currentUserId = 1 // 鍋囪褰撳墠鐢ㄦ埛ID涓?
+
+// 鐘舵€?const loading = ref(false)
+const loadingImage = ref(false)
+const loadingVoice = ref(false)
+const hasMore = ref(true)
+const page = ref(1)
+const messages = ref([])
+const conversation = ref(null)
+const messageListRef = ref(null)
+const messageToDelete = ref(null)
+const showActions = ref(false)
+const showDeleteDialog = ref(false)
+const showClearDialog = ref(false)
+
+// 鎿嶄綔鑿滃崟閰嶇疆
+const actions = [
+  { name: '娓呯┖鑱婂ぉ璁板綍', color: '#ff3b30' }
+]
+
+// 瀵艰埅杩斿洖
+const onClickLeft = () => {
+  router.back()
+}
+
+// 鍔犺浇浼氳瘽璇︽儏
+const fetchConversation = async () => {
+  loading.value = true
+  try {
+    const response = await getConversationDetail(conversationId.value)
+    if (response.code === 200) {
+      conversation.value = response.data
+      
+      // 鏍囪娑堟伅涓哄凡璇?      await markAsRead(conversationId.value)
+    } else {
+      showToast(response.message || '鑾峰彇浼氳瘽澶辫触')
+    }
+  } catch (error) {
+    console.error('鑾峰彇浼氳瘽澶辫触:', error)
+    showToast('缃戠粶閿欒锛岃绋嶅悗閲嶈瘯')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 鍔犺浇娑堟伅鍘嗗彶
+const fetchMessages = async (isLoadMore = false) => {
+  if (loading.value) return
+  
+  loading.value = true
+  try {
+    const response = await getChatLog({
+      conversationId: conversationId.value,
+      page: page.value,
+      limit: 20
+    })
+    
+    if (response.code === 200) {
+      const { list, hasMore: more } = response.data
+      
+      if (isLoadMore) {
+        // 鍚堝苟娑堟伅锛岄伩鍏嶉噸澶?        const messageIds = new Set(messages.value.map(m => m.id))
+        const newMessages = list.filter(m => !messageIds.has(m.id))
+        messages.value = [...newMessages, ...messages.value]
+      } else {
+        messages.value = list
+      }
+      
+      hasMore.value = more
+      
+      // 娑堟伅宸插姞杞斤紝鏍囪涓哄凡璇?      await markAsRead(conversationId.value)
+    } else {
+      showToast(response.message || '鑾峰彇娑堟伅澶辫触')
+    }
+  } catch (error) {
+    console.error('鑾峰彇娑堟伅澶辫触:', error)
+    showToast('缃戠粶閿欒锛岃绋嶅悗閲嶈瘯')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 鍔犺浇鏇存棭鐨勬秷鎭?const loadEarlierMessages = () => {
+  if (loading.value || !hasMore.value) return
+  
+  page.value++
+  fetchMessages(true)
+}
+
+// 鍙戦€佹枃鏈秷鎭?const sendTextMessage = async (content) => {
+  try {
+    // 鍏堟坊鍔犱竴鏉℃湰鍦版秷鎭?    const tempId = `temp_${Date.now()}`
+    const tempMessage = {
+      id: tempId,
+      conversationId: conversationId.value,
+      senderId: currentUserId,
+      receiverId: conversation.value?.targetInfo?.id,
+      type: 'text',
+      content,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      isRead: false,
+      status: 'sending'
+    }
+    
+    messages.value = [...messages.value, tempMessage]
+    
+    // 婊氬姩鍒板簳閮?    nextTick(() => {
+      messageListRef.value?.scrollToBottom()
+    })
+    
+    // 鍙戦€佹秷鎭?    const response = await apiSendText(conversationId.value, content)
+    
+    if (response.code === 200) {
+      // 鐢ㄦ湇鍔″櫒杩斿洖鐨勬秷鎭浛鎹复鏃舵秷鎭?      const index = messages.value.findIndex(m => m.id === tempId)
+      if (index !== -1) {
+        messages.value.splice(index, 1, response.data)
+      }
+    } else {
+      // 鏇存柊涓存椂娑堟伅鐘舵€佷负澶辫触
+      const index = messages.value.findIndex(m => m.id === tempId)
+      if (index !== -1) {
+        messages.value[index].status = 'failed'
+      }
+      
+      showToast(response.message || '鍙戦€佸け璐?)
+    }
+  } catch (error) {
+    console.error('鍙戦€佹秷鎭け璐?', error)
+    showToast('缃戠粶閿欒锛岃绋嶅悗閲嶈瘯')
+  }
+}
+
+// 鍙戦€佸浘鐗囨秷鎭?const sendImageMessage = async (file) => {
+  loadingImage.value = true
+  try {
+    // 鍏堟坊鍔犱竴鏉℃湰鍦版秷鎭?    const tempId = `temp_${Date.now()}`
+    const tempUrl = URL.createObjectURL(file)
+    
+    const tempMessage = {
+      id: tempId,
+      conversationId: conversationId.value,
+      senderId: currentUserId,
+      receiverId: conversation.value?.targetInfo?.id,
+      type: 'image',
+      content: tempUrl,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      isRead: false,
+      status: 'sending'
+    }
+    
+    messages.value = [...messages.value, tempMessage]
+    
+    // 婊氬姩鍒板簳閮?    nextTick(() => {
+      messageListRef.value?.scrollToBottom()
+    })
+    
+    // 鍙戦€佸浘鐗?    const response = await apiSendImage(conversationId.value, file)
+    
+    if (response.code === 200) {
+      // 鐢ㄦ湇鍔″櫒杩斿洖鐨勬秷鎭浛鎹复鏃舵秷鎭?      const index = messages.value.findIndex(m => m.id === tempId)
+      if (index !== -1) {
+        messages.value.splice(index, 1, response.data)
+      }
+    } else {
+      // 鏇存柊涓存椂娑堟伅鐘舵€佷负澶辫触
+      const index = messages.value.findIndex(m => m.id === tempId)
+      if (index !== -1) {
+        messages.value[index].status = 'failed'
+      }
+      
+      showToast(response.message || '鍙戦€佸け璐?)
+    }
+  } catch (error) {
+    console.error('鍙戦€佸浘鐗囧け璐?', error)
+    showToast('缃戠粶閿欒锛岃绋嶅悗閲嶈瘯')
+  } finally {
+    loadingImage.value = false
+  }
+}
+
+// 鍙戦€佽闊虫秷鎭?const sendVoiceMessage = async (voiceData) => {
+  loadingVoice.value = true
+  try {
+    // 姝ゅ搴旇澶勭悊瀹為檯鐨勮闊虫枃浠?    const { duration, file } = voiceData
+    
+    // 妯℃嫙璇煶鍙戦€?    const tempId = `temp_${Date.now()}`
