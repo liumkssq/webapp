@@ -120,27 +120,22 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/store/user'
-import { useIMStore } from '@/store/im'
-import { formatMessageTime, shouldShowTimeDivider, isMessageFromSelf } from '@/utils/messageFormatter'
+import {
+  clearMessages,
+  getChatLog,
+  getConversationDetail,
+  getUserDetail,
+  parseImageContent,
+  recallMessageById,
+  uploadChatImage
+} from '@/api/im'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/im/ChatInput.vue'
-import { 
-  getConversationDetail, 
-  getUserDetail, 
-  getMessageHistory, 
-  clearMessages, 
-  markAsRead, 
-  sendTextMessage, 
-  sendImageMessage, 
-  uploadChatImage, 
-  recallMessageById,
-  sendTypingStatus,
-  getChatInitData,
-  parseImageContent
-} from '@/api/im'
+import { useIMStore } from '@/store/im'
+import { useUserStore } from '@/store/user'
+import { formatMessageTime, isMessageFromSelf, shouldShowTimeDivider } from '@/utils/messageFormatter'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 // 路由
 const route = useRoute()
@@ -415,7 +410,7 @@ const loadMessages = async (initial = false) => {
       startTime = messages.value[0].timestamp
     }
     
-    const res = await getMessageHistory({
+    const res = await getChatLog({
       conversationId: conversationId.value,
       count: 20,
       startSendTime: startTime
@@ -715,74 +710,63 @@ const clearChatHistory = async () => {
 const onMessageSent = async (content, type = 'text') => {
   if (!content || !conversation.value) return
   
-  // 创建消息对象
-  const message = {
-    id: `local_${Date.now()}`,
-    conversationId: conversationId.value,
-    type,
-    content,
-    senderId: userStore.userInfo.id,
-    senderName: userStore.userInfo.nickname || userStore.userInfo.username,
-    senderAvatar: userStore.userInfo.avatar,
-    timestamp: new Date().toISOString(),
-    status: 'sending',
-    isSelf: true
-  }
-  
-  // 添加到消息列表
-  messages.value.push(message)
-  
-  // 滚动到底部
-  scrollToBottom()
-  
-  // 如果是模拟群聊，直接更新状态
-  if (props.conversationType === 'group' && props.targetId === 'g1') {
-    // 延迟模拟发送过程
-    setTimeout(() => {
-      // 更新消息状态为已发送
-      const msgIndex = messages.value.findIndex(m => m.id === message.id)
-      if (msgIndex > -1) {
-        messages.value[msgIndex].status = 'sent'
-      }
-    }, 500)
-    return
-  }
-  
+  // 通过imStore发送消息
   try {
     loading.value.sending = true
     
-    // 根据消息类型发送
-    let result
-    if (type === 'text') {
-      result = await sendTextMessage({
+    // 如果是模拟群聊，直接更新状态
+    if (props.conversationType === 'group' && props.targetId === 'g1') {
+      // 创建消息对象
+      const message = {
+        id: `local_${Date.now()}`,
         conversationId: conversationId.value,
-        receiverId: props.targetId,
-        content
-      })
-    } else if (type === 'image') {
-      result = await sendImageMessage({
-        conversationId: conversationId.value,
-        receiverId: props.targetId,
-        imageUrl: content
-      })
+        type,
+        content,
+        senderId: userStore.userInfo.id,
+        senderName: userStore.userInfo.nickname || userStore.userInfo.username,
+        senderAvatar: userStore.userInfo.avatar,
+        timestamp: new Date().toISOString(),
+        status: 'sending',
+        isSelf: true
+      }
+      
+      // 添加到消息列表
+      messages.value.push(message)
+      
+      // 滚动到底部
+      scrollToBottom()
+      
+      // 延迟模拟发送过程
+      setTimeout(() => {
+        // 更新消息状态为已发送
+        const msgIndex = messages.value.findIndex(m => m.id === message.id)
+        if (msgIndex > -1) {
+          messages.value[msgIndex].status = 'sent'
+        }
+      }, 500)
+      return
     }
     
-    if (result && result.code === 200) {
-      // 更新消息状态
-      const msgIndex = messages.value.findIndex(m => m.id === message.id)
-      if (msgIndex > -1) {
-        messages.value[msgIndex] = {
-          ...messages.value[msgIndex],
-          id: result.data.messageId || messages.value[msgIndex].id,
-          status: 'sent'
-        }
-      }
+    // 使用IM Store发送消息
+    const result = await imStore.sendMessageToConversation({
+      conversationId: conversationId.value,
+      type,
+      content,
+      senderId: userStore.userInfo.id,
+      senderName: userStore.userInfo.nickname || userStore.userInfo.username,
+      senderAvatar: userStore.userInfo.avatar
+    })
+    
+    if (result.success) {
+      // 滚动到底部
+      scrollToBottom()
     } else {
-      handleMessageError(message.id)
+      console.error('发送消息失败:', result.error)
+      showToast('发送失败，请重试')
     }
   } catch (error) {
     console.error('发送消息失败:', error)
-    handleMessageError(message.id)
+    showToast('发送失败，请重试')
   } finally {
     loading.value.sending = false
   }
@@ -1139,6 +1123,49 @@ const handleMessageError = (messageId) => {
     }
   }
 }
+
+// 加载聊天历史记录
+const loadChatHistory = async (isRefresh = false) => {
+  if (loading.value) return;
+  
+  try {
+    loading.value = true;
+    
+    // 构建请求参数
+    const params = {
+      conversationId: conversationId.value,
+      count: PAGE_SIZE,
+      startSendTime: isRefresh ? Date.now() : (messages.value.length > 0 ? 
+        messages.value[0].sendTime : Date.now()),
+      endSendTime: 0 // 0表示到最早的消息
+    };
+    
+    console.log('加载聊天历史参数:', params);
+    const response = await getChatLog(params);
+    
+    if (response.code === 200) {
+      const newMessages = response.data.messageList || [];
+      console.log('获取到聊天消息:', newMessages);
+      
+      if (isRefresh) {
+        messages.value = newMessages;
+      } else {
+        // 将新消息添加到列表前面
+        messages.value = [...newMessages, ...messages.value];
+      }
+      
+      // 更新是否还有更多消息的状态
+      noMore.value = newMessages.length < PAGE_SIZE;
+    } else {
+      console.error('获取聊天记录失败:', response.message);
+    }
+  } catch (error) {
+    console.error('加载聊天记录出错:', error);
+  } finally {
+    loading.value = false;
+    refreshing.value = false;
+  }
+};
 </script>
 
 <style scoped>

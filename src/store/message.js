@@ -1,166 +1,329 @@
+// 消息状态管理
+import { getChatLog, markAsRead, parseImageContent, sendTextMessage } from '@/api/im'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { showNotify, showToast } from 'vant'
 
-export const useMessageStore = defineStore('message', () => {
-  // 消息队列
-  const messages = ref([])
+export const useMessageStore = defineStore('message', {
+  state: () => ({
+    // 消息缓存, 以会话ID为键, 消息数组为值
+    messages: {},
+    // 加载状态
+    loading: {},
+    // 是否还有更多消息可加载
+    hasMore: {},
+    // 最早的消息时间, 用于分页加载
+    earliestTimes: {}
+  }),
   
-  // 消息ID计数器
-  let idCounter = 0
-  
-  /**
-   * 显示消息
-   * @param {Object} messageConfig 消息配置
-   * @param {string} messageConfig.type 消息类型 'success' | 'error' | 'warning' | 'info'
-   * @param {string} messageConfig.content 消息内容
-   * @param {number} messageConfig.duration 显示时长(ms)，默认3000ms，设为0则不自动关闭
-   * @param {Function} messageConfig.onClose 关闭回调
-   * @returns {number} 消息ID
-   */
-  const showMessage = (messageConfig) => {
-    const id = idCounter++
-    const { type = 'info', content, duration = 3000, onClose } = messageConfig
+  getters: {
+    /**
+     * 获取指定会话的消息列表
+     * @param {string} conversationId 会话ID
+     * @returns {Array} 消息列表
+     */
+    getMessagesById: (state) => (conversationId) => {
+      return state.messages[conversationId] || []
+    },
     
-    // 创建消息对象
-    const message = {
-      id,
-      type,
-      content,
-      duration,
-      onClose,
-      visible: true,
-      timer: null
+    /**
+     * 获取指定会话的加载状态
+     * @param {string} conversationId 会话ID
+     * @returns {boolean} 是否加载中
+     */
+    isLoading: (state) => (conversationId) => {
+      return !!state.loading[conversationId]
+    },
+    
+    /**
+     * 是否还有更多历史消息可加载
+     * @param {string} conversationId 会话ID
+     * @returns {boolean} 是否还有更多
+     */
+    canLoadMoreMessages: (state) => (conversationId) => {
+      return !!state.hasMore[conversationId]
     }
-    
-    // 添加到消息队列
-    messages.value.push(message)
-    
-    // 设置自动关闭
-    if (duration > 0) {
-      message.timer = setTimeout(() => {
-        closeMessage(id)
-      }, duration)
-    }
-    
-    return id
-  }
+  },
   
-  /**
-   * 关闭指定消息
-   * @param {number} id 消息ID
-   */
-  const closeMessage = (id) => {
-    const index = messages.value.findIndex(msg => msg.id === id)
+  actions: {
+    /**
+     * 显示成功消息
+     * @param {string} message 消息内容
+     * @param {Object} options 额外选项
+     */
+    showSuccess(message, options = {}) {
+      showNotify({
+        type: 'success',
+        message: message,
+        duration: options.duration || 3000,
+        position: 'top',
+        ...options
+      });
+    },
     
-    if (index !== -1) {
-      const message = messages.value[index]
-      
-      // 清除计时器
-      if (message.timer) {
-        clearTimeout(message.timer)
+    /**
+     * 显示错误消息
+     * @param {string} message 消息内容
+     * @param {Object} options 额外选项
+     */
+    showError(message, options = {}) {
+      showNotify({
+        type: 'danger',
+        message: message,
+        duration: options.duration || 4000,
+        position: 'top',
+        ...options
+      });
+    },
+    
+    /**
+     * 显示普通提示
+     * @param {string} message 消息内容
+     * @param {Object} options 额外选项
+     */
+    showInfo(message, options = {}) {
+      showToast({
+        message: message,
+        position: 'middle',
+        duration: options.duration || 2000,
+        ...options
+      });
+    },
+    
+    /**
+     * 加载聊天记录
+     * @param {Object} options 加载选项
+     * @param {string} options.conversationId 会话ID
+     * @param {number} options.count 消息数量, 默认20
+     * @param {boolean} options.refresh 是否刷新
+     * @returns {Promise<Array>} 消息列表
+     */
+    async loadMessages({ conversationId, count = 20, refresh = false }) {
+      if (!conversationId) {
+        console.error('加载消息失败: 缺少conversationId')
+        return []
       }
       
-      // 标记为不可见
-      message.visible = false
+      // 设置加载状态
+      this.loading[conversationId] = true
       
-      // 调用关闭回调
-      if (typeof message.onClose === 'function') {
-        message.onClose()
-      }
-      
-      // 延迟移除元素，留出动画时间
-      setTimeout(() => {
-        const removeIndex = messages.value.findIndex(msg => msg.id === id)
-        if (removeIndex !== -1) {
-          messages.value.splice(removeIndex, 1)
+      try {
+        // 确定开始时间
+        const startTime = refresh ? Date.now() : (this.earliestTimes[conversationId] || Date.now())
+        
+        const response = await getChatLog({
+          conversationId,
+          count,
+          startSendTime: 0,
+          endSendTime: startTime
+        })
+        
+        if (response.code === 200) {
+          const newMessages = response.data.messages || []
+          
+          // 记录最早的消息时间
+          if (newMessages.length > 0) {
+            const earliestMessage = newMessages[newMessages.length - 1]
+            this.earliestTimes[conversationId] = earliestMessage.sendTime
+          }
+          
+          // 更新是否还有更多消息可加载
+          this.hasMore[conversationId] = newMessages.length >= count
+          
+          // 处理消息并更新存储
+          if (refresh) {
+            // 刷新模式: 替换现有消息
+            this.messages[conversationId] = this.processMessages(newMessages)
+          } else {
+            // 加载更多模式: 追加到现有消息
+            const existingMessages = this.messages[conversationId] || []
+            this.messages[conversationId] = [
+              ...existingMessages,
+              ...this.processMessages(newMessages)
+            ]
+          }
+          
+          return this.messages[conversationId]
+        } else {
+          console.error('加载消息失败:', response.message)
+          return this.messages[conversationId] || []
         }
-      }, 300)
-    }
-  }
-  
-  /**
-   * 关闭所有消息
-   */
-  const closeAllMessages = () => {
-    messages.value.forEach(message => {
-      if (message.timer) {
-        clearTimeout(message.timer)
+      } catch (error) {
+        console.error('加载消息出错:', error)
+        return this.messages[conversationId] || []
+      } finally {
+        this.loading[conversationId] = false
+      }
+    },
+    
+    /**
+     * 处理消息格式
+     * @param {Array} messages 原始消息列表
+     * @returns {Array} 处理后的消息列表
+     */
+    processMessages(messages) {
+      return messages.map(msg => {
+        // 处理不同类型的消息内容
+        let processedContent = msg.content;
+        
+        if (msg.messageType === 1) { // 图片消息
+          processedContent = parseImageContent(msg.content)
+        }
+        
+        return {
+          ...msg,
+          content: processedContent
+        }
+      })
+    },
+    
+    /**
+     * 发送文本消息
+     * @param {Object} messageData 消息数据
+     * @returns {Promise} 发送结果
+     */
+    async sendTextMessage(messageData) {
+      try {
+        // 先添加到本地消息列表(乐观更新)
+        const tempMessage = {
+          id: `temp_${Date.now()}`,
+          conversationId: messageData.conversationId,
+          senderId: messageData.senderId,
+          receiverId: messageData.receiverId,
+          content: messageData.content,
+          messageType: 0, // 文本消息
+          sendTime: Date.now(),
+          status: 'sending' // 发送中状态
+        }
+        
+        this.addMessage(tempMessage)
+        
+        // 调用API发送消息
+        const response = await sendTextMessage(messageData)
+        
+        if (response.code === 200) {
+          // 更新消息状态为发送成功
+          this.updateMessageStatus(tempMessage.id, 'sent', response.data.messageId)
+          return response.data
+        } else {
+          // 更新消息状态为发送失败
+          this.updateMessageStatus(tempMessage.id, 'failed')
+          throw new Error(response.message || '发送消息失败')
+        }
+      } catch (error) {
+        console.error('发送消息出错:', error)
+        throw error
+      }
+    },
+    
+    /**
+     * 添加消息到存储
+     * @param {Object} message 消息对象
+     */
+    addMessage(message) {
+      const { conversationId } = message
+      
+      if (!conversationId) {
+        console.error('添加消息失败: 缺少conversationId')
+        return
       }
       
-      // 调用关闭回调
-      if (typeof message.onClose === 'function') {
-        message.onClose()
+      // 确保消息数组已初始化
+      if (!this.messages[conversationId]) {
+        this.messages[conversationId] = []
       }
-    })
+      
+      // 添加消息
+      this.messages[conversationId].unshift(message)
+    },
     
-    // 清空消息队列
-    messages.value = []
-  }
-  
-  /**
-   * 显示成功消息
-   * @param {string} content 消息内容
-   * @param {number} duration 显示时长
-   * @returns {number} 消息ID
-   */
-  const showSuccess = (content, duration = 3000) => {
-    return showMessage({
-      type: 'success',
-      content,
-      duration
-    })
-  }
-  
-  /**
-   * 显示错误消息
-   * @param {string} content 消息内容
-   * @param {number} duration 显示时长
-   * @returns {number} 消息ID
-   */
-  const showError = (content, duration = 4000) => {
-    return showMessage({
-      type: 'error',
-      content,
-      duration
-    })
-  }
-  
-  /**
-   * 显示警告消息
-   * @param {string} content 消息内容
-   * @param {number} duration 显示时长
-   * @returns {number} 消息ID
-   */
-  const showWarning = (content, duration = 3000) => {
-    return showMessage({
-      type: 'warning',
-      content,
-      duration
-    })
-  }
-  
-  /**
-   * 显示信息消息
-   * @param {string} content 消息内容
-   * @param {number} duration 显示时长
-   * @returns {number} 消息ID
-   */
-  const showInfo = (content, duration = 3000) => {
-    return showMessage({
-      type: 'info',
-      content,
-      duration
-    })
-  }
-  
-  return {
-    messages,
-    showMessage,
-    closeMessage,
-    closeAllMessages,
-    showSuccess,
-    showError,
-    showWarning,
-    showInfo
+    /**
+     * 更新消息状态
+     * @param {string} tempId 临时消息ID
+     * @param {string} status 消息状态
+     * @param {string} newId 新消息ID
+     */
+    updateMessageStatus(tempId, status, newId = null) {
+      // 遍历所有会话
+      Object.keys(this.messages).forEach(conversationId => {
+        const messages = this.messages[conversationId]
+        const index = messages.findIndex(msg => msg.id === tempId)
+        
+        if (index !== -1) {
+          // 更新消息状态
+          const updatedMessage = {
+            ...messages[index],
+            status
+          }
+          
+          // 更新消息ID
+          if (newId) {
+            updatedMessage.id = newId
+          }
+          
+          // 更新消息数组
+          this.messages[conversationId][index] = updatedMessage
+        }
+      })
+    },
+    
+    /**
+     * 标记消息为已读
+     * @param {string} conversationId 会话ID
+     * @param {Array<string>} messageIds 消息ID列表
+     */
+    markMessagesAsRead(conversationId, messageIds) {
+      if (!conversationId || !messageIds || messageIds.length === 0) {
+        return
+      }
+      
+      // 本地更新消息状态
+      const messages = this.messages[conversationId] || []
+      
+      this.messages[conversationId] = messages.map(msg => {
+        if (messageIds.includes(msg.id)) {
+          return { ...msg, isRead: true }
+        }
+        return msg
+      })
+      
+      // 调用API标记已读(后台任务)
+      markAsRead(conversationId).catch(error => {
+        console.error('标记消息已读失败:', error)
+      })
+    },
+    
+    /**
+     * 删除消息
+     * @param {string} conversationId 会话ID
+     * @param {string} messageId 消息ID
+     */
+    deleteMessage(conversationId, messageId) {
+      if (!conversationId || !messageId) {
+        return
+      }
+      
+      const messages = this.messages[conversationId] || []
+      this.messages[conversationId] = messages.filter(msg => msg.id !== messageId)
+    },
+    
+    /**
+     * 清空指定会话的消息
+     * @param {string} conversationId 会话ID
+     */
+    clearMessages(conversationId) {
+      if (conversationId) {
+        this.messages[conversationId] = []
+      }
+    },
+    
+    /**
+     * 重置状态
+     */
+    resetState() {
+      this.messages = {}
+      this.loading = {}
+      this.hasMore = {}
+      this.earliestTimes = {}
+    }
   }
 })

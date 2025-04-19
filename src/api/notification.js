@@ -1,4 +1,3 @@
-import request from '@/utils/request';
 import { nanoid } from 'nanoid'; // 用于生成唯一ID
 
 // Mock 数据存储

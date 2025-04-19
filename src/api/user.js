@@ -815,3 +815,85 @@ export function getUserStats(forceRefresh = true) {
     };
   });
 }
+
+/**
+ * 根据ID查找用户
+ * @param {Array<number>|number} ids 要查找的用户ID数组或单个ID
+ * @returns {Promise} Promise对象
+ */
+export function findUsers(ids) {
+  // 确保ids始终是数组
+  const userIds = Array.isArray(ids) ? ids : [ids];
+  
+  return request({
+    url: '/api/user/finduser',
+    method: 'post',
+    data: {
+      ids: userIds
+    }
+  })
+  .then(response => {
+    console.log('findUsers API原始响应:', response);
+    
+    // 处理直接返回users数组的情况
+    if (response && response.users && Array.isArray(response.users)) {
+      console.log('服务器直接返回users数组格式');
+      return response; // 直接返回原始响应
+    }
+    
+    // 处理标准响应格式
+    if (response && response.code === 200 && response.data) {
+      // 标准化响应格式
+      console.log('标准响应格式处理');
+      if (Array.isArray(response.data.users)) {
+        response.data.users = response.data.users.map(user => ({
+          id: user.id || user.userId,
+          username: user.username || '未知用户',
+          nickname: user.nickname || user.username || '未知用户',
+          avatar: user.avatar || '',
+          bio: user.bio || '',
+          school: user.school || user.campus || '',
+          department: user.department || user.college || ''
+        }));
+      }
+    }
+    
+    return response;
+  })
+  .catch(error => {
+    console.error('findUsers API请求失败:', error);
+    // 使用错误处理的最佳实践
+    if (error.response) {
+      // 服务器响应了一个状态码
+      console.error('服务器响应错误状态码:', error.response.status);
+      console.error('错误响应数据:', error.response.data);
+      
+      return {
+        code: error.response.status,
+        message: error.response.data?.error || '查找用户失败',
+        data: {
+          users: []
+        }
+      };
+    } else if (error.request) {
+      // 请求发送成功，但没有收到响应
+      console.error('未收到响应:', error.request);
+      return {
+        code: 500,
+        message: '服务器无响应',
+        data: {
+          users: []
+        }
+      };
+    } else {
+      // 设置请求时发生错误
+      return {
+        code: 500,
+        message: error.message || '查找用户失败',
+        data: {
+          users: []
+        }
+      };
+    }
+  });
+}

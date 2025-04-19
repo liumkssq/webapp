@@ -131,9 +131,9 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { showToast } from 'vant'
-import { sendTypingStatus } from '@/api/im'
+import { computed, nextTick, onMounted, ref } from 'vue'
+// import { sendTypingStatus } from '@/api/im'
 import { useThrottleFn } from '@vueuse/core'
 
 const props = defineProps({
@@ -171,9 +171,11 @@ const showEmojiPicker = ref(false)
 
 // 节流发送正在输入状态，3秒内最多发送一次
 const throttledSendTyping = useThrottleFn(() => {
-  if (props.conversationId) {
-    sendTypingStatus(props.conversationId)
-  }
+  // 暂时注释掉发送输入状态的功能，因为API不存在
+  // if (props.conversationId) {
+  //   sendTypingStatus(props.conversationId)
+  // }
+  console.log('用户正在输入...');
 }, 3000)
 
 // 文本输入框的行数

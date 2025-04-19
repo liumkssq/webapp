@@ -4,7 +4,7 @@
       <van-tabbar-item name="home" icon="home-o" to="/">首页</van-tabbar-item>
       <van-tabbar-item name="market" icon="shop-o" :to="{ name: 'ProductList' }">市场</van-tabbar-item>
       <van-tabbar-item name="publish" icon="add-o" to="/publish">发布</van-tabbar-item>
-      <van-tabbar-item name="message" icon="chat-o" :to="{ name: 'ImConversations' }" :badge="chatUnreadCount > 0 ? chatUnreadCount : ''">消息</van-tabbar-item>
+      <van-tabbar-item name="message" icon="chat-o" :to="{ name: 'ImConversationList' }" :badge="chatUnreadCount > 0 ? chatUnreadCount : ''">消息</van-tabbar-item>
       <van-tabbar-item name="notifications" icon="bell" to="/notifications" :badge="notificationUnreadCount > 0 ? notificationUnreadCount : ''">通知</van-tabbar-item>
       <van-tabbar-item name="mine" icon="user-circle-o" :to="{ name: 'Mine' }">我的</van-tabbar-item>
     </van-tabbar>
@@ -12,12 +12,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { Tabbar as VanTabbar, TabbarItem as VanTabbarItem, showToast } from 'vant';
-import { useUserStore } from '@/store/user';
 import { getUnreadCount as getChatUnreadCount } from '@/api/im'; // 聊天未读数API
 import { getUnreadCount as getNotificationUnreadCount } from '@/api/notification'; // 通知未读数API
+import { useUserStore } from '@/store/user';
+import { Tabbar as VanTabbar, TabbarItem as VanTabbarItem } from 'vant';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 const router = useRouter();
 const route = useRoute();
@@ -26,6 +26,11 @@ const chatUnreadCount = ref(0);
 const notificationUnreadCount = ref(0);
 let pollingTimer = null;
 const active = ref('home'); // 当前激活的tab name
+
+// 错误计数器
+let chatErrorCount = 0;
+let notificationErrorCount = 0;
+const MAX_ERROR_COUNT = 3;
 
 // 映射路由到 Tab Name
 const routeNameToTabName = {
@@ -38,7 +43,9 @@ const routeNameToTabName = {
   'PublishLostFound': 'publish',
   'PublishArticle': 'publish',
   'ImConversations': 'message',
+  'ImConversationList': 'message',
   'ConversationDetail': 'message',
+  'ImConversationDetail': 'message',
   'Notifications': 'notifications',
   'Mine': 'mine',
   'UserProfile': 'mine',
@@ -64,14 +71,32 @@ const fetchChatUnreadCount = async () => {
     chatUnreadCount.value = 0;
     return;
   }
+  
   try {
     const response = await getChatUnreadCount();
     if (response.code === 200) {
-      chatUnreadCount.value = response.data || 0;
+      // 重置错误计数
+      chatErrorCount = 0;
+      chatUnreadCount.value = response.data?.count || 0;
+    } else {
+      // 响应不成功，递增错误计数
+      chatErrorCount++;
+      console.warn(`获取聊天未读数响应失败 (${chatErrorCount}/${MAX_ERROR_COUNT}):`, response.message);
     }
   } catch (error) {
-    // 忽略错误，避免频繁提示
-    // console.error('获取聊天未读数失败:', error);
+    chatErrorCount++;
+    console.warn(`获取聊天未读数失败 (${chatErrorCount}/${MAX_ERROR_COUNT}):`, error);
+    
+    // 如果连续错误超过最大次数，延长轮询间隔或暂停轮询
+    if (chatErrorCount >= MAX_ERROR_COUNT) {
+      console.error('获取聊天未读数多次失败，暂停轮询');
+      stopPolling();
+      // 30秒后重试一次
+      setTimeout(() => {
+        chatErrorCount = 0;
+        startPolling();
+      }, 30000);
+    }
   }
 };
 
@@ -81,25 +106,47 @@ const fetchNotificationUnread = async () => {
     notificationUnreadCount.value = 0;
     return;
   }
+  
   try {
     const response = await getNotificationUnreadCount();
     if (response.code === 200) {
+      // 重置错误计数
+      notificationErrorCount = 0;
       notificationUnreadCount.value = response.data?.count || 0;
+    } else {
+      // 响应不成功，递增错误计数
+      notificationErrorCount++;
+      console.warn(`获取通知未读数响应失败 (${notificationErrorCount}/${MAX_ERROR_COUNT}):`, response.message);
     }
   } catch (error) {
-    // 忽略错误
-    // console.error('获取通知未读数失败:', error);
+    notificationErrorCount++;
+    console.warn(`获取通知未读数失败 (${notificationErrorCount}/${MAX_ERROR_COUNT}):`, error);
+    
+    // 如果连续错误超过最大次数，延长轮询间隔或暂停轮询
+    if (notificationErrorCount >= MAX_ERROR_COUNT) {
+      console.error('获取通知未读数多次失败，暂停轮询');
+      stopPolling();
+      // 30秒后重试一次
+      setTimeout(() => {
+        notificationErrorCount = 0;
+        startPolling();
+      }, 30000);
+    }
   }
 };
 
 // 轮询未读消息
 const startPolling = () => {
   stopPolling(); // Clear existing timer first
-  // 每30秒获取一次未读消息数
+  // 先立即执行一次
+  fetchChatUnreadCount();
+  fetchNotificationUnread();
+  
+  // 每60秒获取一次未读消息数 (增加间隔减少请求)
   pollingTimer = setInterval(() => {
     fetchChatUnreadCount();
     fetchNotificationUnread();
-  }, 30000);
+  }, 60000);
 };
 
 const stopPolling = () => {

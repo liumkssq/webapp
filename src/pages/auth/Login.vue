@@ -128,11 +128,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onBeforeUnmount, onMounted, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { loginByPassword, loginByVerificationCode, apiSendVerificationCode, autoLogin, adminLogin } from '@/api/user'
-import { useUserStore } from '@/store/user'
+import { adminLogin, apiSendVerificationCode, loginByPassword, loginByVerificationCode } from '@/api/user'
 import { useMessageStore } from '@/store/message'
+import { useUserStore } from '@/store/user'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()

@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import { useUserStore } from '../store/user'
+import { createRouter, createWebHistory } from 'vue-router';
+import { useUserStore } from '../store/user';
 
 // 路由配置
 const routes = [
@@ -137,6 +137,44 @@ const routes = [
     redirect: '/publish/article'
   },
   
+  // 社交相关路由
+  {
+    path: '/social/friends',
+    name: 'Friends',
+    component: () => import('../pages/social/Friends.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的好友'
+    }
+  },
+  {
+    path: '/social/add-friend',
+    name: 'AddFriend',
+    component: () => import('../pages/social/AddFriend.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '添加好友'
+    }
+  },
+  {
+    path: '/social/friend-requests',
+    name: 'SocialFriendRequests',
+    component: () => import('../pages/social/FriendRequests.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '好友请求'
+    }
+  },
+  {
+    path: '/social/groups',
+    name: 'Groups',
+    component: () => import('../pages/social/Groups.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '我的群组'
+    }
+  },
+  
   // 消息与聊天相关路由
   {
     path: '/message',
@@ -186,9 +224,9 @@ const routes = [
   
   // IM相关路由
   {
-    path: '/im/message',
-    name: 'ImMessage',
-    component: () => import('../pages/im/ImMessagePage.vue'),
+    path: '/im',
+    name: 'im',
+    component: () => import('../pages/im/Conversations.vue'),
     meta: {
       requiresAuth: true,
       title: '消息'
@@ -201,6 +239,15 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: '会话列表'
+    }
+  },
+  {
+    path: '/im/conversation-list',
+    name: 'ImConversationList',
+    component: () => import('../pages/im/Conversations.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '消息列表'
     }
   },
   {
@@ -241,30 +288,13 @@ const routes = [
     }
   },
   {
-    path: '/im/group/:id',
-    name: 'GroupDetail',
-    component: () => import('../pages/im/Chat.vue'),
-    meta: {
-      requiresAuth: true,
-      title: '群聊'
-    },
-    props: route => ({
-      conversationType: 'group',
-      targetId: parseInt(route.params.id)
-    })
-  },
-  {
     path: '/im/chat/:id',
-    name: 'ImConversationDetail',
+    name: 'chat',
     component: () => import('../pages/im/Chat.vue'),
     meta: {
       requiresAuth: true,
       title: '聊天'
-    },
-    props: route => ({
-      conversationType: 'private',
-      targetId: route.params.id
-    })
+    }
   },
   
   // 用户相关路由
@@ -562,8 +592,14 @@ router.afterEach((to, from) => {
   }
 })
 
-// 全局路由守卫，处理登录验证
+// 添加全局守卫，处理同路由不同参数的刷新问题
 router.beforeEach((to, from, next) => {
+  // 如果是同一个路由但参数不同，强制刷新组件
+  if (from.name === to.name && JSON.stringify(from.params) !== JSON.stringify(to.params)) {
+    next({ ...to, replace: true });
+    return;
+  }
+  
   const userStore = useUserStore()
   const isLoggedIn = !!localStorage.getItem('token')
   

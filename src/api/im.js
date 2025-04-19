@@ -1,28 +1,85 @@
 // IM API 模块
+import { WS_CONFIG } from '@/config/index'
 import request from '@/utils/request'
 
 // WebSocket操作类型常量
 export const wsActions = {
   USER_ONLINE: 'user.online',
   CONVERSATION_CHAT: 'conversation.chat',
-  PUSH: 'push'
+  CONVERSATION_MARK_CHAT: 'conversation.markChat',
+  PUSH: 'push',
+  CONNECT: 'connect',                  // 连接
+  DISCONNECT: 'disconnect',            // 断开连接
+  SEND_MESSAGE: 'sendMessage',         // 发送消息
+  RECEIVE_MESSAGE: 'receiveMessage',   // 接收消息
+  MARK_READ: 'markRead',               // 标记已读
+  HEART_BEAT: 'heartbeat',             // 心跳包
+  ACK: 'ack'                           // 确认收到
+}
+
+// 聊天类型常量
+export const CHAT_TYPE = {
+  GROUP: 1, // 群聊
+  SINGLE: 2  // 单聊
+}
+
+// 消息类型常量
+export const MESSAGE_TYPE = {
+  TEXT: 1,    // 文本
+  IMAGE: 2,   // 图片
+  AUDIO: 3,   // 音频
+  VIDEO: 4,   // 视频
+  FILE: 5,    // 文件
+  LOCATION: 6, // 位置
+  CARD: 7,    // 名片
+  SYSTEM: 8,  // 系统
+  CUSTOM: 9,  // 自定义
+  RECALL: 10  // 撤回
+}
+
+// 内容类型常量
+export const CONTENT_TYPE = {
+  CHAT_MESSAGE: 0, // 聊天消息
+  READ_RECEIPT: 1,  // 已读回执
+  TEXT: 1,           // 文本
+  IMAGE: 2,          // 图片
+  AUDIO: 3,          // 音频
+  VIDEO: 4,          // 视频
+  FILE: 5,           // 文件
+  LOCATION: 6,       // 位置
+  CARD: 7,           // 名片
+  CUSTOM: 8         // 自定义
 }
 
 /**
- * 获取聊天记录
- * @param {Object} params - 参数
- * @param {string} params.conversationId - 会话ID
- * @param {number} params.count - 获取数量
- * @param {number} params.startSendTime - 开始时间
- * @param {number} params.endSendTime - 结束时间
- * @returns {Promise}
+ * 获取WebSocket URL
+ * @param {string|number} userId - 用户ID
+ * @returns {string} - WebSocket 连接地址
+ */
+export function getWebSocketUrl(userId) {
+  // 使用配置中的WebSocket基础URL
+  const baseUrl = WS_CONFIG.BASE_URL
+  
+  // 即使userId未定义也返回有效URL
+  return `${baseUrl}${userId ? `?userId=${userId}` : ''}`
+}
+
+/**
+ * 获取聊天历史记录
+ * @param {Object} params 请求参数
+ * @param {string} params.conversationId 会话ID
+ * @param {number} params.startSendTime 开始时间戳
+ * @param {number} params.endSendTime 结束时间戳
+ * @param {number} params.count 返回消息数量
+ * @returns {Promise<Object>} 聊天历史记录
  */
 export function getChatLog(params) {
+  console.log('请求聊天历史记录:', params);
   return request({
-    url: '/v1/im/chat/logs',
-    method: 'get',
+    url: '/api/im/chatlog',
+    method: 'GET',
     params
-  })
+  });
 }
 
 /**
@@ -30,12 +87,12 @@ export function getChatLog(params) {
  * @param {Object} data - 参数
  * @param {number} data.sendId - 发送者ID
  * @param {number} data.recvId - 接收者ID
- * @param {number} data.chatType - 聊天类型 1:单聊 2:群聊
+ * @param {number} data.chatType - 聊天类型 1:群聊 2:单聊
  * @returns {Promise}
  */
 export function setUpUserConversation(data) {
   return request({
-    url: '/v1/im/conversations/setup',
+    url: '/api/im/setup/conversation',
     method: 'post',
     data
   })
@@ -47,7 +104,7 @@ export function setUpUserConversation(data) {
  */
 export function getConversations() {
   return request({
-    url: '/v1/im/conversations',
+    url: '/api/im/conversation',
     method: 'get'
   })
 }
@@ -61,7 +118,7 @@ export function getConversations() {
  */
 export function getConversationList(params) {
   return request({
-    url: '/v1/im/conversation',
+    url: '/api/im/conversation',
     method: 'get',
     params
   })
@@ -83,21 +140,81 @@ export function getConversationList(params) {
  */
 export function putConversations(data) {
   return request({
-    url: '/v1/im/conversations',
+    url: '/api/im/conversation',
     method: 'put',
     data
   })
 }
 
 /**
- * 获取未读消息数
- * @returns {Promise}
+ * 获取未读消息数量
+ * @returns {Promise<Object>} 未读消息数量
  */
 export function getUnreadCount() {
+  const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+  
+  // 如果启用了mock模式，返回模拟数据
+  if (useMock) {
+    console.log('[Mock] 使用模拟未读消息数据');
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve({
+          code: 200,
+          message: 'success',
+          data: {
+            count: Math.floor(Math.random() * 5) // 随机0-4条未读消息
+          }
+        });
+      }, 200);
+    });
+  }
+  
+  // 从本地存储获取会话列表并计算未读数，避免不必要的API请求
+  const cachedConversations = localStorage.getItem('cachedConversations');
+  if (cachedConversations) {
+    try {
+      const { conversationList } = JSON.parse(cachedConversations);
+      // 计算所有会话的未读消息总数
+      let totalUnread = 0;
+      Object.values(conversationList || {}).forEach(conv => {
+        totalUnread += (conv.unreadCount || 0);
+      });
+      
+      console.log('[IM] 从缓存计算未读消息数:', totalUnread);
+      return Promise.resolve({
+        code: 200,
+        message: 'success',
+        data: {
+          count: totalUnread
+        }
+      });
+    } catch (error) {
+      console.warn('[IM] 从缓存计算未读消息数失败:', error);
+      // 缓存解析失败，继续使用API请求
+    }
+  }
+  
+  // 实际API请求
+  console.log('[IM] 请求未读消息数');
   return request({
-    url: '/v1/im/unread/count',
-    method: 'get'
-  })
+    url: '/im/unread/count',
+    method: 'get',
+    needLoading: false,
+  }).then(response => {
+    // 如果响应成功但没有count字段，设置为0
+    if (response.code === 200 && !response.data?.count) {
+      response.data = { count: 0 };
+    }
+    return response;
+  }).catch(error => {
+    console.warn('[IM] 获取未读消息数失败:', error);
+    // 失败时返回一个格式化的错误响应
+    return {
+      code: 500,
+      message: error.message || '获取未读消息数失败',
+      data: { count: 0 }
+    };
+  });
 }
 
 /**
@@ -107,7 +224,7 @@ export function getUnreadCount() {
  */
 export function searchUsers(keyword) {
   return request({
-    url: '/v1/user/search',
+    url: '/api/user/search',
     method: 'get',
     params: { keyword }
   })
@@ -121,7 +238,7 @@ export function searchUsers(keyword) {
  */
 export function getFriendRequests(params) {
   return request({
-    url: '/v1/im/friend/requests',
+    url: '/api/social/friend/putIns',
     method: 'get',
     params
   })
@@ -136,25 +253,42 @@ export function getFriendRequests(params) {
  */
 export function handleFriendRequest(data) {
   return request({
-    url: '/v1/im/friend/requests/handle',
-    method: 'post',
-    data
+    url: '/api/social/friend/putIn',
+    method: 'put',
+    data: {
+      id: data.requestId,
+      status: data.action === 'accept' ? 2 : 3 // 2=通过，3=拒绝
+    }
   })
 }
 
 /**
  * 发送好友申请
  * @param {Object} data - 参数
- * @param {number} data.targetUserId - 目标用户ID
- * @param {string} data.message - 申请消息
+ * @param {string} data.targetUserId - 目标用户ID (旧格式)
+ * @param {string} data.message - 申请消息 (旧格式)
+ * @param {string} data.user_uid - 目标用户ID (新格式)
+ * @param {string} data.req_msg - 申请消息 (新格式)
+ * @param {number} data.req_time - 申请时间 (新格式)
  * @returns {Promise}
  */
 export function sendFriendRequest(data) {
+  console.log('发送好友申请，原始参数:', data);
+  
+  // 准备请求数据，优先使用新格式
+  const requestData = {
+    user_uid: data.user_uid || data.targetUserId || data.userId || '',
+    req_msg: data.req_msg || data.message || data.remark || '',
+    req_time: data.req_time || Date.now()
+  };
+  
+  console.log('发送好友申请，处理后参数:', requestData);
+  
   return request({
-    url: '/v1/im/friend/requests/send',
+    url: '/api/social/friend/putIn',
     method: 'post',
-    data
-  })
+    data: requestData
+  });
 }
 
 /**
@@ -164,7 +298,19 @@ export function sendFriendRequest(data) {
  */
 export function getUserDetail(userId) {
   return request({
-    url: `/v1/user/${userId}`,
+    url: `/api/user/${userId}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 获取用户个人资料
+ * @param {number} userId - 用户ID
+ * @returns {Promise}
+ */
+export function getUserProfile(userId) {
+  return request({
+    url: `/api/user/profile/${userId}`,
     method: 'get'
   })
 }
@@ -178,7 +324,7 @@ export function getUserDetail(userId) {
  */
 export function setFriendNote(data) {
   return request({
-    url: '/v1/im/friend/note',
+    url: '/api/social/friend/remark',
     method: 'put',
     data
   })
@@ -191,7 +337,7 @@ export function setFriendNote(data) {
  */
 export function deleteFriend(friendId) {
   return request({
-    url: `/v1/im/friend/${friendId}`,
+    url: `/api/social/friend/${friendId}`,
     method: 'delete'
   })
 }
@@ -235,7 +381,7 @@ export function deleteSession(data) {
  */
 export function deleteMessage(messageId) {
   return request({
-    url: `/v1/im/messages/${messageId}`,
+    url: `/api/im/messages/${messageId}`,
     method: 'delete'
   })
 }
@@ -247,7 +393,7 @@ export function deleteMessage(messageId) {
  */
 export function recallMessageById(messageId) {
   return request({
-    url: `/v1/im/messages/${messageId}/recall`,
+    url: `/api/im/messages/${messageId}/recall`,
     method: 'put'
   })
 }
@@ -262,7 +408,7 @@ export function recallMessageById(messageId) {
  */
 export function sendTextMessage(data) {
   return request({
-    url: '/v1/im/messages/text',
+    url: '/api/im/messages/text',
     method: 'post',
     data
   })
@@ -278,7 +424,7 @@ export function sendTextMessage(data) {
  */
 export function sendImageMessage(data) {
   return request({
-    url: '/v1/im/messages/image',
+    url: '/api/im/messages/image',
     method: 'post',
     data
   })
@@ -291,7 +437,7 @@ export function sendImageMessage(data) {
  */
 export function uploadChatImage(formData) {
   return request({
-    url: '/v1/upload/chat/image',
+    url: '/api/upload/chat/image',
     method: 'post',
     data: formData,
     headers: {
@@ -307,7 +453,7 @@ export function uploadChatImage(formData) {
  */
 export function uploadChatFile(formData) {
   return request({
-    url: '/v1/upload/chat/file',
+    url: '/api/upload/chat/file',
     method: 'post',
     data: formData,
     headers: {
@@ -326,7 +472,7 @@ export function uploadChatFile(formData) {
  */
 export function sendLocationMessage(data) {
   return request({
-    url: '/v1/im/messages/location',
+    url: '/api/im/messages/location',
     method: 'post',
     data
   })
@@ -379,52 +525,13 @@ export function parseLocationContent(content) {
 }
 
 /**
- * WebSocket连接地址
- * @param {number} userId - 用户ID
- * @returns {string} WebSocket URL
- */
-export function getWebSocketUrl(userId) {
-  // 根据环境获取WebSocket基础URL
-  const wsBaseUrl = process.env.NODE_ENV === 'production'
-    ? 'wss://im.ws.example.com'
-    : 'ws://localhost:10090'
-    
-  return `${wsBaseUrl}?userId=${userId}`
-}
-
-/**
- * 发送正在输入状态
- * @param {string|number} conversationId - 会话ID
- * @returns {Promise}
- */
-export function sendTypingStatus(conversationId) {
-  return request({
-    url: '/v1/im/conversations/typing',
-    method: 'post',
-    data: { conversationId }
-  })
-}
-
-/**
- * 清空聊天记录
- * @param {string} conversationId - 会话ID
- * @returns {Promise}
- */
-export function clearMessages(conversationId) {
-  return request({
-    url: `/v1/im/conversations/${conversationId}/messages/clear`,
-    method: 'delete'
-  })
-}
-
-/**
  * 标记消息为已读
  * @param {number|string} conversationId 会话ID
  * @returns {Promise} Promise对象
  */
 export function markAsRead(conversationId) {
   return request({
-    url: `/v1/im/conversations/${conversationId}/read`,
+    url: `/api/im/conversations/${conversationId}/read`,
     method: 'put'
   })
 }
@@ -437,7 +544,7 @@ export function markAsRead(conversationId) {
  */
 export function getChatInitData(params) {
   return request({
-    url: '/v1/im/chat/init',
+    url: '/api/im/chat/init',
     method: 'get',
     params
   })
@@ -453,7 +560,7 @@ export function getChatInitData(params) {
  */
 export function createGroup(data) {
   return request({
-    url: '/v1/im/groups',
+    url: '/api/social/group',
     method: 'post',
     data
   })
@@ -465,7 +572,7 @@ export function createGroup(data) {
  */
 export function getFriendList() {
   return request({
-    url: '/v1/im/friend/list',
+    url: '/api/social/friends',
     method: 'get'
   })
 }
@@ -476,7 +583,7 @@ export function getFriendList() {
  */
 export function getGroupList() {
   return request({
-    url: '/v1/im/groups',
+    url: '/api/social/groups',
     method: 'get'
   })
 }
@@ -489,7 +596,51 @@ export function getGroupList() {
  */
 export function getConversationDetail(params) {
   return request({
-    url: `/v1/im/conversations/${params.conversationId}`,
+    url: `/api/im/conversations/${params.conversationId}`,
     method: 'get'
+  })
+}
+
+/**
+ * 通过WebSocket发送聊天消息
+ * @param {Object} data 聊天消息数据
+ * @returns {Object} 格式化后的WebSocket消息
+ */
+export function formatChatMessage(data) {
+  return {
+    conversationId: data.conversationId,
+    chatType: data.chatType || CHAT_TYPE.SINGLE,
+    sendId: data.senderId,
+    recvId: data.receiverId,
+    msg: {
+      mType: data.messageType || MESSAGE_TYPE.TEXT,
+      content: data.content
+    }
+  }
+}
+
+/**
+ * 格式化标记已读消息
+ * @param {Object} data 已读消息数据
+ * @returns {Object} 格式化后的WebSocket消息
+ */
+export function formatMarkReadMessage(data) {
+  return {
+    chatType: data.chatType || CHAT_TYPE.SINGLE,
+    recvId: data.receiverId,
+    conversationId: data.conversationId,
+    msgIds: data.messageIds
+  }
+}
+
+/**
+ * 清空会话的所有消息
+ * @param {number|string} conversationId 会话ID
+ * @returns {Promise} Promise对象
+ */
+export function clearMessages(conversationId) {
+  return request({
+    url: `/api/im/conversations/${conversationId}/messages`,
+    method: 'delete'
   })
 }

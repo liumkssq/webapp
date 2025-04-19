@@ -84,19 +84,24 @@ export function searchLostFound(params) {
 
 /**
  * 搜索用户
+ * @deprecated 请使用 @/api/user.js 中的 findUsers 函数替代
  * @param {Object} params 搜索参数
  * @param {string} params.keyword 搜索关键词
- * @param {number} params.page 页码
- * @param {number} params.limit 每页数量
+ * @param {number} [params.page=1] 页码
+ * @param {number} [params.limit=10] 每页数量
  * @returns {Promise} Promise对象
  */
 export function searchUsers(params) {
-  const searchParams = { ...params, type: 'user' }
+  // 如果传入的是字符串，将其转换为对象格式
+  const searchParams = typeof params === 'string' 
+    ? { keyword: params } 
+    : { ...params };
+    
   return request({
-    url: '/api/search',
+    url: '/api/search/users',
     method: 'get',
     params: searchParams
-  })
+  });
 }
 
 /**

@@ -69,418 +69,448 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { showToast, showLoadingToast, closeToast } from 'vant'
-import { useIntervalFn } from '@vueuse/core'
-import MessageList from '@/components/im/MessageList.vue'
-import ChatInput from '@/components/im/ChatInput.vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { showToast, showLoadingToast, closeToast } from "vant";
+import { useIntervalFn } from "@vueuse/core";
+import MessageList from "@/components/im/MessageList.vue";
+import ChatInput from "@/components/im/ChatInput.vue";
 import {
   getConversationDetail,
-  getMessageHistory,
+  getChatLog,
   sendTextMessage as apiSendText,
   sendImageMessage as apiSendImage,
   sendVoiceMessage as apiSendVoice,
   markAsRead,
   deleteMessage as apiDeleteMessage,
   clearMessages as apiClearMessages
-} from '@/api/im'
+} from "@/api/im";
 
-const route = useRoute()
-const router = useRouter()
-const conversationId = computed(() => Number(route.params.id))
-const targetUserName = computed(() => route.query.name || '会话')
-const currentUserId = 1 // 假设当前用户ID为1
+const route = useRoute();
+const router = useRouter();
+const conversationId = computed(() => {
+  const id = route.params.id;
+  return id ? (route.params.id + "") : ""; // 确保转换为字符串且不为undefined
+});
+const targetUserName = computed(() => route.query.name || "会话");
+const currentUserId = 1; // 假设当前用户ID为1
 
 // 状态
-const loading = ref(false)
-const loadingImage = ref(false)
-const loadingVoice = ref(false)
-const hasMore = ref(true)
-const page = ref(1)
-const messages = ref([])
-const conversation = ref(null)
-const messageListRef = ref(null)
-const messageToDelete = ref(null)
-const showActions = ref(false)
-const showDeleteDialog = ref(false)
-const showClearDialog = ref(false)
+const loading = ref(false);
+const loadingImage = ref(false);
+const loadingVoice = ref(false);
+const hasMore = ref(true);
+const page = ref(1);
+const messages = ref([]);
+const conversation = ref(null);
+const messageListRef = ref(null);
+const messageToDelete = ref(null);
+const showActions = ref(false);
+const showDeleteDialog = ref(false);
+const showClearDialog = ref(false);
 
 // 操作菜单配置
 const actions = [
-  { name: '清空聊天记录', color: '#ff3b30' }
-]
+  { name: "清空聊天记录", color: "#ff3b30" }
+];
 
 // 导航返回
 const onClickLeft = () => {
-  router.back()
-}
+  router.back();
+};
 
 // 加载会话详情
 const fetchConversation = async () => {
-  loading.value = true
+  if (!conversationId.value) {
+    console.error("会话ID无效");
+    showToast("无效的会话ID");
+    return;
+  }
+  
+  loading.value = true;
   try {
-    const response = await getConversationDetail(conversationId.value)
+    const response = await getConversationDetail(conversationId.value);
     if (response.code === 200) {
-      conversation.value = response.data
+      conversation.value = response.data;
       
       // 标记消息为已读
-      await markAsRead(conversationId.value)
+      await markAsRead(conversationId.value);
     } else {
-      showToast(response.message || '获取会话失败')
+      showToast(response.message || "获取会话失败");
     }
   } catch (error) {
-    console.error('获取会话失败:', error)
-    showToast('网络错误，请稍后重试')
+    console.error("获取会话失败:", error);
+    showToast("网络错误，请稍后重试");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 // 加载消息历史
 const fetchMessages = async (isLoadMore = false) => {
-  if (loading.value) return
+  if (loading.value || !conversationId.value) return;
   
-  loading.value = true
+  loading.value = true;
   try {
-    const response = await getMessageHistory(conversationId.value, {
+    const response = await getChatLog({
+      conversationId: conversationId.value,
       page: page.value,
       limit: 20
-    })
+    });
     
     if (response.code === 200) {
-      const { list, hasMore: more } = response.data
+      const { list, hasMore: more } = response.data;
       
       if (isLoadMore) {
         // 合并消息，避免重复
-        const messageIds = new Set(messages.value.map(m => m.id))
-        const newMessages = list.filter(m => !messageIds.has(m.id))
-        messages.value = [...newMessages, ...messages.value]
+        const messageIds = new Set(messages.value.map(m => m.id));
+        const newMessages = list.filter(m => !messageIds.has(m.id));
+        messages.value = [...newMessages, ...messages.value];
       } else {
-        messages.value = list
+        messages.value = list;
       }
       
-      hasMore.value = more
+      hasMore.value = more;
       
       // 消息已加载，标记为已读
-      await markAsRead(conversationId.value)
+      await markAsRead(conversationId.value);
     } else {
-      showToast(response.message || '获取消息失败')
+      showToast(response.message || "获取消息失败");
     }
   } catch (error) {
-    console.error('获取消息失败:', error)
-    showToast('网络错误，请稍后重试')
+    console.error("获取消息失败:", error);
+    showToast("网络错误，请稍后重试");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 // 加载更早的消息
 const loadEarlierMessages = () => {
-  if (loading.value || !hasMore.value) return
+  if (loading.value || !hasMore.value) return;
   
-  page.value++
-  fetchMessages(true)
-}
+  page.value++;
+  fetchMessages(true);
+};
 
 // 发送文本消息
 const sendTextMessage = async (content) => {
+  if (!conversationId.value) {
+    showToast("无效的会话");
+    return;
+  }
+  
   try {
     // 先添加一条本地消息
-    const tempId = `temp_${Date.now()}`
+    const tempId = `temp_${Date.now()}`;
     const tempMessage = {
       id: tempId,
       conversationId: conversationId.value,
       senderId: currentUserId,
       receiverId: conversation.value?.targetInfo?.id,
-      type: 'text',
+      type: "text",
       content,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
       isRead: false,
-      status: 'sending'
-    }
+      status: "sending"
+    };
     
-    messages.value = [...messages.value, tempMessage]
+    messages.value = [...messages.value, tempMessage];
     
     // 滚动到底部
     nextTick(() => {
-      messageListRef.value?.scrollToBottom()
-    })
+      messageListRef.value?.scrollToBottom();
+    });
     
     // 发送消息
-    const response = await apiSendText(conversationId.value, content)
+    const response = await apiSendText(conversationId.value, content);
     
     if (response.code === 200) {
       // 用服务器返回的消息替换临时消息
-      const index = messages.value.findIndex(m => m.id === tempId)
+      const index = messages.value.findIndex(m => m.id === tempId);
       if (index !== -1) {
-        messages.value.splice(index, 1, response.data)
+        messages.value.splice(index, 1, response.data);
       }
     } else {
       // 更新临时消息状态为失败
-      const index = messages.value.findIndex(m => m.id === tempId)
+      const index = messages.value.findIndex(m => m.id === tempId);
       if (index !== -1) {
-        messages.value[index].status = 'failed'
+        messages.value[index].status = "failed";
       }
       
-      showToast(response.message || '发送失败')
+      showToast(response.message || "发送失败");
     }
   } catch (error) {
-    console.error('发送消息失败:', error)
-    showToast('网络错误，请稍后重试')
+    console.error("发送消息失败:", error);
+    showToast("网络错误，请稍后重试");
   }
-}
+};
 
 // 发送图片消息
 const sendImageMessage = async (file) => {
-  loadingImage.value = true
+  if (!conversationId.value) {
+    showToast("无效的会话");
+    return;
+  }
+  
+  loadingImage.value = true;
   try {
     // 先添加一条本地消息
-    const tempId = `temp_${Date.now()}`
-    const tempUrl = URL.createObjectURL(file)
+    const tempId = `temp_${Date.now()}`;
+    const tempUrl = URL.createObjectURL(file);
     
     const tempMessage = {
       id: tempId,
       conversationId: conversationId.value,
       senderId: currentUserId,
       receiverId: conversation.value?.targetInfo?.id,
-      type: 'image',
+      type: "image",
       content: tempUrl,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
       isRead: false,
-      status: 'sending'
-    }
+      status: "sending"
+    };
     
-    messages.value = [...messages.value, tempMessage]
+    messages.value = [...messages.value, tempMessage];
     
     // 滚动到底部
     nextTick(() => {
-      messageListRef.value?.scrollToBottom()
-    })
+      messageListRef.value?.scrollToBottom();
+    });
     
     // 发送图片
-    const response = await apiSendImage(conversationId.value, file)
+    const response = await apiSendImage(conversationId.value, file);
     
     if (response.code === 200) {
       // 用服务器返回的消息替换临时消息
-      const index = messages.value.findIndex(m => m.id === tempId)
+      const index = messages.value.findIndex(m => m.id === tempId);
       if (index !== -1) {
-        messages.value.splice(index, 1, response.data)
+        messages.value.splice(index, 1, response.data);
       }
     } else {
       // 更新临时消息状态为失败
-      const index = messages.value.findIndex(m => m.id === tempId)
+      const index = messages.value.findIndex(m => m.id === tempId);
       if (index !== -1) {
-        messages.value[index].status = 'failed'
+        messages.value[index].status = "failed";
       }
       
-      showToast(response.message || '发送失败')
+      showToast(response.message || "发送失败");
     }
   } catch (error) {
-    console.error('发送图片失败:', error)
-    showToast('网络错误，请稍后重试')
+    console.error("发送图片失败:", error);
+    showToast("网络错误，请稍后重试");
   } finally {
-    loadingImage.value = false
+    loadingImage.value = false;
   }
-}
+};
 
 // 发送语音消息
 const sendVoiceMessage = async (voiceData) => {
-  loadingVoice.value = true
+  if (!conversationId.value) {
+    showToast("无效的会话");
+    return;
+  }
+  
+  loadingVoice.value = true;
   try {
     // 此处应该处理实际的语音文件
-    const { duration, file } = voiceData
+    const { duration, file } = voiceData;
     
     // 模拟语音发送
-    const tempId = `temp_${Date.now()}`
+    const tempId = `temp_${Date.now()}`;
     const tempMessage = {
       id: tempId,
       conversationId: conversationId.value,
       senderId: currentUserId,
       receiverId: conversation.value?.targetInfo?.id,
-      type: 'voice',
-      content: 'https://example.com/audio/temp.mp3',
+      type: "voice",
+      content: "https://example.com/audio/temp.mp3",
       duration,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
       isRead: false,
-      status: 'sending'
-    }
+      status: "sending"
+    };
     
-    messages.value = [...messages.value, tempMessage]
+    messages.value = [...messages.value, tempMessage];
     
     // 滚动到底部
     nextTick(() => {
-      messageListRef.value?.scrollToBottom()
-    })
+      messageListRef.value?.scrollToBottom();
+    });
     
     // 模拟API延迟
     setTimeout(() => {
       // 更新为成功状态
-      const index = messages.value.findIndex(m => m.id === tempId)
+      const index = messages.value.findIndex(m => m.id === tempId);
       if (index !== -1) {
-        messages.value[index].status = 'sent'
+        messages.value[index].status = "sent";
       }
       
-      loadingVoice.value = false
-    }, 1000)
+      loadingVoice.value = false;
+    }, 1000);
   } catch (error) {
-    console.error('发送语音失败:', error)
-    showToast('发送语音失败，请重试')
-    loadingVoice.value = false
+    console.error("发送语音失败:", error);
+    showToast("发送语音失败，请重试");
+    loadingVoice.value = false;
   }
-}
+};
 
 // 发送位置消息
 const sendLocationMessage = async () => {
   try {
     // 实现位置消息发送逻辑
-    showToast('位置发送功能即将上线')
+    showToast("位置发送功能即将上线");
   } catch (error) {
-    console.error('发送位置失败:', error)
-    showToast('发送位置失败')
+    console.error("发送位置失败:", error);
+    showToast("发送位置失败");
   }
-}
+};
 
 // 发送商品消息
 const sendProductMessage = async (product) => {
   try {
     // 实现商品消息发送逻辑
-    showToast('商品发送功能即将上线')
+    showToast("商品发送功能即将上线");
   } catch (error) {
-    console.error('发送商品失败:', error)
-    showToast('发送商品失败')
+    console.error("发送商品失败:", error);
+    showToast("发送商品失败");
   }
-}
+};
 
 // 发送表情消息
 const sendEmojiMessage = async (emoji) => {
   try {
     // 实现表情消息发送逻辑
-    showToast('表情发送功能即将上线')
+    showToast("表情发送功能即将上线");
   } catch (error) {
-    console.error('发送表情失败:', error)
-    showToast('发送表情失败')
+    console.error("发送表情失败:", error);
+    showToast("发送表情失败");
   }
-}
+};
 
 // 重试发送消息
 const retryMessage = (message) => {
-  if (message.type === 'text') {
-    sendTextMessage(message.content)
-  } else if (message.type === 'image') {
+  if (message.type === "text") {
+    sendTextMessage(message.content);
+  } else if (message.type === "image") {
     // 重试需要原始文件，这里只是示例
-    showToast('请重新选择图片')
-  } else if (message.type === 'voice') {
+    showToast("请重新选择图片");
+  } else if (message.type === "voice") {
     // 重试需要原始录音，这里只是示例
-    showToast('请重新录制语音')
+    showToast("请重新录制语音");
   }
   
   // 移除失败的消息
-  const index = messages.value.findIndex(m => m.id === message.id)
+  const index = messages.value.findIndex(m => m.id === message.id);
   if (index !== -1) {
-    messages.value.splice(index, 1)
+    messages.value.splice(index, 1);
   }
-}
+};
 
 // 显示删除确认弹窗
 const showDeleteConfirm = (message) => {
-  messageToDelete.value = message
-  showDeleteDialog.value = true
-}
+  messageToDelete.value = message;
+  showDeleteDialog.value = true;
+};
 
 // 确认删除消息
 const confirmDeleteMessage = async () => {
-  if (!messageToDelete.value) return
+  if (!messageToDelete.value) return;
   
   const loadingToast = showLoadingToast({
-    message: '删除中...',
+    message: "删除中...",
     forbidClick: true
-  })
+  });
   
   try {
     const response = await apiDeleteMessage(
       conversationId.value,
       messageToDelete.value.id
-    )
+    );
     
     if (response.code === 200) {
       // 从本地删除消息
-      const index = messages.value.findIndex(m => m.id === messageToDelete.value.id)
+      const index = messages.value.findIndex(m => m.id === messageToDelete.value.id);
       if (index !== -1) {
-        messages.value.splice(index, 1)
+        messages.value.splice(index, 1);
       }
       
-      showToast('删除成功')
+      showToast("删除成功");
     } else {
-      showToast(response.message || '删除失败')
+      showToast(response.message || "删除失败");
     }
   } catch (error) {
-    console.error('删除消息失败:', error)
-    showToast('网络错误，请稍后重试')
+    console.error("删除消息失败:", error);
+    showToast("网络错误，请稍后重试");
   } finally {
-    closeToast(loadingToast)
-    messageToDelete.value = null
+    closeToast(loadingToast);
+    messageToDelete.value = null;
   }
-}
+};
 
 // 选择操作
 const onSelectAction = (action) => {
-  if (action.name === '清空聊天记录') {
-    showClearDialog.value = true
+  if (action.name === "清空聊天记录") {
+    showClearDialog.value = true;
   }
-}
+};
 
 // 确认清空消息
 const confirmClearMessages = async () => {
   const loadingToast = showLoadingToast({
-    message: '清空中...',
+    message: "清空中...",
     forbidClick: true
-  })
+  });
   
   try {
-    const response = await apiClearMessages(conversationId.value)
+    const response = await apiClearMessages(conversationId.value);
     
     if (response.code === 200) {
-      messages.value = []
-      showToast('清空成功')
+      messages.value = [];
+      showToast("清空成功");
     } else {
-      showToast(response.message || '清空失败')
+      showToast(response.message || "清空失败");
     }
   } catch (error) {
-    console.error('清空消息失败:', error)
-    showToast('网络错误，请稍后重试')
+    console.error("清空消息失败:", error);
+    showToast("网络错误，请稍后重试");
   } finally {
-    closeToast(loadingToast)
+    closeToast(loadingToast);
   }
-}
+};
 
 // 定时刷新消息
 const { pause: pauseRefresh } = useIntervalFn(() => {
   // 获取最新消息
-  const lastMessageId = messages.value[messages.value.length - 1]?.id
-  
-  // 实际项目中应该调用一个专门的API，这里简化处理
-  fetchMessages()
-}, 10000)
+  if (conversationId.value) {
+    fetchMessages();
+  }
+}, 10000);
 
 // 组件挂载
 onMounted(async () => {
   // 加载会话详情和初始消息
-  await fetchConversation()
-  await fetchMessages()
-  
-  // 标记为已读
-  try {
-    await markAsRead(conversationId.value)
-  } catch (error) {
-    console.error('标记已读失败:', error)
+  if (conversationId.value) {
+    await fetchConversation();
+    await fetchMessages();
+    
+    // 标记为已读
+    try {
+      await markAsRead(conversationId.value);
+    } catch (error) {
+      console.error("标记已读失败:", error);
+    }
+  } else {
+    console.warn("无效的会话ID, 无法加载会话");
+    showToast("无效的会话ID");
+    setTimeout(() => router.push("/im/conversations"), 1500);
   }
-})
+});
 
 // 组件卸载
 onUnmounted(() => {
-  pauseRefresh()
-})
+  pauseRefresh();
+});
 </script>
 
 <style scoped>
@@ -495,4 +525,4 @@ onUnmounted(() => {
   flex: 1;
   overflow: hidden;
 }
-</style> 
+</style>

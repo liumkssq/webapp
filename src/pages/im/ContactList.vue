@@ -30,6 +30,10 @@
                 <van-icon name="friends-o" size="24" class="cell-icon" />
               </van-badge>
             </template>
+            <template #right-icon>
+              <div v-if="newRequestsCount > 0" class="new-request-tip">{{newRequestsCount}}个新请求</div>
+              <van-icon name="arrow" />
+            </template>
           </van-cell>
           <van-cell title="我的群聊" is-link to="/im/groups" center>
             <template #icon>
@@ -150,10 +154,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { searchUsers as apiSearchUsers, sendFriendRequest as apiSendFriendRequest, getFriendList, getFriendRequests } from '@/api/im'
+import { closeToast, showLoadingToast, showSuccessToast, showToast } from 'vant'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
-import { getFriendList, searchUsers as apiSearchUsers, sendFriendRequest as apiSendFriendRequest, getFriendRequests } from '@/api/im'
 
 const router = useRouter()
 const searchText = ref('')
@@ -164,6 +168,46 @@ const searching = ref(false)
 const hasSearched = ref(false)
 const showAddFriend = ref(false)
 const newRequestsCount = ref(0)
+const friendRequests = ref([])
+
+// 处理user_id格式问题的函数
+const parseUserId = (userId) => {
+  // 检查是否是Unicode控制字符
+  if (typeof userId === 'string' && userId.length === 1 && userId.charCodeAt(0) < 32) {
+    // 转换为数字ID
+    return userId.charCodeAt(0);
+  }
+  
+  // 如果已经是数字或其他格式，直接返回
+  return userId;
+}
+
+// 新增：加载好友申请列表
+const loadFriendRequests = async () => {
+  try {
+    const response = await getFriendRequests();
+    console.log('好友申请响应:', response);
+    
+    if (response.code === 200 && response.data && response.data.list) {
+      // 处理user_id格式
+      friendRequests.value = response.data.list.map(request => ({
+        ...request,
+        userId: parseUserId(request.user_id), // 转换ID格式
+        message: request.req_msg,
+        status: request.handle_result === 0 ? 'pending' : 
+                request.handle_result === 1 ? 'accepted' : 'rejected'
+      }));
+      
+      // 更新待处理的好友请求数量
+      newRequestsCount.value = friendRequests.value.filter(req => req.status === 'pending').length;
+      console.log('处理后的好友申请列表:', friendRequests.value);
+    } else {
+      console.error('获取好友申请列表失败:', response);
+    }
+  } catch (error) {
+    console.error('加载好友申请列表失败:', error);
+  }
+}
 
 // 分组好友列表（按首字母）
 const groupedFriends = computed(() => {
@@ -254,9 +298,11 @@ const sendFriendRequest = async (user) => {
   })
   
   try {
+    // 确保发送正确格式的数据
     const response = await apiSendFriendRequest({
-      userId: user.id,
-      message: `我是${localStorage.getItem('userName') || '新用户'}，请求添加您为好友`
+      user_uid: user.id.toString(), // 确保ID是字符串格式
+      req_msg: `我是${localStorage.getItem('userName') || '新用户'}，请求添加您为好友`,
+      req_time: Date.now() // 使用当前时间戳
     })
     
     if (response.code === 200) {
@@ -292,22 +338,11 @@ const loadFriends = async () => {
   }
 }
 
-// 获取好友请求数量
-const loadFriendRequests = async () => {
-  try {
-    const response = await getFriendRequests({ status: 'pending' })
-    if (response.code === 200) {
-      newRequestsCount.value = response.data.list.length
-    }
-  } catch (error) {
-    console.error('获取好友请求数量失败:', error)
-  }
-}
-
 // 组件挂载时加载数据
 onMounted(() => {
-  loadFriends()
-  loadFriendRequests()
+  console.log('ContactList组件已挂载');
+  loadFriends();
+  loadFriendRequests(); // 新增：加载好友申请列表
 })
 </script>
 
@@ -449,5 +484,12 @@ onMounted(() => {
 
 .add-btn {
   flex-shrink: 0;
+}
+
+.new-request-tip {
+  margin-right: 0.5rem;
+  font-size: 0.8rem;
+  color: #ff5722;
+  font-weight: 500;
 }
 </style>
