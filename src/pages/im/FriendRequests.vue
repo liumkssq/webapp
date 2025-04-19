@@ -24,81 +24,59 @@
     
     <!-- 请求列表 -->
     <div class="request-list">
-      <empty-state
-        v-if="requests.length === 0 && !loading" 
-        icon="person_add"
-        text="暂无好友请求"
-        sub-text="可以通过搜索添加好友"
-      />
-      
-      <van-loading v-if="loading" size="24px" vertical class="loading-state">加载中...</van-loading>
-      
+      <van-empty v-if="requests.length === 0 && !loading" description="暂无好友请求" />
       <van-list
-        v-else-if="requests.length > 0"
+        v-else
+        v-model:loading="loading"
         :finished="finished"
         finished-text="没有更多了"
-        @load="onLoad"
+        @load="loadMoreRequests"
+        error-text="请求失败，点击重新加载"
+        :error="hasError"
+        @error="refreshRequests"
       >
-        <div 
-          v-for="request in requests" 
-          :key="request.id" 
-          class="request-item"
-        >
-          <div class="user-info" @click="viewUserProfile(request.user?.userId)">
-            <van-image
-              round
-              width="50"
-              height="50"
-              :src="request.user?.avatar || `https://api.dicebear.com/6.x/avataaars/svg?seed=user${parseUserId(request.user_id)}`"
-              fit="cover"
-            >
-              <template #error>
-                <div class="avatar-fallback">{{ getInitials(request.user?.nickname || request.user?.username) }}</div>
-              </template>
-            </van-image>
-            
-            <div class="request-content">
-              <div class="request-name">{{ request.user?.nickname || request.user?.username || `用户${parseUserId(request.user_id)}` }}</div>
-              <div class="request-message">{{ request.req_msg || '请求添加您为好友' }}</div>
-              <div class="request-time">{{ formatTime(request.req_time) }}</div>
-            </div>
+        <div v-for="req in requests" :key="req.id" class="request-item">
+          <div class="avatar" @click="viewUserProfile(req.user_id)">
+            <img :src="req.avatar || defaultAvatar" alt="头像">
           </div>
-          
-          <div class="request-actions">
-            <!-- 待处理状态 -->
-            <template v-if="request.handle_result === 1">
+          <div class="info" @click="viewUserProfile(req.user_id)">
+            <div class="name">{{ req.username || '未知用户' }}</div>
+            <div class="msg">{{ req.req_msg || '请求添加你为好友' }}</div>
+            <div class="time">{{ formatTime(req.req_time) }}</div>
+          </div>
+          <div class="actions">
+            <!-- 未处理且非处理中状态 -->
+            <template v-if="!req.handle_result && !req.processing">
               <van-button 
+                size="small" 
                 type="primary" 
-                size="small" 
-                @click="handleRequest(request, 'accept')"
-                :loading="acceptingId === request.id"
-              >
-                接受
-              </van-button>
+                class="accept" 
+                :loading="acceptingId === req.id"
+                @click="handleRequest(req.id, 'accept', requests.value.findIndex(r => r.id === req.id))"
+              >接受</van-button>
               <van-button 
-                plain 
-                type="default" 
                 size="small" 
-                @click="handleRequest(request, 'reject')"
-                :loading="rejectingId === request.id"
-              >
-                拒绝
-              </van-button>
+                class="reject" 
+                :loading="rejectingId === req.id"
+                @click="handleRequest(req.id, 'reject', requests.value.findIndex(r => r.id === req.id))"
+              >拒绝</van-button>
             </template>
+            
+            <!-- 处理中状态 -->
+            <div v-else-if="req.processing" class="status processing">
+              <van-loading size="16px" type="spinner" color="#1989fa" />
+              <span>处理中...</span>
+            </div>
             
             <!-- 已处理状态 -->
-            <template v-else>
-              <div class="status-tag" :class="request.handle_result === 2 ? 'accepted' : 'rejected'">
-                {{ request.handle_result === 2 ? '已添加' : '已拒绝' }}
-              </div>
-            </template>
+            <div v-else class="status">
+              <span v-if="req.handle_result === 2" class="accepted">已接受</span>
+              <span v-else-if="req.handle_result === 3" class="rejected">已拒绝</span>
+              <span v-else class="handled">已处理</span>
+            </div>
           </div>
         </div>
       </van-list>
-      
-      <div v-if="error" class="error-message">
-        {{ error }}
-      </div>
     </div>
     
     <!-- 添加好友弹窗 -->
@@ -207,11 +185,10 @@
 <script setup>
 import { sendFriendRequest as apiSendFriendRequest, getFriendRequests, handleFriendRequest } from '@/api/im'
 import { findUsers, getUserProfile } from '@/api/user'
-import EmptyState from '@/components/common/EmptyState.vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { closeToast, showLoadingToast, showSuccessToast, showToast } from 'vant'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 
 // 配置dayjs
@@ -236,6 +213,7 @@ const rejectingId = ref(null)
 const sendingRequest = ref(false)
 const loading = ref(false)
 const error = ref(null)
+const hasError = ref(false)
 
 /**
  * 解析用户ID，处理可能的格式问题
@@ -243,248 +221,220 @@ const error = ref(null)
  * @returns {number|string|null} 解析后的用户ID
  */
 const parseUserId = (userId) => {
-  console.log(`尝试解析用户ID:`, userId);
-  console.log(`用户ID类型: ${typeof userId}`);
-  
-  // 如果已经是数字类型，直接返回
-  if (typeof userId === 'number') {
-    console.log(`用户ID已是数字: ${userId}`);
-    return userId;
-  }
-  
-  // 如果是字符串或其他类型，则尝试转换
   try {
-    // 检查是否是Unicode控制字符
+    // 输出原始ID的类型和值
+    console.log(`解析用户ID - 原始值类型: ${typeof userId}`);
+    
+    // 如果是undefined或null，返回null
+    if (userId === undefined || userId === null) {
+      console.log('用户ID为空');
+      return null;
+    }
+    
+    // 如果已经是数字类型，直接返回
+    if (typeof userId === 'number') {
+      console.log(`用户ID已是数字: ${userId}`);
+      return userId;
+    }
+    
+    // 如果是字符串，进行更详细的处理
     if (typeof userId === 'string') {
+      // 输出字符串的详细信息
       console.log(`用户ID字符串表示: ${JSON.stringify(userId)}`);
+      console.log(`用户ID字符串长度: ${userId.length}`);
       
-      // 检查是否是Unicode控制字符（如\u0001表示数字1）
-      if (userId.length === 1 && userId.charCodeAt(0) <= 31) {
-        const charCode = userId.charCodeAt(0);
-        console.log(`检测到Unicode控制字符: \\u${charCode.toString(16).padStart(4, '0')}`);
-        console.log(`转换为数字: ${charCode}`);
-        return charCode;
+      if (userId.length === 0) {
+        console.log('用户ID为空字符串');
+        return null;
       }
       
-      // 尝试解析为整数
+      // 检查是否是Unicode控制字符（如\u0001表示数字1）
+      if (userId.length === 1) {
+        const charCode = userId.charCodeAt(0);
+        console.log(`字符ASCII码: ${charCode}`);
+        
+        // 如果是控制字符（ASCII 0-31）
+        if (charCode <= 31) {
+          console.log(`检测到Unicode控制字符: \\u${charCode.toString(16).padStart(4, '0')}`);
+          console.log(`将其转换为数字: ${charCode}`);
+          return charCode;
+        }
+      }
+      
+      // 尝试按数字解析
       const parsed = parseInt(userId, 10);
       if (!isNaN(parsed)) {
         console.log(`成功解析为数字: ${parsed}`);
         return parsed;
       }
+      
+      // 如果不是数字，可能是其他格式的ID，直接返回原字符串
+      console.log(`无法解析为数字，保留原字符串: ${userId}`);
+      return userId;
     }
     
-    // 解析失败，返回原值
-    console.log(`无法解析用户ID，返回原值: ${userId}`);
-    return userId;
+    // 如果是对象或其他类型，尝试转换为字符串后解析
+    if (typeof userId === 'object') {
+      console.log(`用户ID是对象类型: ${JSON.stringify(userId)}`);
+      // 尝试使用toString()方法
+      const strId = userId.toString();
+      console.log(`对象转换为字符串: ${strId}`);
+      return parseUserId(strId); // 递归调用自身来解析转换后的字符串
+    }
+    
+    // 其他类型，直接转换为字符串并返回
+    console.log(`未知类型用户ID: ${typeof userId}, 值: ${userId}`);
+    return String(userId);
   } catch (err) {
     console.error(`解析用户ID时出错:`, err);
-    return userId;
+    // 出错时返回null
+    return null;
   }
 };
 
 // 加载好友请求列表
 const loadRequests = async () => {
-  // 防止重复加载
-  if (loading.value) return;
-  
   loading.value = true;
-  error.value = null;
-  
-  console.log(`开始加载好友请求，页码: ${page.value}`);
+  hasError.value = false;
   
   try {
-    const response = await getFriendRequests({ page: page.value, page_size: pageSize.value });
+    console.log('正在加载好友请求...');
+    const response = await getFriendRequests();
+    console.log('好友请求响应:', JSON.stringify(response, null, 2));
     
-    // 记录API响应
-    console.log('getFriendRequests API 响应:', JSON.stringify(response));
-    
-    // 获取请求列表 - 处理可能的不同响应格式
-    let requestList = [];
-    if (response && response.code === 0 && response.data && response.data.lists) {
-      requestList = response.data.lists;
-    } else if (response && response.list && Array.isArray(response.list)) {
-      // 直接返回list数组的情况
-      requestList = response.list;
-    } else if (response && Array.isArray(response)) {
-      // 直接返回数组的情况
-      requestList = response;
-    } else {
-      console.error('无法识别的响应格式，无法获取请求列表', response);
-    }
-    
-    console.log('处理的请求列表:', requestList);
-    
-    if (requestList.length > 0) {
-      // 为每个请求获取用户信息
-      const enhancedRequests = await Promise.all(
-        requestList.map(async (req) => {
-          try {
-            // 解析用户ID
-            const parsedUserId = parseUserId(req.user_id);
-            console.log(`好友请求原始user_id: ${JSON.stringify(req.user_id)}, 解析后: ${parsedUserId}`);
+    if (response && response.list) {
+      // 处理每个请求数据并获取用户信息
+      const requestsWithProfiles = await Promise.all(response.list.map(async (req, idx) => {
+        // 标记处理状态
+        req.processing = false;
+        
+        try {
+          // 显示原始用户ID用于调试
+          console.log(`请求 #${idx+1} 原始用户ID:`, req.user_id);
+          console.log(`用户ID类型: ${typeof req.user_id}`);
+          console.log(`用户ID JSON表示: ${JSON.stringify(req.user_id)}`);
+          
+          // 解析用户ID
+          const userId = parseUserId(req.user_id);
+          console.log(`解析后的用户ID: ${userId} (${typeof userId})`);
+          
+          // 构建请求URL并记录
+          const requestUrl = `/api/user/profile/${userId}`;
+          console.log(`获取用户资料请求URL: ${requestUrl}`);
+          
+          // 获取用户资料
+          const userProfile = await getUserProfile(userId);
+          console.log(`用户 ${userId} 资料响应:`, userProfile);
+          
+          if (userProfile) {
+            // 提取用户名和头像
+            const username = userProfile.username || userProfile.nickname || '未知用户';
+            const avatar = userProfile.avatar || '';
             
-            // 确保userId是数字类型
-            if (parsedUserId === null || parsedUserId === undefined) {
-              console.error(`无效的用户ID: ${req.user_id}`);
-              return {
-                ...req,
-                user: null,
-                errorLoadingUser: true
-              };
-            }
+            console.log(`成功获取用户资料: 用户名=${username}, 头像=${avatar}`);
             
-            // 获取用户资料 - 直接使用ID参数
-            console.log(`请求用户资料，用户ID: ${parsedUserId}`);
-            
-            const userProfileResponse = await getUserProfile(parsedUserId);
-            console.log(`用户资料API响应:`, userProfileResponse);
-            
-            if (userProfileResponse && (userProfileResponse.code === 0 || userProfileResponse.code === 200)) {
-              const userData = userProfileResponse.data;
-              return {
-                ...req,
-                user: {
-                  userId: parsedUserId,
-                  username: userData.username || `用户${parsedUserId}`,
-                  nickname: userData.nickname || userData.username || `用户${parsedUserId}`,
-                  avatar: userData.avatar || ''
-                },
-                errorLoadingUser: false
-              };
-            } else {
-              console.error(`获取用户资料失败:`, userProfileResponse);
-              return {
-                ...req,
-                user: {
-                  userId: parsedUserId,
-                  username: `用户${parsedUserId}`,
-                  nickname: `用户${parsedUserId}`,
-                  avatar: ''
-                },
-                errorLoadingUser: true
-              };
-            }
-          } catch (err) {
-            console.error(`处理好友请求时出错:`, err);
-            const parsedUserId = parseUserId(req.user_id);
+            // 合并用户资料到请求数据中
             return {
               ...req,
-              user: {
-                userId: parsedUserId,
-                username: `用户${parsedUserId}`,
-                nickname: `用户${parsedUserId}`,
-                avatar: ''
-              },
-              errorLoadingUser: true
+              username,
+              avatar,
+              userId: userId,
+              user_id: userId // 统一用户ID格式
             };
+          } else {
+            console.warn(`未能获取用户 ${userId} 的有效资料`);
+            return req;
           }
-        })
-      );
+        } catch (error) {
+          console.error(`获取用户 ${req.user_id} 资料失败:`, error);
+          // 返回带默认值的请求数据
+          return {
+            ...req,
+            username: '未知用户',
+            avatar: '',
+            error: true
+          };
+        }
+      }));
       
-      // 根据当前页码更新请求列表
-      if (page.value === 1) {
-        requests.value = enhancedRequests;
-      } else {
-        requests.value = [...requests.value, ...enhancedRequests];
-      }
+      requests.value = requestsWithProfiles;
+      console.log('处理后的请求数据:', JSON.stringify(requests.value, null, 2));
       
-      // 检查是否还有更多数据
-      finished.value = enhancedRequests.length < pageSize.value;
-      page.value++;
+      finished.value = requestsWithProfiles.length < pageSize.value;
     } else {
-      console.log('没有找到好友请求');
-      if (page.value === 1) {
-        // 如果是第一页，显示空状态
-        requests.value = [];
-      }
+      console.error('获取好友请求失败:', response);
+      requests.value = [];
       finished.value = true;
+      
+      // 如果没有请求数据但API没有返回错误，显示空状态
+      if (response && response.code === 200) {
+        console.log('没有待处理的好友请求');
+      } else {
+        // API返回了错误
+        hasError.value = true;
+        error.value = extractFriendlyErrorMessage(response);
+      }
     }
-  } catch (err) {
-    console.error('获取好友请求出错:', err);
-    error.value = err.message || '获取好友请求出错，请稍后再试';
-    finished.value = true;
+  } catch (error) {
+    console.error('加载好友请求错误:', error);
+    hasError.value = true;
+    error.value = extractFriendlyErrorMessage(error);
   } finally {
     loading.value = false;
   }
 };
 
-// 加载更多
-const onLoad = () => {
-  // 模拟分页，实际项目中应该调用API获取更多数据
-  setTimeout(() => {
-    finished.value = true
-  }, 500)
-}
+const refreshRequests = () => {
+  page.value = 1;
+  hasError.value = false;
+  finished.value = false;
+  requests.value = [];
+  loadRequests();
+};
+
+const loadMoreRequests = () => {
+  // 如果已经加载完所有数据，不再请求
+  if (finished.value) return;
+  
+  page.value++;
+  loadRequests();
+};
 
 // 处理好友请求
-const handleRequest = async (req, action) => {
-  if (!req) {
-    console.error('无效的请求数据');
-    return;
-  }
-  
-  // 设置加载状态
-  if (action === 'accept') {
-    acceptingId.value = req.id;
-  } else {
-    rejectingId.value = req.id;
-  }
-  
-  // 解析用户ID
-  const parsedUserId = parseUserId(req.user_id);
-  console.log(`处理好友请求: action=${action}, 原始user_id=${JSON.stringify(req.user_id)}, 解析后=${parsedUserId}`);
-  
-  if (parsedUserId === null || parsedUserId === undefined) {
-    console.error(`无效的用户ID: ${req.user_id}`);
-    showToast('无效的用户ID，无法处理请求');
-    
-    // 重置加载状态
-    acceptingId.value = null;
-    rejectingId.value = null;
-    return;
-  }
+const handleRequest = async (requestId, action, index) => {
+  // 设置当前处理的请求为loading状态
+  if (!requests.value[index]) return;
+  requests.value[index].processing = true;
   
   try {
-    // 准备API参数
-    const apiParams = {
-      requestId: req.id,
-      userId: parsedUserId,
-      action: action
-    };
+    // 使用handleFriendRequest函数处理请求
+    await handleFriendRequest({
+      requestId,
+      action
+    });
     
-    console.log(`调用handleFriendRequest API，参数:`, apiParams);
+    // 直接更新请求的状态
+    requests.value[index].handle_result = action === 'accept' ? 2 : 3;
+    Toast.success(action === 'accept' ? '已添加为好友' : '已拒绝请求');
     
-    // 调用API处理请求
-    const response = await handleFriendRequest(apiParams);
-    console.log(`handleFriendRequest API响应:`, response);
+    // 重要：强制更新数组，确保Vue能检测到变化
+    requests.value = [...requests.value];
     
-    if (response && (response.code === 0 || response.code === 200)) {
-      // 操作成功
-      showSuccessToast(action === 'accept' ? '已接受好友请求' : '已拒绝好友请求');
-      
-      // 更新请求状态而不是移除
-      const index = requests.value.findIndex(item => item.id === req.id);
-      if (index !== -1) {
-        requests.value[index].handle_result = action === 'accept' ? 2 : 3; // 2=接受, 3=拒绝
-        requests.value[index].handle_time = Date.now();
-      }
-    } else {
-      // 操作失败
-      const errorMsg = extractFriendlyErrorMessage(response) || 
-        (action === 'accept' ? '接受好友请求失败' : '拒绝好友请求失败');
-      console.error('处理好友请求失败:', response);
-      showToast(errorMsg);
-    }
-  } catch (err) {
-    console.error('处理好友请求出错:', err);
-    showToast(err.message || '操作失败，请稍后再试');
+    console.log(`请求处理完成，ID: ${requestId}, 动作: ${action}, 新状态: ${requests.value[index].handle_result}`);
+  } catch (error) {
+    console.error('处理好友请求失败:', error);
+    const errorMsg = extractFriendlyErrorMessage(error);
+    Toast.fail(errorMsg || '处理请求失败，请重试');
   } finally {
-    // 重置加载状态
-    acceptingId.value = null;
-    rejectingId.value = null;
+    // 无论成功或失败，都移除处理中状态
+    if (requests.value[index]) {
+      requests.value[index].processing = false;
+      
+      // 再次强制更新数组
+      requests.value = [...requests.value];
+    }
   }
-};
+}
 
 // 搜索用户
 const searchUsers = async () => {
@@ -719,6 +669,28 @@ const formatTime = (time) => {
   }
 }
 
+// 添加获取用户显示名称的方法
+const getUserDisplayName = (req) => {
+  if (!req || !req.user) {
+    return `用户${parseUserId(req.user_id)}`;
+  }
+  
+  // 优先级：nickname > username > 默认名称
+  return req.user.nickname || req.user.username || `用户${parseUserId(req.user_id)}`;
+}
+
+// 添加调试日志
+console.log('所有请求数据:', requests);
+
+// 每当请求数组发生变化时，监听并打印
+watchEffect(() => {
+  console.log('请求数组变化:', requests.value.map(req => ({
+    id: req.id,
+    status: req.handle_result,
+    user: req.user?.nickname
+  })));
+});
+
 // 组件挂载时获取数据
 onMounted(() => {
   console.log('FriendRequests component mounted');
@@ -755,52 +727,67 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
+.avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-right: 12px;
+}
+
+.info {
   flex: 1;
 }
 
-.request-content {
-  margin-left: 12px;
-}
-
-.request-name {
+.name {
   font-weight: 500;
   font-size: 16px;
   margin-bottom: 4px;
 }
 
-.request-message {
+.msg {
   font-size: 14px;
   color: #666;
   margin-bottom: 4px;
 }
 
-.request-time {
+.time {
   font-size: 12px;
   color: #999;
 }
 
-.request-actions {
+.actions {
   display: flex;
   align-items: center;
 }
 
-.request-actions button {
+.accept, .reject {
   margin-left: 8px;
 }
 
-.avatar-fallback {
+.status {
+  margin-left: 16px;
+}
+
+.processing {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  background-color: #f2f3f5;
-  border-radius: 50%;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #f0f0f0;
+}
+
+.accepted {
+  color: #67c23a;
+}
+
+.rejected {
+  color: #f56c6c;
+}
+
+.handled {
   color: #909399;
-  font-weight: 500;
 }
 
 .popup-header {
@@ -861,22 +848,6 @@ onMounted(() => {
   margin-left: 16px;
 }
 
-.status-tag {
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 12px;
-}
-
-.status-tag.accepted {
-  background-color: #e8f5e9;
-  color: #4caf50;
-}
-
-.status-tag.rejected {
-  background-color: #ffebee;
-  color: #f44336;
-}
-
 .tab-bar {
   position: fixed;
   bottom: 0;
@@ -921,5 +892,13 @@ onMounted(() => {
   color: #f56c6c;
   text-align: center;
   margin-top: 12px;
+}
+
+.processing-tag {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #909399;
+  background: #f4f4f5;
+  border-radius: 4px;
 }
 </style>
