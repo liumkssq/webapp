@@ -869,6 +869,60 @@ const clearChatHistory = async () => {
   }
 }
 
+// 添加直接处理WebSocket原始数据的函数，直接绕过store
+function directProcessWebsocketMessages() {
+  // 保存原始的console.log函数
+  const originalConsoleLog = console.log;
+  
+  // 创建一个包装的console.log函数来拦截内容
+  console.log = function(...args) {
+    // 调用原始的console.log
+    originalConsoleLog.apply(console, args);
+    
+    // 检查参数是否包含"处理PUSH消息:"
+    if (args.length >= 2 && args[0] === '处理PUSH消息:' && args[1]) {
+      try {
+        const message = args[1];
+        
+        // 检查消息是否包含必要字段
+        if (message && message.conversationId && message.content && message.conversationId === conversationId.value) {
+          console.log('直接拦截到PUSH消息，准备显示在UI上:', message);
+          
+          // 创建一个新的消息对象
+          const newMessage = {
+            id: message.msgId || `direct_${Date.now()}`,
+            conversationId: message.conversationId,
+            senderId: message.sendId || '2', // 对方ID，这里用默认值
+            content: message.content,
+            type: 'text',
+            timestamp: message.sendTime || Date.now(),
+            status: 'received',
+            isSelf: false,
+            senderName: targetUser.value?.nickname || targetUser.value?.username || '对方',
+            senderAvatar: targetUser.value?.avatar || getDefaultAvatar('2')
+          };
+          
+          // 检查这个消息是否已存在
+          if (!messages.value.find(m => m.id === newMessage.id)) {
+            // 将消息添加到UI
+            messages.value.push(newMessage);
+            scrollToBottom(true);
+            console.log('成功将拦截的消息添加到UI:', newMessage);
+          }
+        }
+      } catch (error) {
+        console.error('直接处理控制台消息时出错:', error);
+      }
+    }
+  };
+  
+  // 返回一个清理函数
+  return () => {
+    // 恢复原始console.log
+    console.log = originalConsoleLog;
+  };
+}
+
 // 设置消息监听器
 const setupMessageListeners = () => {
   console.log('设置WebSocket消息监听');
@@ -884,6 +938,9 @@ const setupMessageListeners = () => {
   } else {
     console.log('WebSocket已连接，可以接收消息');
   }
+  
+  // 启用直接处理控制台日志的功能
+  const cleanupConsoleIntercept = directProcessWebsocketMessages();
   
   // 注册IM store事件（主要消息处理通道）
   registerWebSocketEvents();
@@ -904,6 +961,73 @@ const setupMessageListeners = () => {
     },
     onMessage: (message) => {
       console.log('Chat.vue收到WebSocket消息:', message);
+      
+      // 紧急处理 - 直接从原始消息中提取内容并显示
+      try {
+        let content = null;
+        let senderId = null;
+        
+        // 提取消息内容，尝试所有可能的位置
+        if (message.data && message.data.Content) {
+          content = message.data.Content;
+          senderId = message.formId || '';
+        } else if (message.data && message.data.content) {
+          content = message.data.content;
+          senderId = message.formId || '';
+        } else if (message.Content) {
+          content = message.Content;
+        } else if (message.content) {
+          content = message.content;
+        }
+        
+        console.log('提取的消息内容:', content, '发送者ID:', senderId);
+        
+        // 如果提取到内容，创建消息并显示
+        if (content) {
+          // 检查会话ID是否匹配当前会话
+          let msgConvId = message.data && message.data.ConversationId 
+                       ? message.data.ConversationId 
+                       : message.conversationId || '';
+          
+          if (msgConvId === conversationId.value || !msgConvId) {
+            console.log('会话ID匹配当前会话，显示消息');
+            
+            // 判断是否是自己发送的消息
+            const isCurrentUser = senderId && userStore.userInfo && userStore.userInfo.id && 
+                              userStore.userInfo.id.toString() === senderId;
+            
+            // 创建新消息对象
+            const newMessage = {
+              id: (message.data && message.data.MsgId) || `emergency_${Date.now()}`,
+              conversationId: msgConvId || conversationId.value,
+              senderId: senderId || (message.formId || ''),
+              content: content,
+              type: 'text',
+              timestamp: (message.data && message.data.SendTime) || Date.now(),
+              status: 'received',
+              isSelf: isCurrentUser,
+              senderName: isCurrentUser 
+                        ? (userStore.userInfo?.nickname || '我') 
+                        : (targetUser.value?.nickname || targetUser.value?.username || `用户${senderId}`),
+              senderAvatar: isCurrentUser
+                          ? (userStore.userInfo?.avatar || getDefaultAvatar(userStore.userInfo?.id))
+                          : (targetUser.value?.avatar || getDefaultAvatar(senderId || 'unknown'))
+            };
+            
+            console.log('创建的紧急消息对象:', newMessage);
+            
+            // 将消息添加到界面
+            if (!messages.value.find(m => m.id === newMessage.id)) {
+              messages.value.push(newMessage);
+              scrollToBottom(true);
+            }
+          } else {
+            console.log('消息属于其他会话，忽略显示');
+          }
+        }
+      } catch (error) {
+        console.error('紧急处理WebSocket消息时出错:', error);
+      }
       
       // 处理简化格式的推送消息
       if (message.formId && message.data) {
@@ -950,73 +1074,130 @@ const setupMessageListeners = () => {
   // 返回清理函数，将在组件卸载时调用
   return () => {
     if (removeListener) removeListener();
+    cleanupConsoleIntercept(); // 清理console拦截
   };
 };
 
 // 处理WebSocket推送消息
 const handleWebSocketPushMessage = (data) => {
-  // 只处理与当前会话相关的消息
-  const currentConvId = conversationId.value;
-  const msgConvId = data.conversationId || data.ConversationId;
+  console.log('WebSocket推送消息 - 处理开始:', data);
   
-  if (msgConvId !== currentConvId) {
-    console.log('消息与当前会话无关，忽略');
-    return;
-  }
-  
-  console.log('处理当前会话推送消息:', data);
-  
-  // 提取消息内容，支持大小写字段名和多种格式
-  let content = data.content || data.Content;
-  
-  // 处理接收到的消息格式
-  // {
-  //     "msgId": "6808d1e730c4683b61b7b099",
-  //     "conversationId": "1_2",
-  //     "chatType": 2,
-  //     "mType": 0,
-  //     "content": "fas",
-  //     "sendTime": 1745408485750,
-  //     "contentType": 0
-  // }
-  
-  // 确保我们能获取到消息内容，即使字段名为小写
-  if (!content && data.content !== undefined) {
-    content = data.content;
-  }
-  
-  if (!content) {
-    console.log('消息无内容，忽略');
-    return;
-  }
-  
-  // 提取其他字段，支持不同的命名格式
-  const msgId = data.msgId || data.MsgId || `temp_${Date.now()}`;
-  const sendTime = data.sendTime || data.SendTime || Date.now();
-  const messageType = data.mType !== undefined ? data.mType : (data.MType !== undefined ? data.MType : 0);
-  const senderId = data.sendId || data.SendId || '未知用户';
-  
-  // 创建消息对象
-  const newMessage = {
-    id: msgId,
-    conversationId: msgConvId,
-    senderId: senderId,
-    content: content,
-    type: messageType === 0 ? 'text' : 'unknown',
-    timestamp: sendTime,
-    status: 'received',
-    isSelf: false
-  };
-  
-  // 检查消息是否已存在
-  if (!messages.value.find(m => m.id === newMessage.id)) {
-    console.log('添加新消息到聊天界面:', newMessage);
-    messages.value.push(newMessage);
+  try {
+    // 1. 从不同可能的位置提取消息内容
+    let content = null;
     
-    // 滚动到底部
-    scrollToBottom(true);
+    // 如果是嵌套的data结构
+    if (data.data && data.data.Content) {
+      content = data.data.Content;
+    } 
+    // 如果是直接的消息结构
+    else if (data.content) {
+      content = data.content;
+    }
+    // 如果是console中的对象结构
+    else if (data.Content) {
+      content = data.Content;
+    }
+    
+    if (!content) {
+      console.log('无法从消息中提取内容:', data);
+      return;
+    }
+    
+    // 2. 提取会话ID
+    let conversationId = null;
+    if (data.data && data.data.ConversationId) {
+      conversationId = data.data.ConversationId;
+    } else if (data.conversationId) {
+      conversationId = data.conversationId;
+    }
+    
+    // 3. 提取发送者ID，确定消息方向
+    let senderId = null;
+    if (data.formId) {
+      senderId = data.formId;
+    } else if (data.data && data.data.SendId) {
+      senderId = data.data.SendId;
+    } else if (data.sendId) {
+      senderId = data.sendId;
+    }
+    
+    // 4. 生成唯一消息ID
+    const msgId = (data.data && data.data.MsgId) || 
+                 data.msgId || 
+                 `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // 5. 获取发送时间
+    const sendTime = (data.data && data.data.SendTime) || 
+                    data.sendTime || 
+                    Date.now();
+    
+    // 确定是不是自己发的消息
+    const isSelf = senderId === userStore.userInfo.id?.toString();
+    
+    // 创建新消息对象
+    const newMessage = {
+      id: msgId,
+      conversationId: conversationId || '',
+      senderId: senderId || '',
+      content: content,
+      type: 'text',  // 默认为文本类型
+      timestamp: sendTime,
+      status: 'received',
+      isSelf: isSelf,
+      senderName: isSelf ? 
+                (userStore.userInfo?.nickname || '我') : 
+                (targetUser.value?.nickname || targetUser.value?.username || `用户${senderId}`),
+      senderAvatar: isSelf ? 
+                  (userStore.userInfo?.avatar || getDefaultAvatar(senderId)) : 
+                  (targetUser.value?.avatar || getDefaultAvatar(senderId))
+    };
+    
+    console.log('创建的新消息对象:', newMessage);
+    
+    // 将新消息添加到消息列表
+    if (!messages.value.find(m => m.id === newMessage.id)) {
+      messages.value.push(newMessage);
+      scrollToBottom(true);
+    }
+  } catch (error) {
+    // 记录错误但不中断执行，确保UI不会崩溃
+    console.error('处理WebSocket消息时出错:', error);
+    
+    // 即使出错，也尝试从消息中提取内容并显示
+    try {
+      let content = null;
+      
+      if (data.data && data.data.Content) {
+        content = data.data.Content;
+      } else if (data.content) {
+        content = data.content;
+      } else if (data.Content) {
+        content = data.Content;
+      }
+      
+      if (content) {
+        // 创建最简单的消息对象
+        const simpleMessage = {
+          id: `emergency_${Date.now()}`,
+          content: content,
+          type: 'text',
+          timestamp: Date.now(),
+          status: 'received',
+          isSelf: false,
+          senderName: targetUser.value?.nickname || '对方',
+          senderAvatar: targetUser.value?.avatar || getDefaultAvatar('unknown')
+        };
+        
+        // 添加到消息列表
+        messages.value.push(simpleMessage);
+        scrollToBottom(true);
+      }
+    } catch (fallbackError) {
+      console.error('尝试备用方法处理消息时出错:', fallbackError);
+    }
   }
-};
+}
 
 // 发送消息
 const onMessageSent = async (content, type = 'text') => {
