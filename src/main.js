@@ -1,24 +1,25 @@
-import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { showToast, showDialog, showNotify } from 'vant'
+import { showDialog, showNotify, showToast } from 'vant'
 import 'vant/lib/index.css'
+import { createApp } from 'vue'
 import App from './App.vue'
-import router from './router'
 import './assets/styles/main.css'
+import router from './router'
+import './styles/ios-gestures.css'
 import './styles/transitions.css'
 import './styles/vant-override.css'
-import './styles/ios-gestures.css'
-import { setupVantConfig } from './utils/vant-config'
 import './utils/dayjs'
 import { FALLBACK_IMAGES } from './utils/defaultImages'
+import { setupVantConfig } from './utils/vant-config'
+import { wsClient } from './utils/websocket'; // 导入WebSocket客户端
 
 // 导入Vant UI
 import Vant from 'vant'
 import 'vant/lib/index.css'
 
 // 导入全局组件
-import SvgIcon from '@/components/SvgIcon.vue'
 import AppLoading from '@/components/AppLoading.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 // 引入消息存储
 import { useMessageStore } from './store/message'
@@ -59,6 +60,9 @@ app.component('AppLoading', AppLoading)
 app.config.globalProperties.$toast = showToast
 app.config.globalProperties.$dialog = showDialog
 app.config.globalProperties.$notify = showNotify
+
+// 挂载WebSocket客户端到全局
+app.config.globalProperties.$ws = wsClient
 
 // 全局错误处理器
 app.config.errorHandler = (err, instance, info) => {

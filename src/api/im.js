@@ -1,5 +1,4 @@
 // IM API 模块
-import { WS_CONFIG } from '@/config/index'
 import request from '@/utils/request'
 
 // WebSocket操作类型常量
@@ -14,7 +13,8 @@ export const wsActions = {
   RECEIVE_MESSAGE: 'receiveMessage',   // 接收消息
   MARK_READ: 'markRead',               // 标记已读
   HEART_BEAT: 'heartbeat',             // 心跳包
-  ACK: 'ack'                           // 确认收到
+  ACK: 'ack',                          // 确认收到
+  TYPING: 'typing'                     // 输入中
 }
 
 // 聊天类型常量
@@ -25,77 +25,85 @@ export const CHAT_TYPE = {
 
 // 消息类型常量
 export const MESSAGE_TYPE = {
-  TEXT: 1,    // 文本
-  IMAGE: 2,   // 图片
-  AUDIO: 3,   // 音频
-  VIDEO: 4,   // 视频
+  TEXT: 0,    // 文本
+  IMAGE: 1,   // 图片
+  VOICE: 2,   // 音频
+  VIDEO: 3,   // 视频
   FILE: 5,    // 文件
-  LOCATION: 6, // 位置
-  CARD: 7,    // 名片
-  SYSTEM: 8,  // 系统
-  CUSTOM: 9,  // 自定义
-  RECALL: 10  // 撤回
+  LOCATION: 4, // 位置
+  SYSTEM: 9   // 系统
 }
 
 // 内容类型常量
 export const CONTENT_TYPE = {
   CHAT_MESSAGE: 0, // 聊天消息
   READ_RECEIPT: 1,  // 已读回执
-  TEXT: 1,           // 文本
-  IMAGE: 2,          // 图片
-  AUDIO: 3,          // 音频
-  VIDEO: 4,          // 视频
-  FILE: 5,           // 文件
-  LOCATION: 6,       // 位置
-  CARD: 7,           // 名片
-  CUSTOM: 8         // 自定义
+  USER_STATUS: 2,   // 用户状态
+  SYSTEM_NOTICE: 3  // 系统通知
 }
 
 /**
  * 获取WebSocket URL
- * @param {string|number} userId - 用户ID
  * @returns {string} - WebSocket 连接地址
  */
-export function getWebSocketUrl(userId) {
-  // 使用配置中的WebSocket基础URL
-  const baseUrl = WS_CONFIG.BASE_URL
+export function getWebSocketUrl() {
+  // 优先使用环境变量中配置的WS地址
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
   
-  // 即使userId未定义也返回有效URL
-  return `${baseUrl}${userId ? `?userId=${userId}` : ''}`
+  // 否则使用默认WS地址
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  return baseUrl.replace(/^http/, 'ws') + '/ws';
 }
 
 /**
  * 获取聊天历史记录
  * @param {Object} params 请求参数
  * @param {string} params.conversationId 会话ID
- * @param {number} params.startSendTime 开始时间戳
- * @param {number} params.endSendTime 结束时间戳
- * @param {number} params.count 返回消息数量
- * @returns {Promise<Object>} 聊天历史记录
+ * @param {number} [params.startSendTime] 开始时间戳
+ * @param {number} [params.endSendTime] 结束时间戳
+ * @param {number} [params.count] 消息数量
+ * @returns {Promise} 请求Promise
  */
 export function getChatLog(params) {
-  console.log('请求聊天历史记录:', params);
-  return request({
-    url: '/api/im/chatlog',
-    method: 'GET',
-    params
-  });
+  // 构建查询参数
+  const queryParams = new URLSearchParams();
+  if (params.conversationId) {
+    queryParams.append('conversationId', params.conversationId);
+  }
+  if (params.startSendTime) {
+    queryParams.append('startSendTime', params.startSendTime);
+  }
+  if (params.endSendTime) {
+    queryParams.append('endSendTime', params.endSendTime);
+  }
+  if (params.count) {
+    queryParams.append('count', params.count);
+  }
+  
+  return request.get(`/api/im/chatlog?${queryParams.toString()}`);
+}
+
+/**
+ * 获取消息已读记录
+ * @param {string} msgId 消息ID
+ * @returns {Promise} 请求Promise
+ */
+export function getChatLogReadRecords(msgId) {
+  return request.get(`/api/im/chatlog/readRecords?msgId=${msgId}`);
 }
 
 /**
  * 创建/获取用户会话
  * @param {Object} data - 参数
- * @param {number} data.sendId - 发送者ID
- * @param {number} data.recvId - 接收者ID
+ * @param {string} data.sendId - 发送者ID
+ * @param {string} data.recvId - 接收者ID
  * @param {number} data.chatType - 聊天类型 1:群聊 2:单聊
  * @returns {Promise}
  */
 export function setUpUserConversation(data) {
-  return request({
-    url: '/api/im/setup/conversation',
-    method: 'post',
-    data
-  })
+  return request.post('/api/im/setup/conversation', data);
 }
 
 /**
@@ -103,10 +111,7 @@ export function setUpUserConversation(data) {
  * @returns {Promise}
  */
 export function getConversations() {
-  return request({
-    url: '/api/im/conversation',
-    method: 'get'
-  })
+  return request.get('/api/im/conversation');
 }
 
 /**
@@ -117,11 +122,7 @@ export function getConversations() {
  * @returns {Promise}
  */
 export function getConversationList(params) {
-  return request({
-    url: '/api/im/conversation',
-    method: 'get',
-    params
-  })
+  return request.get('/api/im/conversation', { params });
 }
 
 /**
@@ -139,82 +140,25 @@ export function getConversationList(params) {
  * }
  */
 export function putConversations(data) {
-  return request({
-    url: '/api/im/conversation',
-    method: 'put',
-    data
-  })
+  return request.put('/api/im/conversation', data);
 }
 
 /**
  * 获取未读消息数量
- * @returns {Promise<Object>} 未读消息数量
+ * @returns {Promise} 请求Promise
  */
 export function getUnreadCount() {
-  const useMock = import.meta.env.VITE_USE_MOCK === 'true';
-  
-  // 如果启用了mock模式，返回模拟数据
-  if (useMock) {
-    console.log('[Mock] 使用模拟未读消息数据');
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({
-          code: 200,
-          message: 'success',
-          data: {
-            count: Math.floor(Math.random() * 5) // 随机0-4条未读消息
-          }
-        });
-      }, 200);
+  // 如果是mock环境，返回模拟数据
+  if (import.meta.env.VITE_USE_MOCK === 'true') {
+    return Promise.resolve({
+      code: 200,
+      data: {
+        unreadCount: Math.floor(Math.random() * 10)
+      }
     });
   }
   
-  // 从本地存储获取会话列表并计算未读数，避免不必要的API请求
-  const cachedConversations = localStorage.getItem('cachedConversations');
-  if (cachedConversations) {
-    try {
-      const { conversationList } = JSON.parse(cachedConversations);
-      // 计算所有会话的未读消息总数
-      let totalUnread = 0;
-      Object.values(conversationList || {}).forEach(conv => {
-        totalUnread += (conv.unreadCount || 0);
-      });
-      
-      console.log('[IM] 从缓存计算未读消息数:', totalUnread);
-      return Promise.resolve({
-        code: 200,
-        message: 'success',
-        data: {
-          count: totalUnread
-        }
-      });
-    } catch (error) {
-      console.warn('[IM] 从缓存计算未读消息数失败:', error);
-      // 缓存解析失败，继续使用API请求
-    }
-  }
-  
-  // 实际API请求
-  console.log('[IM] 请求未读消息数');
-  return request({
-    url: '/im/unread/count',
-    method: 'get',
-    needLoading: false,
-  }).then(response => {
-    // 如果响应成功但没有count字段，设置为0
-    if (response.code === 200 && !response.data?.count) {
-      response.data = { count: 0 };
-    }
-    return response;
-  }).catch(error => {
-    console.warn('[IM] 获取未读消息数失败:', error);
-    // 失败时返回一个格式化的错误响应
-    return {
-      code: 500,
-      message: error.message || '获取未读消息数失败',
-      data: { count: 0 }
-    };
-  });
+  return request.get('/api/im/unread/count');
 }
 
 /**
@@ -223,25 +167,25 @@ export function getUnreadCount() {
  * @returns {Promise}
  */
 export function searchUsers(keyword) {
-  return request({
-    url: '/api/user/search',
-    method: 'get',
-    params: { keyword }
-  })
+  return request.get(`/api/user/search?keyword=${keyword}`);
+}
+
+/**
+ * 获取好友在线状态
+ * @returns {Promise} 请求Promise
+ */
+export function getFriendOnlineStatus() {
+  return request.get('/api/social/friends/online');
 }
 
 /**
  * 获取好友申请列表
  * @param {Object} params - 参数
- * @param {string} params.status - 状态(pending/accepted/rejected)
+ * @param {string} [params.status] - 状态(pending/accepted/rejected)
  * @returns {Promise}
  */
 export function getFriendRequests(params) {
-  return request({
-    url: '/api/social/friend/putIns',
-    method: 'get',
-    params
-  })
+  return request.get('/api/social/friends/requests', { params });
 }
 
 /**
@@ -309,10 +253,7 @@ export function getUserDetail(userId) {
  * @returns {Promise}
  */
 export function getUserProfile(userId) {
-  return request({
-    url: `/api/user/profile/${userId}`,
-    method: 'get'
-  })
+  return request.get(`/api/user/profile/${userId}`);
 }
 
 /**
@@ -349,13 +290,7 @@ export function deleteFriend(friendId) {
  * @returns {Promise}
  */
 export function markMessageRead(data) {
-  return putConversations({
-    conversationList: {
-      [data.conversationId]: {
-        read: 1
-      }
-    }
-  })
+  return request.put('/api/im/conversation/read', data);
 }
 
 /**
@@ -365,13 +300,7 @@ export function markMessageRead(data) {
  * @returns {Promise}
  */
 export function deleteSession(data) {
-  return putConversations({
-    conversationList: {
-      [data.conversationId]: {
-        isShow: false
-      }
-    }
-  })
+  return request.delete('/api/im/conversation', { params: data });
 }
 
 /**
@@ -402,32 +331,28 @@ export function recallMessageById(messageId) {
  * 发送文本消息
  * @param {Object} data - 参数
  * @param {string} data.conversationId - 会话ID
- * @param {number} data.receiverId - 接收者ID
+ * @param {string} data.senderId - 发送者ID
+ * @param {string} data.receiverId - 接收者ID
  * @param {string} data.content - 消息内容
+ * @param {number} data.chatType - 聊天类型
  * @returns {Promise}
  */
 export function sendTextMessage(data) {
-  return request({
-    url: '/api/im/messages/text',
-    method: 'post',
-    data
-  })
+  return request.post('/api/im/message/text', data);
 }
 
 /**
  * 发送图片消息
  * @param {Object} data - 参数
  * @param {string} data.conversationId - 会话ID
- * @param {number} data.receiverId - 接收者ID
- * @param {string} data.imageUrl - 图片URL
+ * @param {string} data.senderId - 发送者ID
+ * @param {string} data.receiverId - 接收者ID
+ * @param {string} data.content - 图片URL
+ * @param {number} data.chatType - 聊天类型
  * @returns {Promise}
  */
 export function sendImageMessage(data) {
-  return request({
-    url: '/api/im/messages/image',
-    method: 'post',
-    data
-  })
+  return request.post('/api/im/message/image', data);
 }
 
 /**
@@ -602,35 +527,51 @@ export function getConversationDetail(params) {
 }
 
 /**
- * 通过WebSocket发送聊天消息
- * @param {Object} data 聊天消息数据
+ * 格式化聊天消息对象，用于WebSocket发送
+ * @param {Object} data - 消息数据
+ * @param {string} data.conversationId - 会话ID
+ * @param {string} data.senderId - 发送者ID
+ * @param {string} data.receiverId - 接收者ID
+ * @param {string} data.content - 消息内容
+ * @param {number} [data.messageType=0] - 消息类型，默认0(文本)
+ * @param {string} [data.messageId] - 消息ID，如果未提供则自动生成
  * @returns {Object} 格式化后的WebSocket消息
  */
 export function formatChatMessage(data) {
+  const senderId = data.senderId.toString();
+  const receiverId = data.receiverId.toString();
+  const msgId = data.messageId || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
   return {
     conversationId: data.conversationId,
     chatType: data.chatType || CHAT_TYPE.SINGLE,
-    sendId: data.senderId,
-    recvId: data.receiverId,
+    sendId: senderId,
+    recvId: receiverId,
+    sendTime: Date.now(),
     msg: {
+      msgId,
       mType: data.messageType || MESSAGE_TYPE.TEXT,
       content: data.content
     }
-  }
+  };
 }
 
 /**
- * 格式化标记已读消息
- * @param {Object} data 已读消息数据
+ * 格式化标记已读消息对象，用于WebSocket发送
+ * @param {Object} data - 已读数据
+ * @param {string} data.conversationId - 会话ID 
+ * @param {string} data.receiverId - 接收者ID
+ * @param {number} [data.chatType=2] - 聊天类型，默认2(单聊)
+ * @param {Array<string>} [data.messageIds=[]] - 需标记已读的消息ID数组
  * @returns {Object} 格式化后的WebSocket消息
  */
 export function formatMarkReadMessage(data) {
   return {
     chatType: data.chatType || CHAT_TYPE.SINGLE,
-    recvId: data.receiverId,
+    recvId: data.receiverId.toString(),
     conversationId: data.conversationId,
-    msgIds: data.messageIds
-  }
+    msgIds: data.messageIds || []
+  };
 }
 
 /**

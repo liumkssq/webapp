@@ -223,82 +223,86 @@ import { useIMStore } from '@/store/im';
 import { useUserStore } from '@/store/user';
 import { wsClient } from '@/utils/websocket'; // 导入WebSocket客户端
 import dayjs from 'dayjs';
+import { storeToRefs } from 'pinia';
 import { showDialog, showToast } from 'vant';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-const router = useRouter()
-const userStore = useUserStore()
-const imStore = useIMStore()
+// 路由和状态管理
+const router = useRouter();
+const userStore = useUserStore();
+const imStore = useIMStore();
+const { userInfo } = storeToRefs(userStore);
 
 // 激活的标签页
-const activeTab = ref('chat')
+const activeTab = ref('chat');
 
 // 会话列表相关状态
-const conversations = ref([])
-const loading = ref(false)
-const loadingMore = ref(false)
-const finished = ref(false)
-const refreshing = ref(false)
-const page = ref(1)
-const pageSize = ref(20)
-let dataFetchedOnce = false // 标记是否已经成功获取过数据
-let wsListener = null // WebSocket监听器引用
+const conversations = ref([]);
+const loading = ref(false);
+const loadingMore = ref(false);
+const finished = ref(false);
+const refreshing = ref(false);
+const page = ref(1);
+const pageSize = ref(20);
+let dataFetchedOnce = false; // 标记是否已经成功获取过数据
 
 // 新建聊天相关状态
-const showNewChatOptions = ref(false)
-const newFriendRequestsCount = ref(0)
+const showNewChatOptions = ref(false);
+const newFriendRequestsCount = ref(0);
 
 // 通知列表
-const notifications = ref([])
+const notifications = ref([]);
 
 // 侧滑相关状态
-const swipeOffset = ref({})
-const touchStartX = ref(0)
-const currentSwipeIndex = ref(null)
-const swipeThreshold = 80 // 触发操作的阈值
-const maxSwipeOffset = 150 // 最大侧滑距离
+const swipeOffset = ref({});
+const touchStartX = ref(0);
+const currentSwipeIndex = ref(null);
+const swipeThreshold = 80; // 触发操作的阈值
+const maxSwipeOffset = 150; // 最大侧滑距离
 
-// 用户资料临时缓存 - 从ConversationList.vue中引入
+// 用户资料临时缓存 
 const userProfiles = {};
 
 // 获取未读消息总数
 const unreadChatCount = computed(() => {
-  return conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0)
-})
+  return conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
+});
 
 // 未读通知数
 const unreadNotificationCount = computed(() => {
-  return notifications.value.filter(notification => !notification.read).length
-})
+  return notifications.value.filter(notification => !notification.read).length;
+});
 
 // 监听未读消息总数变化，更新标题栏
 watch(unreadChatCount, (count) => {
-  document.title = count > 0 ? `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : (import.meta.env.VITE_APP_TITLE || 'IM App')
-})
+  document.title = count > 0 ? 
+    `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : 
+    (import.meta.env.VITE_APP_TITLE || 'IM App');
+}, { immediate: true });
 
 // 切换新建聊天选项面板
 const toggleNewChatOptions = () => {
-  showNewChatOptions.value = !showNewChatOptions.value
-}
+  showNewChatOptions.value = !showNewChatOptions.value;
+};
 
 // 导航到联系人列表
 const navigateToContactList = () => {
-  showNewChatOptions.value = false
-  router.push('/im/contacts')
-}
+  showNewChatOptions.value = false;
+  router.push('/im/contacts');
+};
 
 // 导航到群聊列表
 const navigateToGroups = () => {
-  showNewChatOptions.value = false
-  router.push('/im/groups')
-}
+  showNewChatOptions.value = false;
+  router.push('/im/groups');
+};
 
 // 导航到好友申请列表
 const navigateToFriendRequests = () => {
-  showNewChatOptions.value = false
-  router.push('/im/friend-requests')
-}
+  showNewChatOptions.value = false;
+  router.push('/im/friend-requests');
+};
 
 // 导航到聊天界面
 const navigateToChat = (conversation) => {
@@ -318,7 +322,7 @@ const navigateToChat = (conversation) => {
     return;
   }
   
-  // 只使用一种路由格式，统一到/im/chat/:id
+  // 修复URL格式，确保参数正确编码
   router.push({
     path: `/im/chat/${targetId}`,
     query: {
@@ -335,20 +339,23 @@ const navigateToChat = (conversation) => {
         const index = conversations.value.findIndex(c => c.id === conversation.id);
         if (index !== -1) {
           conversations.value[index].unreadCount = 0;
+          
+          // 同步更新到IM store
+          imStore.markConversationAsRead(conversation.id);
         }
       })
       .catch(err => {
         console.error('标记会话已读失败:', err);
       });
   }
-}
+};
 
-// 通过ID获取默认头像 - 从ConversationList.vue引入
+// 通过ID获取默认头像
 const getDefaultAvatar = (userId) => {
   return `https://api.dicebear.com/6.x/avataaars/svg?seed=user${userId}`;
 };
 
-// 加载会话列表 - 改用ConversationList.vue的更可靠方法
+// 加载会话列表
 const fetchConversations = async (isRefresh = false) => {
   // 先检查用户是否登录
   if (!userStore.isLoggedIn) {
@@ -360,14 +367,14 @@ const fetchConversations = async (isRefresh = false) => {
   }
   
   if (isRefresh) {
-    page.value = 1
-    finished.value = false
+    page.value = 1;
+    finished.value = false;
   }
   
   try {
     loading.value = true;
     
-    // 使用更可靠的API
+    // 获取会话列表
     const response = await getConversations();
     
     console.log('获取会话列表响应:', response);
@@ -476,372 +483,445 @@ const fetchConversations = async (isRefresh = false) => {
       conversations.value = [...conversations.value, ...uniqueNewConversations];
     }
     
+    // 同步到IM store
+    imStore.setConversations(conversations.value);
+    
     // 根据数据量判断是否还有更多
     finished.value = true; // 目前API不支持分页，所以一次性加载所有
     
   } catch (error) {
-    console.error('获取会话列表失败:', error)
-    showToast('网络错误，请重试')
+    console.error('获取会话列表失败:', error);
+    showToast('网络错误，请重试');
     finished.value = true;
   } finally {
-    loading.value = false
+    loading.value = false;
     loadingMore.value = false;
-    refreshing.value = false
+    refreshing.value = false;
   }
-}
+};
 
-// 加载更多会话
+// 加载更多会话 (当前API不支持分页，但保留此函数以备将来扩展)
 const loadMore = () => {
   // 如果已经完成或正在加载中，不再发出请求
   if (finished.value || loadingMore.value || loading.value) {
     return;
   }
   
-  fetchConversations(false);
-}
+  loadingMore.value = true;
+  page.value += 1;
+  fetchConversations();
+};
 
-// 下拉刷新
+// 刷新会话列表
 const onRefresh = () => {
-  console.log('触发下拉刷新');
+  refreshing.value = true;
   fetchConversations(true);
-}
-
-// 设置WebSocket监听
-const setupWebSocketListener = () => {
-  // 如果已经有监听器，先移除
-  if (wsListener) {
-    wsClient.removeListener(wsListener);
-  }
-  
-  // 创建新的监听器
-  wsListener = {
-    onMessage: (message) => {
-      console.log('WebSocket收到消息:', message);
-      
-      // 如果是会话列表更新消息，刷新列表
-      if (message.method === 'conversation.update' || 
-          message.method === 'conversation.chat') {
-        // 只有在当前页面显示时才刷新
-        if (document.visibilityState === 'visible') {
-          console.log('收到会话更新，刷新列表');
-          fetchConversations(true);
-        }
-      }
-    },
-    onOpen: () => {
-      console.log('WebSocket连接已建立，请求最新会话列表');
-      fetchConversations(true);
-    }
-  };
-  
-  // 添加监听器
-  wsClient.addListener(wsListener);
-  
-  // 确保WebSocket已连接
-  if (!wsClient.isConnected()) {
-    console.log('WebSocket未连接，尝试连接');
-    wsClient.connect();
-  }
-}
-
-// 获取好友申请数量
-const fetchFriendRequests = async () => {
-  try {
-    if (!userStore.isLoggedIn) return;
-    
-    const response = await getFriendRequests({ status: 'pending' })
-    if (response.code === 200) {
-      newFriendRequestsCount.value = response.data.list.length
-    }
-  } catch (error) {
-    console.error('获取好友申请数量失败:', error)
-  }
-}
-
-// 获取通知列表
-const fetchNotifications = async () => {
-  try {
-    if (!userStore.isLoggedIn) return
-    
-    // 模拟通知数据
-    notifications.value = [
-      {
-        id: 1,
-        type: 'like',
-        title: '点赞通知',
-        content: '用户张三点赞了你的帖子《校园二手交易平台使用指南》',
-        time: '2023-04-18 14:30:00',
-        read: false,
-        targetType: 'article',
-        targetId: 101,
-        fromUser: { id: 2, name: '张三' }
-      },
-      {
-        id: 2,
-        type: 'comment',
-        title: '评论通知',
-        content: '用户李四评论了你的帖子《寻找丢失的学生卡》：我在食堂看到过',
-        time: '2023-04-17 10:20:00',
-        read: true,
-        targetType: 'lostFound',
-        targetId: 102,
-        fromUser: { id: 3, name: '李四' }
-      },
-      {
-        id: 3,
-        type: 'system',
-        title: '系统通知',
-        content: '你发布的商品《二手笔记本电脑》已通过审核',
-        time: '2023-04-16 09:15:00',
-        read: false,
-        targetType: 'product',
-        targetId: 103
-      }
-    ]
-  } catch (error) {
-    console.error('获取通知列表失败:', error)
-  }
-}
-
-// 处理通知点击
-const handleNotification = (notification) => {
-  // 标记为已读
-  if (!notification.read) {
-    notification.read = true
-  }
-  
-  // 根据通知类型处理跳转
-  switch (notification.type) {
-    case 'like':
-    case 'comment':
-      if (notification.targetType === 'article') {
-        router.push(`/article/detail/${notification.targetId}`)
-      } else if (notification.targetType === 'product') {
-        router.push(`/product/detail/${notification.targetId}`)
-      } else if (notification.targetType === 'lostFound') {
-        router.push(`/lost-found/detail/${notification.targetId}`)
-      }
-      break
-    case 'follow':
-      router.push(`/user/${notification.fromUser.id}`)
-      break
-    case 'system':
-      // 系统通知不跳转
-      break
-    default:
-      break
-  }
-}
-
-// 获取通知图标
-const getNotificationIcon = (type) => {
-  switch (type) {
-    case 'like':
-      return 'like-o'
-    case 'comment':
-      return 'comment-o'
-    case 'follow':
-      return 'friends-o'
-    case 'system':
-      return 'info-o'
-    default:
-      return 'bell'
-  }
-}
+};
 
 // 标记会话为已读
 const markAsRead = async (conversation) => {
   try {
-    await markMessageRead({
-      conversationId: conversation.id,
-      messageId: conversation.lastMessage?.id
-    })
+    await markMessageRead({ conversationId: conversation.id });
     
-    // 更新本地数据
-    const index = conversations.value.findIndex(c => c.id === conversation.id)
+    // 更新本地状态
+    const index = conversations.value.findIndex(c => c.id === conversation.id);
     if (index !== -1) {
-      conversations.value[index].unreadCount = 0
+      conversations.value[index].unreadCount = 0;
+      
+      // 同步更新到IM store
+      imStore.markConversationAsRead(conversation.id);
     }
     
-    resetSwipe()
-    // 更新未读数
-    const count = conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0)
-    document.title = count > 0 ? `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : (import.meta.env.VITE_APP_TITLE || 'IM App')
+    // 关闭侧滑菜单
+    swipeOffset.value[currentSwipeIndex.value] = 0;
+    currentSwipeIndex.value = null;
   } catch (error) {
-    console.error('标记已读失败:', error)
-    showToast('操作失败，请重试')
+    console.error('标记已读失败:', error);
+    showToast('操作失败，请重试');
   }
-}
+};
 
 // 删除会话
 const deleteConversation = (conversation) => {
   showDialog({
     title: '删除会话',
-    message: '确定要删除此会话吗？聊天记录将不会被删除',
+    message: `确定要删除与 ${conversation.targetInfo?.name || '对方'} 的会话吗？`,
     showCancelButton: true,
   }).then(async () => {
     try {
-      await deleteSession({ conversationId: conversation.id })
+      await deleteSession({ conversationId: conversation.id });
       
-      // 更新本地数据
-      conversations.value = conversations.value.filter(c => c.id !== conversation.id)
+      // 更新本地状态
+      conversations.value = conversations.value.filter(c => c.id !== conversation.id);
       
-      resetSwipe()
-      // 更新未读数
-      const count = conversations.value.reduce((total, conv) => total + (conv.unreadCount || 0), 0)
-      document.title = count > 0 ? `(${count}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : (import.meta.env.VITE_APP_TITLE || 'IM App')
+      // 同步更新到IM store
+      imStore.removeConversation(conversation.id);
+      
+      showToast('删除成功');
     } catch (error) {
-      console.error('删除会话失败:', error)
-      showToast('操作失败，请重试')
+      console.error('删除会话失败:', error);
+      showToast('删除失败，请重试');
     }
   }).catch(() => {
-    // 取消删除，重置侧滑状态
-    resetSwipe()
-  })
-}
+    // 用户取消
+    // 关闭侧滑菜单
+    swipeOffset.value[currentSwipeIndex.value] = 0;
+    currentSwipeIndex.value = null;
+  });
+};
 
-// 侧滑相关方法
+// 处理触摸开始事件
 const touchStart = (event, index) => {
-  touchStartX.value = event.touches[0].clientX
-  currentSwipeIndex.value = index
+  // 如果当前有其他项目处于侧滑状态，先重置
+  if (currentSwipeIndex.value !== null && currentSwipeIndex.value !== index) {
+    swipeOffset.value[currentSwipeIndex.value] = 0;
+  }
   
-  // 重置其他项的侧滑状态
-  Object.keys(swipeOffset.value).forEach(key => {
-    if (parseInt(key) !== index) {
-      swipeOffset.value[key] = 0
-    }
-  })
-}
+  touchStartX.value = event.touches[0].clientX;
+  currentSwipeIndex.value = index;
+};
 
+// 处理触摸移动事件
 const touchMove = (event, index) => {
-  if (currentSwipeIndex.value !== index) return
+  if (currentSwipeIndex.value !== index) return;
   
-  const currentX = event.touches[0].clientX
-  const diff = currentX - touchStartX.value
+  const currentX = event.touches[0].clientX;
+  const diff = touchStartX.value - currentX;
   
-  // 仅允许左滑（负值）
-  if (diff < 0) {
+  // 只允许向左滑动（diff > 0）
+  if (diff > 0) {
     // 限制最大滑动距离
-    const offset = Math.max(diff, -maxSwipeOffset)
-    swipeOffset.value[index] = offset
+    swipeOffset.value[index] = Math.min(diff, maxSwipeOffset);
   } else {
-    // 右滑归位
-    swipeOffset.value[index] = 0
-  }
-}
-
-const touchEnd = (index) => {
-  if (currentSwipeIndex.value !== index) return
-  
-  const offset = swipeOffset.value[index] || 0
-  
-  // 如果滑动距离超过阈值，则固定在最大滑动距离
-  if (Math.abs(offset) > swipeThreshold) {
-    swipeOffset.value[index] = -maxSwipeOffset
-  } else {
-    // 否则回弹
-    swipeOffset.value[index] = 0
-  }
-  
-  currentSwipeIndex.value = null
-}
-
-// 重置所有侧滑状态
-const resetSwipe = () => {
-  Object.keys(swipeOffset.value).forEach(key => {
-    swipeOffset.value[key] = 0
-  })
-}
-
-// 获取姓名首字母作为头像占位
-const getInitials = (name) => {
-  if (!name) return '?'
-  // 处理中文字符，取第一个字
-  const firstChar = name.charAt(0)
-  return firstChar.toUpperCase()
-}
-
-// 格式化时间
-const formatTime = (time) => {
-  if (!time) return ''
-  
-  const date = dayjs(time)
-  const now = dayjs()
-  
-  if (date.isSame(now, 'day')) {
-    // 今天，显示时间
-    return date.format('HH:mm')
-  } else if (date.isSame(now.subtract(1, 'day'), 'day')) {
-    // 昨天
-    return '昨天'
-  } else if (date.isSame(now, 'year')) {
-    // 今年，显示月日
-    return date.format('MM-DD')
-  } else {
-    // 往年，显示年月日
-    return date.format('YYYY-MM-DD')
-  }
-}
-
-// 截断文本
-const truncateText = (text) => {
-  if (!text) return ''
-  return text.length > 20 ? text.substring(0, 20) + '...' : text
-}
-
-// 格式化徽章数字
-const formatBadge = (count) => {
-  if (count > 99) return '99+'
-  return count
-}
-
-// 获取最后一条消息的显示文本 - 从ConversationList.vue引入
-const getLastMessageText = (conversation) => {
-  const msg = conversation.lastMessage;
-  if (!msg) return '暂无消息';
-  
-  switch (msg.type) {
-    case 'text':
-      return msg.content?.length > 20 ? `${msg.content.slice(0, 20)}...` : msg.content;
-    case 'image':
-      return '[图片]';
-    case 'file':
-      return '[文件]';
-    case 'location':
-      return '[位置]';
-    case 'voice':
-      return `[语音消息 ${msg.duration || ''}″]`;
-    default:
-      return '[未知消息类型]';
+    swipeOffset.value[index] = 0;
   }
 };
 
-onMounted(() => {
-  // 初始化
-  console.log('组件挂载，初始化');
+// 处理触摸结束事件
+const touchEnd = (index) => {
+  if (currentSwipeIndex.value !== index) return;
   
-  // 设置页面可见性监听
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && dataFetchedOnce) {
-      console.log('页面重新可见，刷新会话列表');
-      fetchConversations(true);
+  // 根据滑动距离判断是否显示操作按钮
+  if (swipeOffset.value[index] >= swipeThreshold) {
+    swipeOffset.value[index] = maxSwipeOffset;
+  } else {
+    swipeOffset.value[index] = 0;
+  }
+};
+
+// 处理通知
+const handleNotification = (notification) => {
+  // 标记通知为已读
+  notification.read = true;
+  
+  // 根据通知类型执行不同操作
+  switch (notification.type) {
+    case 'friend_request':
+      router.push('/im/friend-requests');
+      break;
+    case 'group_invite':
+      router.push('/im/groups');
+      break;
+    case 'system':
+      // 处理系统通知
+      break;
+    default:
+      break;
+  }
+};
+
+// 获取通知图标
+const getNotificationIcon = (type) => {
+  switch (type) {
+    case 'friend_request':
+      return 'friends-o';
+    case 'group_invite':
+      return 'cluster-o';
+    case 'system':
+      return 'info-o';
+    default:
+      return 'bell';
+  }
+};
+
+// 格式化徽标数字
+const formatBadge = (count) => {
+  return count > 99 ? '99+' : count;
+};
+
+// 截断文本
+const truncateText = (text) => {
+  if (!text) return '';
+  return text.length > 20 ? text.substring(0, 20) + '...' : text;
+};
+
+// 格式化时间
+const formatTime = (time) => {
+  if (!time) return '';
+  
+  const date = dayjs(time);
+  const now = dayjs();
+  
+  if (date.isSame(now, 'day')) {
+    // 今天，显示时间
+    return date.format('HH:mm');
+  } else if (date.isSame(now.subtract(1, 'day'), 'day')) {
+    // 昨天
+    return '昨天';
+  } else if (date.isSame(now, 'year')) {
+    // 今年，显示月日
+    return date.format('MM-DD');
+  } else {
+    // 往年，显示年月日
+    return date.format('YYYY-MM-DD');
+  }
+};
+
+// 获取联系人名称首字母
+const getInitials = (name) => {
+  if (!name) return '';
+  return name.charAt(0).toUpperCase();
+};
+
+// 加载好友申请数量
+const loadFriendRequestsCount = async () => {
+  try {
+    const response = await getFriendRequests({ status: 'pending' });
+    if (response.code === 200 && response.data) {
+      newFriendRequestsCount.value = response.data.total || 0;
     }
+  } catch (error) {
+    console.error('获取好友申请数量失败:', error);
+  }
+};
+
+// 初始化模拟通知数据
+const initMockNotifications = () => {
+  // 仅在mock环境下初始化模拟数据
+  if (import.meta.env.VITE_USE_MOCK === 'true') {
+    notifications.value = [
+      {
+        id: 1,
+        type: 'friend_request',
+        title: '好友申请',
+        content: '张三请求添加您为好友',
+        time: '2023-04-18 14:30:00',
+        read: false
+      },
+      {
+        id: 2,
+        type: 'group_invite',
+        title: '群聊邀请',
+        content: '李四邀请您加入群聊"校园活动"',
+        time: '2023-04-17 10:20:00',
+        read: false
+      },
+      {
+        id: 3,
+        type: 'system',
+        title: '系统通知',
+        content: '您的账号已完成实名认证',
+        time: '2023-04-16 09:15:00',
+        read: true
+      }
+    ];
+  }
+};
+
+// 更新未读消息数
+const updateUnreadCount = () => {
+  // 从IM Store中获取未读消息总数
+  const totalUnread = imStore.getTotalUnreadCount();
+  
+  // 更新文档标题
+  document.title = totalUnread > 0 ? 
+    `(${totalUnread}) 消息 - ${import.meta.env.VITE_APP_TITLE || 'IM App'}` : 
+    (import.meta.env.VITE_APP_TITLE || 'IM App');
+};
+
+// 处理新消息更新会话列表
+const updateConversationWithNewMessage = (messageData) => {
+  console.log('处理新消息更新会话列表:', messageData);
+  
+  // 查找是否已有该会话
+  const conversationId = messageData.conversationId;
+  const conversationIndex = conversations.value.findIndex(c => c.id === conversationId);
+  
+  // 格式化消息类型
+  const messageType = messageData.mType === 0 ? 'text' : 
+                    messageData.mType === 1 ? 'image' : 
+                    messageData.mType === 2 ? 'voice' : 
+                    messageData.mType === 3 ? 'video' : 
+                    messageData.mType === 5 ? 'file' : 'unknown';
+  
+  // 格式化消息内容
+  let messageContent = messageData.content;
+  // 针对不同类型的消息进行不同的格式化处理
+  if (messageType !== 'text') {
+    try {
+      if (messageType === 'image') {
+        messageContent = '[图片]';
+      } else if (messageType === 'voice') {
+        messageContent = '[语音]';
+      } else if (messageType === 'video') {
+        messageContent = '[视频]';
+      } else if (messageType === 'file') {
+        const fileData = JSON.parse(messageData.content);
+        messageContent = `[文件] ${fileData.name || '文件'}`;
+      } else {
+        messageContent = `[${messageType}]`;
+      }
+    } catch (e) {
+      console.error('解析消息内容出错:', e);
+      messageContent = `[${messageType}]`;
+    }
+  }
+  
+  if (conversationIndex !== -1) {
+    // 更新现有会话
+    const conversation = {...conversations.value[conversationIndex]};
+    
+    // 更新最后消息
+    conversation.lastMessage = {
+      type: messageType,
+      content: messageContent,
+      timestamp: messageData.sendTime || Date.now()
+    };
+    
+    // 如果发送者不是当前用户，增加未读计数
+    if (messageData.sendId !== userStore.userInfo.id.toString()) {
+      conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+    }
+    
+    // 将此会话移到顶部
+    conversations.value.splice(conversationIndex, 1);
+    conversations.value.unshift(conversation);
+    
+    // 播放通知声音（如果不是自己发送的消息且不是当前活跃会话）
+    if (messageData.sendId !== userStore.userInfo.id.toString() && 
+        router.currentRoute.value.path !== `/im/chat/${conversation.targetId}`) {
+      playNotificationSound();
+    }
+  } else {
+    // 会话不存在，刷新会话列表
+    fetchConversations(true);
+  }
+};
+
+// 播放消息通知声音
+const playNotificationSound = () => {
+  try {
+    const audio = new Audio('/sounds/message.mp3');
+    audio.volume = 0.5; // 设置音量为50%
+    audio.play().catch(e => console.log('播放通知声音失败:', e));
+  } catch (e) {
+    console.log('播放通知声音出错:', e);
+  }
+};
+
+// 组件挂载时
+onMounted(() => {
+  console.log('Conversations组件已挂载');
+  
+  // 连接WebSocket
+  if (wsClient && userStore.isLoggedIn) {
+    if (!wsClient.isConnected()) {
+      wsClient.connect();
+    }
+    
+    // 设置WebSocket监听器
+    const removeWSListener = wsClient.addListener({
+      onMessage: (message) => {
+        console.log('会话列表收到WebSocket消息:', message);
+        
+        // 只处理push消息
+        if (message.method === 'push' && message.data) {
+          const data = message.data;
+          
+          // 处理新消息通知
+          if (data.contentType === 0) { // 聊天消息
+            updateConversationWithNewMessage(data);
+            
+            // 更新全局未读消息数
+            updateUnreadCount();
+          } else if (data.contentType === 1) { // 已读回执
+            // 处理已读回执更新
+            if (data.conversationId) {
+              const conversationIndex = conversations.value.findIndex(c => c.id === data.conversationId);
+              if (conversationIndex !== -1 && data.sendId === userStore.userInfo.id) {
+                // 对方已读我们的消息，可以更新UI显示
+                console.log('收到已读回执:', data);
+              }
+            }
+          } else if (data.contentType === 2) { // 用户状态
+            // 更新用户在线状态
+            console.log('用户状态更新:', data);
+            if (data.status === 'online' && data.userId) {
+              imStore.addOnlineUser(data.userId);
+            } else if (data.status === 'offline' && data.userId) {
+              imStore.removeOnlineUser(data.userId);
+            }
+          }
+        }
+      },
+      onError: (error) => {
+        console.error('WebSocket错误:', error);
+        showToast('连接错误，请检查网络');
+      },
+      onStateChange: (state) => {
+        console.log('WebSocket状态变更:', state);
+        
+        // 如果断开连接，尝试重连
+        if (state === 'disconnected' && userStore.isLoggedIn) {
+          setTimeout(() => {
+            if (userStore.isLoggedIn && !wsClient.isConnected()) {
+              console.log('尝试重新连接WebSocket...');
+              wsClient.connect();
+            }
+          }, 3000); // 3秒后尝试重连
+        }
+      }
+    });
+    
+    // 组件卸载时移除监听器
+    onBeforeUnmount(() => {
+      if (removeWSListener) removeWSListener();
+    });
+  }
+  
+  // 加载会话列表
+  fetchConversations();
+  
+  // 加载好友申请数量
+  loadFriendRequestsCount();
+  
+  // 初始化模拟通知数据
+  initMockNotifications();
+  
+  // 监听IM Store中未读消息变化
+  const unsubscribe = imStore.$subscribe((mutation, state) => {
+    updateUnreadCount();
   });
   
-  // 设置WebSocket监听
-  setupWebSocketListener();
-  
-  // 只在组件初次挂载时加载一次聊天列表
-  fetchConversations(true);
-  fetchFriendRequests();
-  fetchNotifications();
+  // 组件卸载时移除监听
+  onBeforeUnmount(() => {
+    unsubscribe();
+  });
 });
 
-onUnmounted(() => {
-  // 组件卸载时清理监听器
-  if (wsListener) {
-    console.log('组件卸载，移除WebSocket监听器');
-    wsClient.removeListener(wsListener);
+// 组件激活时
+onActivated(() => {
+  // 每次组件激活时刷新会话列表
+  if (dataFetchedOnce) {
+    fetchConversations(true);
+  }
+  
+  // 更新未读消息数
+  updateUnreadCount();
+  
+  // 确保WebSocket已连接
+  if (wsClient && userStore.isLoggedIn && !wsClient.isConnected()) {
+    wsClient.connect();
   }
 });
 </script>

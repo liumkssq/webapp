@@ -155,9 +155,11 @@
 import {
   sendImageMessage as apiSendImageMessage,
   sendTextMessage as apiSendTextMessage,
+  CHAT_TYPE,
   getChatLog,
   getUserDetail,
   markMessageRead,
+  setUpUserConversation,
   uploadChatImage
 } from '@/api/im';
 import HeaderNav from '@/components/HeaderNav.vue';
@@ -239,11 +241,27 @@ const loadUserInfo = async () => {
 };
 
 // 检查或创建会话ID
-const ensureConversationId = () => {
+const ensureConversationId = async () => {
   if (!conversationId.value && currentUserId.value && targetUserId.value) {
-    // 如果没有会话ID，则根据两个用户ID生成
-    const ids = [currentUserId.value, targetUserId.value].sort();
-    conversationId.value = ids.join('_');
+    try {
+      // 如果没有会话ID，则通过API创建/获取会话
+      const response = await setUpUserConversation({
+        sendId: currentUserId.value.toString(),
+        recvId: targetUserId.value.toString(),
+        chatType: CHAT_TYPE.SINGLE // 单聊
+      });
+      
+      if (response.code === 200 && response.data) {
+        conversationId.value = response.data.conversationId;
+        console.log('成功创建/获取会话:', conversationId.value);
+      } else {
+        showToast('创建会话失败');
+        console.error('创建会话失败:', response);
+      }
+    } catch (error) {
+      console.error('创建会话异常:', error);
+      showToast('创建会话失败，请稍后重试');
+    }
   }
 };
 
@@ -372,11 +390,51 @@ const sendTextMessage = async () => {
   scrollToBottom();
   
   try {
-    // 发送消息到服务器
+    // 首先尝试通过WebSocket发送消息
+    if (wsClient.isConnected()) {
+      wsClient.sendChatMessage({
+        conversationId: conversationId.value,
+        recvId: targetUserId.value,
+        content: messageToSend,
+        type: 0, // 文本类型
+        msgId: tempMessage.id
+      }, (response) => {
+        // 处理WebSocket消息发送回调
+        if (response && response.error) {
+          console.error('WebSocket发送消息失败:', response.error);
+          // WebSocket发送失败，回退到HTTP API
+          fallbackToHttpSend(tempMessage, messageToSend);
+        } else {
+          // WebSocket发送成功，更新消息状态
+          const index = messages.value.findIndex(msg => msg.id === tempMessage.id);
+          if (index !== -1) {
+            messages.value[index].status = 'sent';
+          }
+        }
+      });
+    } else {
+      // WebSocket未连接，直接使用HTTP API
+      fallbackToHttpSend(tempMessage, messageToSend);
+    }
+  } catch (error) {
+    console.error('发送消息错误:', error);
+    // 更新消息状态为失败
+    const index = messages.value.findIndex(msg => msg.id === tempMessage.id);
+    if (index !== -1) {
+      messages.value[index].status = 'failed';
+    }
+    showToast('发送消息失败');
+  }
+};
+
+// 回退到HTTP API发送消息
+const fallbackToHttpSend = async (tempMessage, content) => {
+  try {
+    // 发送消息到服务器（通过HTTP API）
     const response = await apiSendTextMessage({
       conversationId: conversationId.value,
       receiverId: targetUserId.value,
-      content: messageToSend
+      content: content
     });
     
     if (response.code !== 200) {
@@ -395,16 +453,13 @@ const sendTextMessage = async () => {
       messages.value[index].id = response.data?.messageId || tempMessage.id;
       messages.value[index].status = 'sent';
     }
-    
   } catch (error) {
-    console.error('发送消息失败:', error);
-    
+    console.error('HTTP API发送消息失败:', error);
     // 更新消息状态为失败
     const index = messages.value.findIndex(msg => msg.id === tempMessage.id);
     if (index !== -1) {
       messages.value[index].status = 'failed';
     }
-    
     showToast('发送消息失败');
   }
 };
@@ -637,53 +692,71 @@ const handleUserAction = (action) => {
 
 // 处理接收到新消息
 const handleNewMessage = (message) => {
+  // 检查消息是否是聊天消息
+  if (message.method !== 'push' || !message.data) return;
+  
+  const data = message.data;
+  
   // 检查是否与当前会话相关
-  if (message.conversationId !== conversationId.value) return;
+  if (data.conversationId !== conversationId.value) return;
+  
+  console.log('收到新聊天消息:', data);
   
   // 转换消息格式
   const newMessage = {
-    id: message.id || `server_${Date.now()}`,
-    senderId: message.senderId,
-    receiverId: message.receiverId,
-    type: message.type || 'text',
-    content: message.content,
-    timestamp: message.timestamp || Date.now(),
+    id: data.msgId || `server_${Date.now()}`,
+    senderId: data.sendId,
+    receiverId: data.recvId,
+    type: data.mType === 0 ? 'text' : 
+          data.mType === 1 ? 'image' : 
+          data.mType === 2 ? 'voice' : 
+          data.mType === 3 ? 'video' :
+          data.mType === 4 ? 'location' :
+          data.mType === 5 ? 'file' : 'unknown',
+    content: data.content,
+    timestamp: data.sendTime || Date.now(),
     status: 'sent'
   };
   
-  // 添加到消息列表
-  messages.value.push(newMessage);
-  
-  // 更新最新消息时间
-  if (newMessage.timestamp > newestMessageTime.value) {
-    newestMessageTime.value = newMessage.timestamp;
+  // 添加到消息列表，避免重复消息
+  if (!messages.value.some(msg => msg.id === newMessage.id)) {
+    messages.value.push(newMessage);
+    
+    // 更新最新消息时间
+    if (newMessage.timestamp > newestMessageTime.value) {
+      newestMessageTime.value = newMessage.timestamp;
+    }
+    
+    // 如果是别人发的消息，标记为已读
+    if (newMessage.senderId !== currentUserId.value) {
+      markMessageRead({ conversationId: conversationId.value })
+        .catch(err => console.error('标记消息已读失败:', err));
+    }
+    
+    // 滚动到底部
+    scrollToBottom();
   }
-  
-  // 如果是别人发的消息，标记为已读
-  if (newMessage.senderId !== currentUserId.value) {
-    markMessageRead({ conversationId: conversationId.value })
-      .catch(err => console.error('标记消息已读失败:', err));
-  }
-  
-  // 滚动到底部
-  scrollToBottom();
 };
 
 // 建立WebSocket连接
 const setupWebSocketListener = () => {
-  // 设置WebSocket消息处理函数
-  wsClient.addListener({
-    onMessage: (message) => {
-      if (message && message.method === 'chat') {
-        handleNewMessage(message);
-      }
-    }
-  });
-  
-  // 确保连接状态
+  // 确保WebSocket已连接
   if (!wsClient.isConnected() && userStore.isLoggedIn) {
     wsClient.connect();
   }
+  
+  // 设置WebSocket消息处理函数
+  return wsClient.addListener({
+    onMessage: (message) => {
+      handleNewMessage(message);
+    },
+    onStateChange: (state) => {
+      console.log('WebSocket连接状态变化:', state);
+    },
+    onError: (error) => {
+      console.error('WebSocket错误:', error);
+    }
+  });
 };
 
 // 滚动到底部
@@ -753,7 +826,7 @@ watch(messages, () => {
 // 组件挂载时
 onMounted(async () => {
   // 确保有会话ID
-  ensureConversationId();
+  await ensureConversationId();
   
   // 加载用户信息
   await loadUserInfo();
@@ -762,10 +835,15 @@ onMounted(async () => {
   await loadChatMessages(true);
   
   // 设置WebSocket监听
-  setupWebSocketListener();
+  const removeListener = setupWebSocketListener();
   
   // 初始滚动到底部
   scrollToBottom();
+  
+  // 组件卸载时清理WebSocket监听器
+  onUnmounted(() => {
+    if (removeListener) removeListener();
+  });
 });
 
 // 组件卸载时

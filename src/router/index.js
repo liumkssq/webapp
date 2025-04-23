@@ -294,7 +294,11 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: '聊天'
-    }
+    },
+    props: route => ({
+      conversationType: 'private',
+      targetId: route.params.id
+    })
   },
   
   // 用户相关路由

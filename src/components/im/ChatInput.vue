@@ -98,17 +98,17 @@
           </div>
           <div class="action-name">图片</div>
         </div>
+        <div class="action-item" @click="chooseFile">
+          <div class="action-icon">
+            <van-icon name="description" size="1.5rem" color="#2c2c2c" />
+          </div>
+          <div class="action-name">文件</div>
+        </div>
         <div class="action-item" @click="chooseLocation">
           <div class="action-icon">
             <van-icon name="location-o" size="1.5rem" color="#2c2c2c" />
           </div>
           <div class="action-name">位置</div>
-        </div>
-        <div class="action-item" @click="chooseProduct">
-          <div class="action-icon">
-            <van-icon name="gift-o" size="1.5rem" color="#2c2c2c" />
-          </div>
-          <div class="action-name">商品</div>
         </div>
         <div class="action-item" @click="chooseEmoji">
           <div class="action-icon">
@@ -126,6 +126,14 @@
       accept="image/*"
       style="display: none"
       @change="handleFileSelected"
+    />
+    
+    <!-- 文件上传选择器 -->
+    <input
+      ref="fileUploadRef"
+      type="file"
+      style="display: none"
+      @change="handleFileUploadSelected"
     />
   </div>
 </template>
@@ -159,24 +167,31 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['send-text', 'send-image', 'send-voice', 'send-location', 'send-product', 'send-emoji'])
+const emit = defineEmits([
+  'send', 
+  'send-image', 
+  'send-file',
+  'send-location',
+  'focus',
+  'blur',
+  'panel-change',
+  'input'
+])
 
 // 输入相关的状态
 const inputMode = ref('text') // 'text' 或 'voice'
 const textMessage = ref('')
 const textareaRef = ref(null)
 const fileInputRef = ref(null)
+const fileUploadRef = ref(null)
 const showMoreActions = ref(false)
 const showEmojiPicker = ref(false)
 
 // 节流发送正在输入状态，3秒内最多发送一次
 const throttledSendTyping = useThrottleFn(() => {
-  // 暂时注释掉发送输入状态的功能，因为API不存在
-  // if (props.conversationId) {
-  //   sendTypingStatus(props.conversationId)
-  // }
-  console.log('用户正在输入...');
-}, 3000)
+  // 通知父组件用户正在输入
+  emit('input', textMessage.value)
+}, 1000)
 
 // 文本输入框的行数
 const textareaRows = computed(() => {
@@ -208,15 +223,23 @@ const sendTextMessage = () => {
   const message = textMessage.value.trim()
   if (!message) return
   
-  emit('send-text', message)
+  emit('send', message)
   textMessage.value = ''
   adjustTextareaHeight()
   showEmojiPicker.value = false
 }
 
 // 监听输入变化，发送正在输入状态
-const onTextInput = () => {
-  adjustTextareaHeight()
+const onTextInput = (event) => {
+  // 调整文本框高度
+  nextTick(() => {
+    if (textareaRef.value) {
+      textareaRef.value.style.height = 'auto'
+      textareaRef.value.style.height = `${textareaRef.value.scrollHeight}px`
+    }
+  })
+  
+  // 触发输入事件通知父组件
   throttledSendTyping()
 }
 
@@ -244,7 +267,7 @@ const stopRecording = () => {
   
   // 模拟发送语音消息
   // 实际项目中需要处理录音文件
-  emit('send-voice', {
+  emit('send-file', {
     duration,
     file: null // 实际项目中应该是录音文件
   })
@@ -292,14 +315,6 @@ const chooseLocation = () => {
   // 模拟选择位置
   // 实际项目中需要调用地图API
   emit('send-location')
-  showMoreActions.value = false
-}
-
-// 选择商品
-const chooseProduct = () => {
-  // 实现商品选择功能
-  emit('send-product', { id: 'demo-product', name: '示例商品' })
-  showToast('选择商品功能即将上线')
   showMoreActions.value = false
 }
 
@@ -379,6 +394,35 @@ const onKeyEnter = (event) => {
   
   // 否则发送消息
   sendTextMessage()
+}
+
+// 选择文件上传
+function chooseFile() {
+  if (fileUploadRef.value) {
+    fileUploadRef.value.click()
+  }
+}
+
+// 处理选择的文件上传
+function handleFileUploadSelected(event) {
+  const files = event.target.files
+  if (!files || files.length === 0) {
+    return
+  }
+  
+  const file = files[0]
+  
+  // 文件大小检查 (最大10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('文件大小不能超过10MB')
+    return
+  }
+  
+  // 通知父组件处理文件上传
+  emit('send-file', file)
+  
+  // 重置文件选择器以便再次选择相同文件
+  event.target.value = ''
 }
 
 // 组件挂载时的初始化

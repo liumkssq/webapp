@@ -99,59 +99,108 @@ export const useMessageStore = defineStore('message', {
      */
     async loadMessages({ conversationId, count = 20, refresh = false }) {
       if (!conversationId) {
-        console.error('加载消息失败: 缺少conversationId')
-        return []
+        console.error('加载消息失败: 缺少conversationId');
+        return [];
       }
       
       // 设置加载状态
-      this.loading[conversationId] = true
+      this.loading[conversationId] = true;
       
       try {
-        // 确定开始时间
-        const startTime = refresh ? Date.now() : (this.earliestTimes[conversationId] || Date.now())
+        // 确定开始时间和结束时间
+        let endTime = Date.now();
+        let startTime = 0; // 默认加载所有历史消息
+        
+        // 如果不是刷新，且有最早的消息时间记录，则从最早的消息时间开始加载更早的消息
+        if (!refresh && this.earliestTimes[conversationId]) {
+          endTime = this.earliestTimes[conversationId];
+        }
+        
+        console.log('加载聊天记录:', {
+          conversationId,
+          startSendTime: startTime,
+          endSendTime: endTime,
+          count
+        });
         
         const response = await getChatLog({
           conversationId,
-          count,
-          startSendTime: 0,
-          endSendTime: startTime
-        })
+          startSendTime: startTime,
+          endSendTime: endTime,
+          count
+        });
         
-        if (response.code === 200) {
-          const newMessages = response.data.messages || []
+        if (response.code === 200 && response.data) {
+          let newMessages = [];
           
-          // 记录最早的消息时间
+          // 确保response.data.List存在且是数组
+          if (response.data.List && Array.isArray(response.data.List)) {
+            newMessages = response.data.List.map(msg => ({
+              id: msg.id,
+              conversationId: msg.conversationId,
+              senderId: msg.sendId,
+              receiverId: msg.recvId,
+              type: msg.msgType,
+              content: msg.msgContent,
+              chatType: msg.chatType,
+              timestamp: msg.SendTime,
+              status: 'received',
+              readRecords: msg.readRecords ? JSON.parse(msg.readRecords) : {}
+            }));
+          }
+          
+          // 记录最早的消息时间，如果有新消息的话
           if (newMessages.length > 0) {
-            const earliestMessage = newMessages[newMessages.length - 1]
-            this.earliestTimes[conversationId] = earliestMessage.sendTime
+            const earliestMessage = newMessages[newMessages.length - 1];
+            this.earliestTimes[conversationId] = earliestMessage.timestamp;
           }
           
           // 更新是否还有更多消息可加载
-          this.hasMore[conversationId] = newMessages.length >= count
+          this.hasMore[conversationId] = newMessages.length >= count;
+          
+          // 确保消息按时间排序（从新到旧）
+          newMessages.sort((a, b) => b.timestamp - a.timestamp);
           
           // 处理消息并更新存储
           if (refresh) {
             // 刷新模式: 替换现有消息
-            this.messages[conversationId] = this.processMessages(newMessages)
+            this.messages[conversationId] = newMessages;
           } else {
             // 加载更多模式: 追加到现有消息
-            const existingMessages = this.messages[conversationId] || []
-            this.messages[conversationId] = [
-              ...existingMessages,
-              ...this.processMessages(newMessages)
-            ]
+            const existingMessages = this.messages[conversationId] || [];
+            
+            // 创建一个新的消息集合，避免重复
+            const messageMap = new Map();
+            
+            // 添加现有消息
+            existingMessages.forEach(msg => {
+              messageMap.set(msg.id, msg);
+            });
+            
+            // 添加新消息，避免重复
+            newMessages.forEach(msg => {
+              if (!messageMap.has(msg.id)) {
+                messageMap.set(msg.id, msg);
+              }
+            });
+            
+            // 转换回数组并按时间排序
+            const mergedMessages = Array.from(messageMap.values());
+            mergedMessages.sort((a, b) => b.timestamp - a.timestamp);
+            
+            this.messages[conversationId] = mergedMessages;
           }
           
-          return this.messages[conversationId]
+          return this.messages[conversationId];
         } else {
-          console.error('加载消息失败:', response.message)
-          return this.messages[conversationId] || []
+          console.error('加载消息失败:', response.message || '未知错误');
+          return this.messages[conversationId] || [];
         }
       } catch (error) {
-        console.error('加载消息出错:', error)
-        return this.messages[conversationId] || []
+        console.error('加载消息出错:', error);
+        return this.messages[conversationId] || [];
       } finally {
-        this.loading[conversationId] = false
+        this.loading[conversationId] = false;
       }
     },
     

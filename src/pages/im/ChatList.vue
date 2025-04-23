@@ -266,17 +266,18 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
-import { Dialog, showLoadingToast, showToast, closeToast } from 'vant'
-import dayjs from 'dayjs'
-import { 
-  getConversationList, 
-  deleteConversationByType,
-  setConversationSticky, 
-  setConversationMuted, 
-  getUserOnlineStatus 
-} from '@/api/im'
+import {
+    deleteConversationByType,
+    getConversationList,
+    getUserOnlineStatus,
+    setConversationMuted,
+    setConversationSticky
+} from '@/api/im';
+import { wsClient } from '@/utils/websocket'; // 导入WebSocket客户端
+import dayjs from 'dayjs';
+import { closeToast, Dialog, showLoadingToast, showToast } from 'vant';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 const router = useRouter()
 
@@ -351,6 +352,86 @@ const updateOnlineStatus = async () => {
   } catch (error) {
     console.error('获取在线状态失败:', error)
   }
+}
+
+// WebSocket连接状态处理
+const handleWebSocketStateChange = (state) => {
+  console.log('WebSocket连接状态变更:', state);
+}
+
+// WebSocket消息处理
+const handleWebSocketMessage = (message) => {
+  console.log('收到WebSocket消息:', message);
+  
+  // 只处理推送消息
+  if (message.method !== 'push' || !message.data) return;
+  
+  const data = message.data;
+  
+  // 处理新消息通知
+  if (data.contentType === 0) { // 聊天消息
+    updateConversationWithNewMessage(data);
+  }
+}
+
+// 使用新消息更新会话
+const updateConversationWithNewMessage = (data) => {
+  // 查找对应会话
+  const conversationId = data.conversationId;
+  let conversation = conversations.value.find(c => c.id === conversationId);
+  
+  if (conversation) {
+    // 会话已存在，更新最后一条消息
+    conversation.lastMessage = {
+      senderId: data.sendId,
+      content: data.content,
+      type: data.mType === 0 ? 'text' : 
+            data.mType === 1 ? 'image' : 
+            data.mType === 2 ? 'voice' : 
+            data.mType === 3 ? 'video' :
+            data.mType === 4 ? 'location' :
+            data.mType === 5 ? 'file' : 'unknown',
+      senderName: data.senderName || '用户' // 如果有发送者名称
+    };
+    conversation.lastActiveTime = data.sendTime;
+    
+    // 如果不是自己发的消息，增加未读数
+    if (data.sendId !== currentUserId.toString()) {
+      // 如果没有设置免打扰，增加未读数
+      if (!conversation.isMuted) {
+        conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+      }
+    }
+    
+    // 将此会话移到列表顶部
+    const index = conversations.value.findIndex(c => c.id === conversationId);
+    if (index > 0) {
+      const [conv] = conversations.value.splice(index, 1);
+      conversations.value.unshift(conv);
+    }
+  } else {
+    // 会话不存在，需要刷新会话列表
+    fetchConversations();
+  }
+}
+
+// WebSocket错误处理
+const handleWebSocketError = (error) => {
+  console.error('WebSocket错误:', error);
+}
+
+// 添加WebSocket监听器
+const setupWebSocketListeners = () => {
+  // 确保WebSocket已连接
+  if (!wsClient.isConnected()) {
+    wsClient.connect();
+  }
+  
+  return wsClient.addListener({
+    onMessage: handleWebSocketMessage,
+    onError: handleWebSocketError,
+    onStateChange: handleWebSocketStateChange
+  });
 }
 
 // 处理滑动删除前确认
@@ -435,9 +516,21 @@ const formatTime = (timestamp) => {
 // 跳转到会话
 const goToConversation = (item) => {
   if (item.type === 'private') {
-    router.push(`/im/chat/${item.type}/${item.targetId}`)
+    router.push({
+      path: `/im/chat/${item.targetInfo.id}`,
+      query: {
+        conversationId: item.id,
+        name: item.targetInfo.name
+      }
+    });
   } else {
-    router.push(`/im/chat/${item.type}/${item.targetId}`)
+    router.push({
+      path: `/im/chat/group/${item.targetId}`,
+      query: {
+        conversationId: item.id,
+        name: item.targetInfo.name
+      }
+    });
   }
 }
 
@@ -502,19 +595,28 @@ const onContextMenuSelect = async (action) => {
 onMounted(() => {
   fetchConversations()
   
+  // 设置WebSocket监听器
+  const removeWSListener = setupWebSocketListeners();
+  
   // 定时更新在线状态
   onlineStatusTimer.value = setInterval(() => {
     if (conversations.value.length > 0) {
       updateOnlineStatus()
     }
   }, 30000) // 每30秒更新一次
-})
-
-onBeforeUnmount(() => {
-  if (onlineStatusTimer.value) {
-    clearInterval(onlineStatusTimer.value)
-    onlineStatusTimer.value = null
-  }
+  
+  // 组件卸载前清理
+  onBeforeUnmount(() => {
+    if (onlineStatusTimer.value) {
+      clearInterval(onlineStatusTimer.value)
+      onlineStatusTimer.value = null
+    }
+    
+    // 移除WebSocket监听器
+    if (removeWSListener) {
+      removeWSListener();
+    }
+  })
 })
 </script>
 

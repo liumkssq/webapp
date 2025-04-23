@@ -1,11 +1,11 @@
 // 会话状态管理
-import { defineStore } from 'pinia'
-import { 
-  getConversations, 
-  setUpUserConversation, 
-  getUnreadCount, 
-  deleteSession
+import {
+    deleteSession,
+    getConversations,
+    getUnreadCount,
+    setUpUserConversation
 } from '@/api/im'
+import { defineStore } from 'pinia'
 import { useUserStore } from './user'
 
 export const useConversationStore = defineStore('conversation', {
@@ -161,9 +161,24 @@ export const useConversationStore = defineStore('conversation', {
       const chatType = params.chatType || 2
       
       try {
+        // 检查是否已有现成的会话
+        // 对于单聊，会话ID格式为 senderId_receiverId 或 receiverId_senderId
+        const possibleIds = [`${userId}_${params.targetId}`, `${params.targetId}_${userId}`]
+        const existingConv = this.conversations.find(conv => 
+          possibleIds.includes(conv.id) && conv.chatType === chatType
+        )
+        
+        if (existingConv) {
+          console.log('使用现有会话:', existingConv)
+          this.setActiveConversation(existingConv.id)
+          return existingConv
+        }
+        
+        // 创建新会话
+        console.log('创建新会话:', { SendId: userId, recvId: params.targetId, chatType })
         const response = await setUpUserConversation({
-          sendId: userId,
-          recvId: params.targetId,
+          SendId: userId,  // 注意大小写：SendId首字母大写
+          recvId: params.targetId, // recvId小写
           chatType
         })
         

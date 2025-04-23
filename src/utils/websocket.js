@@ -1,5 +1,5 @@
 // WebSocket客户端工具类
-import { formatChatMessage, formatMarkReadMessage, wsActions } from '@/api/im'
+import { wsActions } from '@/api/im'
 import { useConversationStore } from '@/store/conversation'
 import { useMessageStore } from '@/store/message'
 import { useUserStore } from '@/store/user'
@@ -36,6 +36,9 @@ export function getWsClient() {
   return wsClientInstance;
 }
 
+// 导出实例，方便直接使用
+export const wsClient = getWsClient();
+
 /**
  * 创建WebSocket客户端实例
  * @returns {Object} WebSocket客户端实例
@@ -67,8 +70,42 @@ function createWebSocketClient() {
    * 获取WebSocket服务器URL
    */
   function getServerUrl() {
-    // 直接返回固定地址，不添加任何参数
+    // 优先使用环境变量中的WebSocket URL
+    if (import.meta.env.VITE_WS_URL) {
+      return import.meta.env.VITE_WS_URL;
+    }
+    
+    // 回退到默认地址
     return 'ws://127.0.0.1:10090/ws';
+  }
+  
+  /**
+   * 获取认证Token
+   * @returns {string|null} 认证Token或null
+   */
+  function getAuthToken() {
+    try {
+      let token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('未找到认证Token，无法进行WebSocket认证');
+        return null;
+      }
+      
+      // 清除引号和空格
+      token = token.replace(/['"]/g, '').trim();
+      
+      // 请确保Token有效
+      if (token.length < 10) {
+        console.warn('Token似乎无效（长度过短）:', token);
+        return null;
+      }
+      
+      console.log('获取到有效Token:', token.substring(0, 15) + '...');
+      return token;
+    } catch (error) {
+      console.error('获取Token时发生错误:', error);
+      return null;
+    }
   }
   
   /**
@@ -86,40 +123,101 @@ function createWebSocketClient() {
   }
   
   /**
-   * 连接WebSocket服务器
+   * 建立WebSocket连接
+   * @returns {Promise<boolean>} 连接成功返回true，失败返回false
    */
-  function connect() {
-    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
-      return;
+  async function connect() {
+    // 防止重复连接
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log('WebSocket已经连接，无需重新连接');
+      return true;
     }
-
-    setConnectionState(ConnectionState.CONNECTING);
     
-    const url = getServerUrl();
+    // 获取认证Token
+    const token = getAuthToken();
+    if (!token) {
+      console.error('无法连接WebSocket: 缺少有效的认证Token');
+      setConnectionState(ConnectionState.DISCONNECTED);
+      _notifyListeners('error', { code: 'AUTH_ERROR', message: '认证失败：未找到有效Token' });
+      return false;
+    }
     
-    // 从localStorage获取token
-    const token = localStorage.getItem('token');
-    
-    console.log('准备连接WebSocket:', url);
-
     try {
-      // 正确创建WebSocket连接，使用token作为protocol
-      if (token) {
-        console.log('使用token作为Sec-WebSocket-Protocol头');
-        // WebSocket构造函数第二个参数是protocols，可以是字符串或字符串数组
-        ws = new WebSocket(url, token);
-      } else {
-        console.log('未找到token，建立无协议WebSocket连接');
-        ws = new WebSocket(url);
-      }
-
-      ws.onopen = handleOpen;
-      ws.onmessage = handleMessage;
-      ws.onerror = handleError;
-      ws.onclose = handleClose;
+      console.log(`正在连接WebSocket服务器: ${getServerUrl()}, 使用token认证`);
+      // 使用token作为Sec-WebSocket-Protocol (子协议)
+      // 这是WebSocket规范中推荐的认证方式
+      ws = new WebSocket(getServerUrl(), [token]);
+      
+      return new Promise((resolve) => {
+        // 连接成功
+        ws.onopen = () => {
+          console.log('WebSocket连接成功');
+          setConnectionState(ConnectionState.CONNECTED);
+          // 发送上线消息
+          sendOnlineMessage();
+          resolve(true);
+        };
+        
+        // 连接错误
+        ws.onerror = (error) => {
+          console.error('WebSocket连接错误:', error);
+          setConnectionState(ConnectionState.DISCONNECTED);
+          
+          // 通知所有监听器
+          listeners.forEach(listener => {
+            if (typeof listener.onError === 'function') {
+              listener.onError(error);
+            }
+          });
+          
+          resolve(false);
+        };
+        
+        // 连接关闭
+        ws.onclose = (event) => {
+          console.log(`WebSocket连接关闭: 代码=${event.code}, 原因=${event.reason || '未知原因'}`);
+          setConnectionState(ConnectionState.DISCONNECTED);
+          
+          // 通知所有监听器
+          listeners.forEach(listener => {
+            if (typeof listener.onClose === 'function') {
+              listener.onClose(event);
+            }
+          });
+          
+          // 如果不是正常关闭，则尝试重连
+          if (event.code !== 1000) {
+            // 1006表示异常关闭，可能是认证问题
+            if (event.code === 1006) {
+              console.warn('WebSocket异常关闭，可能是认证问题，尝试重新获取token...');
+              // 尝试刷新token或通知用户重新登录
+            }
+            reconnect();
+          }
+        };
+        
+        // 接收消息
+        ws.onmessage = (event) => {
+          try {
+            _handleMessage(event.data);
+          } catch (error) {
+            console.error('处理WebSocket消息出错:', error);
+          }
+        };
+        
+        // 设置连接超时
+        setTimeout(() => {
+          if (ws && ws.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket连接超时');
+            resolve(false);
+          }
+        }, 5000);
+      });
     } catch (error) {
-      console.error('WebSocket连接错误:', error);
-      handleError(error);
+      console.error('创建WebSocket连接时出错:', error);
+      setConnectionState(ConnectionState.DISCONNECTED);
+      _notifyListeners('error', { code: 'CONNECTION_ERROR', message: '连接错误: ' + error.message });
+      return false;
     }
   }
   
@@ -150,187 +248,247 @@ function createWebSocketClient() {
   }
   
   /**
-   * 处理WebSocket连接成功事件
-   */
-  function handleOpen() {
-    console.log('WebSocket已连接');
-    setConnectionState(ConnectionState.CONNECTED);
-    reconnectAttempts = 0;
-    startHeartbeat();
-    
-    // 广播通知监听器
-    listeners.forEach(listener => {
-      if (typeof listener.onOpen === 'function') {
-        listener.onOpen();
-      }
-    });
-    
-    // 连接成功后发送上线消息
-    sendOnlineMessage();
-  }
-  
-  /**
    * 处理WebSocket收到消息事件
    */
-  function handleMessage(event) {
+  function _handleMessage(data) {
     try {
-      const message = JSON.parse(event.data);
+      const message = JSON.parse(data);
       console.log('收到WebSocket消息:', message);
       
-      // 处理心跳响应
-      if (message.frameType === FrameType.HEARTBEAT) {
-        waitingForPong = false;
-        return;
-      }
-      
-      // 处理确认帧
-      if (message.frameType === FrameType.ACK && message.id) {
-        const callback = messageCallbacks[message.id];
-        if (callback) {
-          callback(message);
-          delete messageCallbacks[message.id];
-        }
-      }
-      
-      // 处理错误帧
-      if (message.frameType === FrameType.ERROR) {
-        console.error('WebSocket错误:', message);
+      // 处理错误消息
+      if (message.data && typeof message.data === 'string' && message.data.includes('不具备访问权限')) {
+        console.error('WebSocket认证失败:', message.data);
+        // 通知认证失败
         listeners.forEach(listener => {
           if (typeof listener.onError === 'function') {
-            listener.onError(message);
+            listener.onError(new Error(`认证失败: ${message.data}`));
           }
         });
+        
+        // 关闭连接，触发重新登录流程
+        if (ws) {
+          ws.close(3000, '认证失败');
+        }
         return;
       }
       
-      // 处理业务消息
-      if (message.frameType === FrameType.DATA || message.frameType === FrameType.NO_ACK) {
-        // 接收到服务器推送的消息
-        if (message.method === wsActions.PUSH) {
-          handlePushMessage(message.data);
-        }
+      // 处理心跳响应
+      if (message.method === 'pong') {
+        handlePong();
+        return;
+      }
+      
+      // 处理回调
+      if (message.id && messageCallbacks[message.id]) {
+        // 调用回调并移除
+        const callback = messageCallbacks[message.id];
+        delete messageCallbacks[message.id];
+        callback(message);
         
-        // 通知所有监听器
-        listeners.forEach(listener => {
-          if (typeof listener.onMessage === 'function') {
-            listener.onMessage(message);
+        // 如果是响应消息，不需要继续处理
+        if (message.reply === true) {
+          return;
+        }
+      }
+      
+      // 处理不同类型的消息
+      if (message.method) {
+        // 分发消息到特定处理器
+        dispatchMessageByMethod(message);
+      } else if (message.type) {
+        // 兼容旧版API使用type而非method的情况
+        dispatchMessageByType(message);
+      } else {
+        console.warn('收到未知格式的消息，无法处理:', message);
+      }
+      
+      // 通知所有监听器
+      listeners.forEach(listener => {
+        if (typeof listener.onMessage === 'function') {
+          listener.onMessage(message);
+        }
+      });
+    } catch (error) {
+      console.error('解析或处理WebSocket消息错误:', error, data);
+    }
+  }
+  
+  /**
+   * 按method分发消息到对应处理器
+   */
+  function dispatchMessageByMethod(message) {
+    const method = message.method;
+    
+    // 常见的消息类型处理
+    switch (method) {
+      case 'conversation.chat':
+        // 接收到聊天消息
+        handleChatMessage(message);
+        break;
+        
+      case 'conversation.mark_chat':
+        // 处理已读回执
+        handleReadReceipt(message);
+        break;
+        
+      case 'user.online':
+        // 用户上线通知
+        handleUserOnline(message);
+        break;
+        
+      case 'user.offline':
+        // 用户离线通知
+        handleUserOffline(message);
+        break;
+        
+      case 'conversation.typing':
+        // 正在输入状态
+        handleTypingStatus(message);
+        break;
+        
+      case 'conversation.recall':
+        // 消息撤回
+        handleMessageRecall(message);
+        break;
+        
+      case 'error':
+        // 错误消息
+        handleErrorMessage(message);
+        break;
+        
+      default:
+        console.log(`未处理的消息类型: ${method}`, message);
+        // 尝试将消息分发到注册的处理器
+        if (messageHandlers[method] && typeof messageHandlers[method] === 'function') {
+          messageHandlers[method](message);
+        }
+    }
+  }
+  
+  /**
+   * 发送消息到WebSocket服务器
+   */
+  function sendMessage(message, callback) {
+    // 确保WebSocket已连接
+    if (!isConnected()) {
+      console.warn('WebSocket未连接，尝试重新连接');
+      
+      // 存储消息以便连接后发送
+      const msg = message;
+      
+      // 尝试连接
+      connect()
+        .then(() => {
+          console.log('WebSocket重连成功，继续发送消息');
+          // 连接成功后发送消息
+          _sendMessageInternal(msg, callback);
+        })
+        .catch(error => {
+          console.error('WebSocket重连失败:', error);
+          // 通知发送失败
+          if (callback) {
+            callback({
+              error: {
+                code: 'CONNECTION_ERROR',
+                message: '消息发送失败: 无法连接到服务器'
+              }
+            });
           }
         });
-        
-        // 处理旧式消息处理器 - 向下兼容
-        if (message.method && messageHandlers[message.method]) {
-          messageHandlers[message.method](message);
-        }
-        
-        // 对需要确认的消息发送ACK
-        if (message.frameType === FrameType.DATA && message.id) {
-          sendAck(message.id);
-        }
-      }
-    } catch (error) {
-      console.error('解析WebSocket消息错误:', error, event.data);
+      
+      return;
     }
-  }
-  
-  /**
-   * 处理WebSocket错误事件
-   */
-  function handleError(event) {
-    console.error('WebSocket错误:', event);
-    listeners.forEach(listener => {
-      if (typeof listener.onError === 'function') {
-        listener.onError(event);
-      }
-    });
-  }
-  
-  /**
-   * 处理WebSocket关闭事件
-   */
-  function handleClose(event) {
-    console.log('WebSocket已关闭, 代码:', event.code, '原因:', event.reason);
     
-    stopHeartbeat();
-    
-    // 通知所有监听器
-    listeners.forEach(listener => {
-      if (typeof listener.onClose === 'function') {
-        listener.onClose(event);
-      }
-    });
-    
-    // 如果不是正常关闭，则尝试重连
-    if (event.code !== 1000) {
-      reconnect();
-    } else {
-      setConnectionState(ConnectionState.DISCONNECTED);
-    }
+    return _sendMessageInternal(message, callback);
   }
   
   /**
-   * 注册消息监听器
+   * 内部发送消息实现
    */
-  function addListener(listener) {
-    if (!listeners.includes(listener)) {
-      listeners.push(listener);
-    }
-  }
-  
-  /**
-   * 移除消息监听器
-   */
-  function removeListener(listener) {
-    const index = listeners.indexOf(listener);
-    if (index !== -1) {
-      listeners.splice(index, 1);
-    }
-  }
-  
-  /**
-   * 发送消息
-   */
-  function sendMessage(frameType, method, data, callback) {
-    if (!isConnected()) {
-      console.error('WebSocket未连接，无法发送消息');
-      return null;
-    }
-
-    const messageId = getRandomId();
-    const message = {
-      frameType,
-      id: messageId,
-      method,
-      data
-    };
-
+  function _sendMessageInternal(message, callback) {
     try {
-      ws.send(JSON.stringify(message));
-      
-      // 如果是需要确认的消息，注册回调函数
-      if (frameType === FrameType.DATA && callback) {
-        messageCallbacks[messageId] = callback;
+      // 确保message是对象
+      let messageObj = message;
+      if (typeof message === 'string') {
+        try {
+          messageObj = JSON.parse(message);
+        } catch (e) {
+          // 不是JSON字符串，可能是普通字符串消息
+          messageObj = { content: message };
+        }
       }
       
-      return messageId;
+      // 确保有ID
+      if (!messageObj.id) {
+        messageObj.id = Date.now().toString() + Math.floor(Math.random() * 1000).toString();
+      }
+      
+      // 确保有method
+      if (!messageObj.method && !messageObj.type) {
+        console.warn('消息缺少method字段', messageObj);
+        messageObj.method = 'message.send'; // 默认消息方法
+      }
+      
+      // 存储回调
+      if (callback) {
+        messageCallbacks[messageObj.id] = callback;
+        
+        // 设置超时处理
+        setTimeout(() => {
+          if (messageCallbacks[messageObj.id]) {
+            console.warn(`消息 ${messageObj.id} 超时未收到响应`);
+            messageCallbacks[messageObj.id]({
+              error: {
+                code: 'TIMEOUT',
+                message: '服务器响应超时'
+              }
+            });
+            delete messageCallbacks[messageObj.id];
+          }
+        }, 15000); // 15秒超时
+      }
+      
+      // 发送消息
+      const messageJson = JSON.stringify(messageObj);
+      console.log(`发送WebSocket消息 [${messageObj.id}]: ${messageJson.length > 200 ? messageJson.substring(0, 200) + '...' : messageJson}`);
+      ws.send(messageJson);
+      
+      return messageObj.id; // 返回消息ID用于跟踪
     } catch (error) {
-      console.error('发送WebSocket消息错误:', error);
+      console.error('发送消息出错:', error);
+      
+      // 通知发送失败
+      if (callback) {
+        callback({
+          error: {
+            code: 'SEND_ERROR',
+            message: error.message || '发送消息失败'
+          }
+        });
+      }
+      
       return null;
     }
   }
   
   /**
-   * 发送确认帧(ACK)
+   * 发送确认消息
    */
   function sendAck(messageId) {
-    const message = {
+    if (!isConnected() || !messageId) {
+      return;
+    }
+    
+    // 构建ACK消息
+    const ackMessage = {
       frameType: FrameType.ACK,
       id: messageId
     };
     
     try {
-      ws.send(JSON.stringify(message));
+      ws.send(JSON.stringify(ackMessage));
     } catch (error) {
-      console.error('发送ACK错误:', error);
+      console.error('发送ACK消息错误:', error);
     }
   }
   
@@ -342,20 +500,28 @@ function createWebSocketClient() {
       return;
     }
     
-    const message = {
+    // 如果上一个心跳没有收到响应，可能连接已断开
+    if (waitingForPong) {
+      console.warn('未收到上一次心跳响应，可能连接已断开');
+      ws.close(4000, '心跳超时'); // 4000为自定义关闭代码
+      return;
+    }
+    
+    // 发送心跳包
+    const heartbeatMessage = {
       frameType: FrameType.HEARTBEAT,
       id: getRandomId()
     };
     
     try {
-      ws.send(JSON.stringify(message));
       waitingForPong = true;
+      ws.send(JSON.stringify(heartbeatMessage));
       
-      // 设置超时检测
+      // 设置心跳响应超时
       setTimeout(() => {
         if (waitingForPong) {
-          console.error('心跳包超时未响应，准备重连');
-          ws.close(4000, 'Heartbeat timeout');
+          console.warn('心跳响应超时');
+          ws.close(4001, '心跳响应超时'); // 4001为自定义关闭代码
         }
       }, PONG_TIMEOUT);
     } catch (error) {
@@ -364,146 +530,294 @@ function createWebSocketClient() {
   }
   
   /**
-   * 开启心跳检测
+   * 启动心跳机制
    */
   function startHeartbeat() {
-    stopHeartbeat();
-    heartbeatTimer = setInterval(() => {
-      sendHeartbeat();
-    }, HEARTBEAT_INTERVAL);
+    stopHeartbeat(); // 确保先停止之前的心跳
+    
+    heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
   }
   
   /**
-   * 停止心跳检测
+   * 停止心跳机制
    */
   function stopHeartbeat() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
       heartbeatTimer = null;
     }
-  }
-  
-  /**
-   * 关闭WebSocket连接
-   */
-  function close() {
-    stopHeartbeat();
-    
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    
-    if (ws) {
-      ws.close(1000, 'Normal closure');
-      ws = null;
-    }
-    
-    setConnectionState(ConnectionState.DISCONNECTED);
+    waitingForPong = false;
   }
   
   /**
    * 检查WebSocket是否已连接
    */
   function isConnected() {
-    return ws && ws.readyState === WebSocket.OPEN;
+    return ws && ws.readyState === WebSocket.OPEN && connectionState === ConnectionState.CONNECTED;
   }
   
   /**
    * 发送上线消息
    */
   function sendOnlineMessage() {
-    const userStore = useUserStore();
-    const userId = userStore.getUserId;
+    if (!isConnected()) {
+      console.warn('WebSocket未连接，无法发送上线消息');
+      return;
+    }
     
-    sendMessage(FrameType.DATA, wsActions.USER_ONLINE, { userId }, response => {
-      console.log('用户上线消息已确认:', response);
-    });
+    // 获取用户信息
+    const userStore = useUserStore();
+    if (!userStore.isLoggedIn) {
+      console.warn('用户未登录，不发送上线消息');
+      return;
+    }
+    
+    console.log('准备发送上线消息');
+    
+    try {
+      // 构建上线消息
+      const onlineMessage = {
+        frameType: FrameType.DATA,
+        id: Date.now().toString() + Math.floor(Math.random() * 1000).toString(),
+        method: wsActions.USER_ONLINE,
+        data: {
+          userId: userStore.userId,
+          device: navigator.userAgent,
+          status: 'online',
+          timestamp: Date.now()
+        }
+      };
+      
+      console.log('发送上线消息:', onlineMessage);
+      
+      // 发送上线消息
+      sendMessage(onlineMessage, (response) => {
+        console.log('上线消息响应:', response);
+        
+        if (response.error) {
+          console.error('上线消息发送失败:', response.error);
+        } else {
+          console.log('上线消息发送成功');
+        }
+      });
+    } catch (error) {
+      console.error('发送上线消息错误:', error);
+    }
   }
   
   /**
    * 处理服务器推送的消息
    */
   function handlePushMessage(message) {
-    // 处理聊天消息
-    if (message && message.type === 'chatMessage') {
-      handleChatMessage(message.data);
-    }
-  }
-  
-  /**
-   * 处理推送的聊天消息
-   */
-  function handleChatMessage(messageData) {
-    const messageStore = useMessageStore();
-    const conversationStore = useConversationStore();
+    if (!message) return;
     
-    if (messageData) {
-      // 更新消息存储
-      messageStore.addMessage(messageData.conversationId, messageData);
-      
-      // 更新会话的最后一条消息
-      conversationStore.updateConversationLastMessage(
-        messageData.conversationId, 
-        messageData
-      );
+    const conversationStore = useConversationStore();
+    const messageStore = useMessageStore();
+    
+    console.log('处理PUSH消息:', message);
+    
+    // 处理消息类型
+    switch (message.contentType) {
+      case 0: // 聊天消息
+        // 格式化并存储消息
+        const formattedMessage = {
+          id: message.msgId,
+          conversationId: message.conversationId,
+          senderId: message.sendId,
+          receiverId: message.recvId,
+          type: message.mType,
+          content: message.content,
+          timestamp: message.sendTime,
+          status: 'received'
+        };
+        
+        // 向下兼容原有逻辑
+        messageStore.addMessage(formattedMessage);
+        
+        // 更新会话最后一条消息
+        conversationStore.updateConversation({
+          id: message.conversationId,
+          lastMessage: formattedMessage,
+          unreadCount: conversation => (conversation.unreadCount || 0) + 1,
+          lastActiveTime: message.sendTime
+        });
+        break;
+        
+      case 1: // 已读回执
+        if (message.msgIds && message.msgIds.length > 0) {
+          // 更新消息状态为已读
+          messageStore.updateMessageStatus(message.msgIds, 'read');
+        }
+        break;
+        
+      default:
+        console.warn('未知的消息类型:', message.contentType);
+        break;
     }
   }
   
   /**
    * 发送聊天消息
+   * @param {Object} data 消息数据
+   * @param {Function} callback 回调函数
    */
   function sendChatMessage(data, callback) {
-    const formattedData = formatChatMessage(data);
-    return sendMessage(FrameType.DATA, wsActions.CONVERSATION_CHAT, formattedData, callback);
+    console.log('WebSocket sendChatMessage 被调用:', data);
+    
+    if (!isConnected()) {
+      console.error('发送消息失败：WebSocket未连接');
+      if (callback) callback({ error: 'WebSocket未连接' });
+      
+      // 尝试重新连接
+      connect().then(() => {
+        console.log('WebSocket重连成功，重新发送消息');
+        // 重连成功后再次尝试发送
+        setTimeout(() => sendChatMessage(data, callback), 1000);
+      }).catch(err => {
+        console.error('WebSocket重连失败:', err);
+      });
+      
+      return null;
+    }
+    
+    if (!data.conversationId || !data.recvId) {
+      console.error('发送消息失败：缺少必要参数');
+      if (callback) callback({ error: '缺少必要参数' });
+      return null;
+    }
+    
+    // 获取用户信息
+    const userStore = useUserStore();
+    if (!userStore.isLoggedIn) {
+      console.error('发送消息失败：用户未登录');
+      if (callback) callback({ error: '用户未登录' });
+      return null;
+    }
+    
+    // 如果已经是完整消息格式，直接发送
+    if (data.frameType !== undefined && data.method !== undefined) {
+      return sendMessage(data, callback);
+    }
+    
+    // 使用conversation.chat方法发送消息
+    const messageData = {
+      conversationId: data.conversationId,
+      chatType: data.chatType || 2, // 默认为单聊
+      sendId: userStore.userId.toString(),
+      recvId: data.recvId.toString(),
+      sendTime: Date.now(),
+      msg: {
+        msgId: data.msgId || `msg_${getRandomId()}`,
+        mType: data.type || 0, // 默认为文本
+        content: data.content
+      }
+    };
+    
+    // 构建WebSocket消息
+    const wsMessage = {
+      frameType: FrameType.DATA,
+      id: getRandomId(),
+      method: wsActions.CONVERSATION_CHAT,
+      data: messageData
+    };
+    
+    // 发送WebSocket消息
+    return sendMessage(wsMessage, response => {
+      if (callback) callback(response);
+      
+      // 如果没有错误，本地更新消息状态
+      if (!response.error) {
+        const messageStore = useMessageStore();
+        messageStore.updateMessageStatus([messageData.msg.msgId], 'sent');
+      }
+    });
   }
   
   /**
    * 标记消息已读
+   * @param {Object} data 标记已读数据
+   * @param {Function} callback 回调函数
    */
   function markMessageRead(data, callback) {
-    const formattedData = formatMarkReadMessage(data);
-    return sendMessage(FrameType.DATA, wsActions.CONVERSATION_MARK_CHAT, formattedData, callback);
+    if (!data.conversationId) {
+      console.error('标记已读失败：缺少必要参数');
+      if (callback) callback({ error: '缺少必要参数' });
+      return null;
+    }
+    
+    // 获取用户信息
+    const userStore = useUserStore();
+    if (!userStore.isLoggedIn) {
+      console.error('标记已读失败：用户未登录');
+      if (callback) callback({ error: '用户未登录' });
+      return null;
+    }
+    
+    // 使用conversation.markChat方法标记已读
+    const markReadData = {
+      chatType: data.chatType || 2, // 默认为单聊
+      conversationId: data.conversationId,
+      recvId: data.recvId || userStore.userId.toString(),
+      msgIds: data.msgIds || [] // 如果不指定消息ID，则标记该会话所有消息为已读
+    };
+    
+    // 发送WebSocket消息
+    return sendMessage(FrameType.DATA, wsActions.CONVERSATION_MARK_CHAT, markReadData, callback);
   }
   
   /**
-   * 添加消息处理函数 (向下兼容旧API)
-   * @param {string} method 消息类型
-   * @param {Function} handler 处理函数
+   * 注册消息处理器（旧式接口，向下兼容）
    */
   function addMessageHandler(method, handler) {
-    console.warn('addMessageHandler方法已废弃，请使用addListener代替');
-    if (typeof handler === 'function') {
+    if (method && typeof handler === 'function') {
       messageHandlers[method] = handler;
     }
   }
   
   /**
-   * 移除消息处理函数 (向下兼容旧API)
-   * @param {string} method 消息类型
+   * 移除消息处理器（旧式接口，向下兼容）
    */
   function removeMessageHandler(method) {
-    console.warn('removeMessageHandler方法已废弃，请使用removeListener代替');
-    if (messageHandlers[method]) {
+    if (method && messageHandlers[method]) {
       delete messageHandlers[method];
     }
   }
   
-  // 返回客户端接口
+  // 返回公共接口
   return {
+    // 连接管理
     connect,
-    close,
-    addListener,
-    removeListener,
+    close: () => {
+      if (ws) {
+        ws.close();
+      }
+    },
+    reconnect,
+    isConnected,
+    
+    // 消息发送
+    sendMessage,
     sendChatMessage,
     markMessageRead,
-    isConnected: isConnected,
-    // 向下兼容的方法
+    
+    // 事件监听
+    addListener: (listener) => {
+      listeners.push(listener);
+      return () => removeListener(listener);
+    },
+    removeListener: (listener) => {
+      const index = listeners.findIndex(l => l === listener);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    },
+    
+    // 旧式消息处理器（向下兼容）
     addMessageHandler,
-    removeMessageHandler
+    removeMessageHandler,
+    
+    // 获取当前状态
+    getState: () => connectionState
   };
 }
-
-// 导出一个已经初始化好的实例，别名为wsClient
-export const wsClient = getWsClient();
 
