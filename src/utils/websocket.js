@@ -182,7 +182,7 @@ function createWebSocketClient() {
           listeners.forEach(listener => {
             if (typeof listener.onClose === 'function') {
               listener.onClose(event);
-            }
+      }
           });
           
           // 如果不是正常关闭，则尝试重连
@@ -255,6 +255,36 @@ function createWebSocketClient() {
       const message = JSON.parse(data);
       console.log('收到WebSocket消息:', message);
       
+      // 处理仅包含formId和data的消息格式（直接推送消息）
+      if (message.formId && message.data && message.data.Content) {
+        // 构建一个push消息格式
+        const pushMessage = {
+          method: 'push',
+          formId: message.formId,
+          data: {
+            msgId: message.data.MsgId,
+            conversationId: message.data.ConversationId,
+            chatType: message.data.ChatType,
+            mType: message.data.MType,
+            content: message.data.Content,
+            sendTime: message.data.SendTime,
+            contentType: 0 // 设为聊天消息类型
+          }
+        };
+        
+        // 调用处理push消息的函数
+        handlePushMessage(pushMessage.data);
+        
+        // 通知所有监听器
+        listeners.forEach(listener => {
+          if (typeof listener.onMessage === 'function') {
+            listener.onMessage(pushMessage);
+          }
+        });
+        
+        return;
+      }
+      
       // 处理错误消息
       if (message.data && typeof message.data === 'string' && message.data.includes('不具备访问权限')) {
         console.error('WebSocket认证失败:', message.data);
@@ -283,7 +313,7 @@ function createWebSocketClient() {
         // 调用回调并移除
         const callback = messageCallbacks[message.id];
         delete messageCallbacks[message.id];
-        callback(message);
+          callback(message);
         
         // 如果是响应消息，不需要继续处理
         if (message.reply === true) {
@@ -300,14 +330,14 @@ function createWebSocketClient() {
         dispatchMessageByType(message);
       } else {
         console.warn('收到未知格式的消息，无法处理:', message);
-      }
-      
-      // 通知所有监听器
-      listeners.forEach(listener => {
-        if (typeof listener.onMessage === 'function') {
-          listener.onMessage(message);
         }
-      });
+        
+        // 通知所有监听器
+        listeners.forEach(listener => {
+          if (typeof listener.onMessage === 'function') {
+            listener.onMessage(message);
+          }
+        });
     } catch (error) {
       console.error('解析或处理WebSocket消息错误:', error, data);
     }
@@ -575,19 +605,19 @@ function createWebSocketClient() {
     console.log('准备发送上线消息');
     
     try {
-      // 构建上线消息
-      const onlineMessage = {
-        frameType: FrameType.DATA,
+    // 构建上线消息
+    const onlineMessage = {
+      frameType: FrameType.DATA,
         id: Date.now().toString() + Math.floor(Math.random() * 1000).toString(),
-        method: wsActions.USER_ONLINE,
-        data: {
-          userId: userStore.userId,
-          device: navigator.userAgent,
-          status: 'online',
-          timestamp: Date.now()
-        }
-      };
-      
+      method: wsActions.USER_ONLINE,
+      data: {
+        userId: userStore.userId,
+        device: navigator.userAgent,
+        status: 'online',
+        timestamp: Date.now()
+      }
+    };
+    
       console.log('发送上线消息:', onlineMessage);
       
       // 发送上线消息
@@ -616,18 +646,28 @@ function createWebSocketClient() {
     
     console.log('处理PUSH消息:', message);
     
+    // 确保必要字段存在
+    const msgId = message.msgId || message.MsgId;
+    const conversationId = message.conversationId || message.ConversationId;
+    const sendId = message.sendId || message.SendId || '1'; // 默认系统ID
+    const recvId = message.recvId || message.RecvId || '';
+    const content = message.content || message.Content || '';
+    const mType = message.mType !== undefined ? message.mType : (message.MType !== undefined ? message.MType : 0);
+    const sendTime = message.sendTime || message.SendTime || Date.now();
+    const contentType = message.contentType !== undefined ? message.contentType : 0;
+    
     // 处理消息类型
-    switch (message.contentType) {
+    switch (contentType) {
       case 0: // 聊天消息
         // 格式化并存储消息
         const formattedMessage = {
-          id: message.msgId,
-          conversationId: message.conversationId,
-          senderId: message.sendId,
-          receiverId: message.recvId,
-          type: message.mType,
-          content: message.content,
-          timestamp: message.sendTime,
+          id: msgId,
+          conversationId: conversationId,
+          senderId: sendId,
+          receiverId: recvId,
+          type: mType,
+          content: content,
+          timestamp: sendTime,
           status: 'received'
         };
         
@@ -636,10 +676,10 @@ function createWebSocketClient() {
         
         // 更新会话最后一条消息
         conversationStore.updateConversation({
-          id: message.conversationId,
+          id: conversationId,
           lastMessage: formattedMessage,
           unreadCount: conversation => (conversation.unreadCount || 0) + 1,
-          lastActiveTime: message.sendTime
+          lastActiveTime: sendTime
         });
         break;
         
@@ -651,7 +691,7 @@ function createWebSocketClient() {
         break;
         
       default:
-        console.warn('未知的消息类型:', message.contentType);
+        console.warn('未知的消息类型:', contentType);
         break;
     }
   }
@@ -696,6 +736,26 @@ function createWebSocketClient() {
     
     // 如果已经是完整消息格式，直接发送
     if (data.frameType !== undefined && data.method !== undefined) {
+      // 为conversation.chat方法不等待响应
+      if (data.method === wsActions.CONVERSATION_CHAT) {
+        // 发送消息但不等待响应
+        ws.send(JSON.stringify(data));
+        
+        // 立即返回成功
+        if (callback) {
+          callback({ success: true });
+        }
+        
+        // 本地更新消息状态
+        const messageStore = useMessageStore();
+        const msgId = data.data?.msg?.msgId;
+        if (msgId) {
+          messageStore.updateMessageStatus([msgId], 'sent');
+        }
+        
+        return data.id;
+      }
+      
       return sendMessage(data, callback);
     }
     
@@ -721,16 +781,19 @@ function createWebSocketClient() {
       data: messageData
     };
     
-    // 发送WebSocket消息
-    return sendMessage(wsMessage, response => {
-      if (callback) callback(response);
-      
-      // 如果没有错误，本地更新消息状态
-      if (!response.error) {
-        const messageStore = useMessageStore();
-        messageStore.updateMessageStatus([messageData.msg.msgId], 'sent');
-      }
-    });
+    // 直接发送消息，不等待响应
+    ws.send(JSON.stringify(wsMessage));
+    
+    // 立即返回成功
+    if (callback) {
+      callback({ success: true });
+    }
+    
+    // 本地更新消息状态
+    const messageStore = useMessageStore();
+    messageStore.updateMessageStatus([messageData.msg.msgId], 'sent');
+    
+    return wsMessage.id;
   }
   
   /**

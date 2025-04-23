@@ -27,21 +27,21 @@
       <div class="loading-more" v-if="loading.more">
         <div class="loading-spinner"></div>
         <span>加载更多消息...</span>
-              </div>
+      </div>
       
       <!-- 没有更多消息提示 -->
       <div class="no-more-messages" v-if="!hasMoreMessages && messages.length > 0">
         没有更多消息了
-              </div>
-              
+      </div>
+      
       <!-- 消息为空提示 -->
       <div class="empty-message" v-if="!loading.messages && messages.length === 0">
         <div class="empty-icon">
           <i class="icon-chat-empty"></i>
         </div>
         <div class="empty-text">暂无消息，开始聊天吧</div>
-              </div>
-              
+      </div>
+      
       <!-- 消息列表 -->
       <template v-for="(message, index) in messages" :key="message.id">
         <!-- 时间分割线 -->
@@ -50,13 +50,16 @@
           v-if="shouldShowTime(message, messages[index - 1])"
         >
           {{ formatTime(message.timestamp) }}
-              </div>
-              
+        </div>
+        
         <!-- 消息气泡 -->
         <ChatBubble
           :message="message"
           :show-avatar="true"
           :show-name="conversation?.type === 'group'"
+          :read-status="message.readStatus"
+          :show-read-status="message.isSelf"
+          :delivery-status="message.status"
           @avatar-click="viewUserProfile"
           @image-preview="previewImage"
           @file-preview="previewFile"
@@ -68,15 +71,21 @@
         />
       </template>
       
+      <!-- 发送状态指示器 -->
+      <div class="sending-indicator" v-if="loading.sending">
+        <div class="sending-spinner"></div>
+        <span>发送中...</span>
+      </div>
+      
       <!-- 对方正在输入提示 -->
       <div class="typing-indicator" v-if="isTyping">
         {{ typingName }} 正在输入...
-              </div>
-              
+      </div>
+      
       <!-- 底部空白填充，确保内容不被输入框遮挡 -->
       <div class="bottom-spacer"></div>
-              </div>
-              
+    </div>
+    
     <!-- 聊天输入框 -->
     <ChatInput
       ref="chatInputEl"
@@ -97,12 +106,12 @@
     <div class="image-preview" v-if="showImagePreview" @click="closeImagePreview">
       <div class="preview-image">
         <img :src="previewImageUrl" alt="图片预览">
-                </div>
+      </div>
       <div class="preview-close">
         <i class="icon-close"></i>
-              </div>
-              </div>
-              
+      </div>
+    </div>
+    
     <!-- 聊天选项菜单 -->
     <div class="chat-options" v-if="showOptions">
       <div class="options-overlay" @click="showOptions = false"></div>
@@ -114,9 +123,9 @@
           @click="handleOptionClick(option.id)"
         >
           {{ option.name }}
-          </div>
         </div>
       </div>
+    </div>
   </div>
 </template>
 
@@ -125,6 +134,7 @@ import {
   CHAT_TYPE,
   clearMessages,
   getChatLog,
+  getChatLogReadRecords,
   getConversationDetail,
   getUserProfile,
   MESSAGE_TYPE,
@@ -392,6 +402,23 @@ const loadMoreMessages = async () => {
     console.error('加载更多消息失败', error)
   } finally {
     loading.value.more = false
+  }
+}
+
+// 获取消息的已读状态
+const getMessageReadStatus = async (messageId) => {
+  try {
+    // 调用API获取消息的已读状态
+    const res = await getChatLogReadRecords({ msgId: messageId });
+    console.log('获取消息已读状态响应:', res);
+    
+    if (res.code === 200 && res.data) {
+      return res.data.readRecords || {};
+    }
+    return {};
+  } catch (error) {
+    console.error('获取消息已读状态失败:', error);
+    return {};
   }
 }
 
@@ -679,8 +706,20 @@ const loadMessages = async (initial = false) => {
         senderName: msg.senderName || '用户',
         timestamp: msg.sendTime,
         status: 'sent',
-        isSelf: msg.sendId === userStore.userInfo.id.toString()
+        isSelf: msg.sendId === userStore.userInfo.id.toString(),
+        readStatus: msg.readRecords || {} // 新增: 保存已读状态
       }));
+      
+      // 加载每条消息的已读状态
+      if (props.conversationType === 'group' && newMessages.length > 0) {
+        for (const msg of newMessages) {
+          if (msg.isSelf) {
+            // 只加载自己发送的消息的已读状态
+            const readStatus = await getMessageReadStatus(msg.id);
+            msg.readStatus = readStatus;
+          }
+        }
+      }
       
       if (initial) {
         messages.value = newMessages;
@@ -837,7 +876,13 @@ const setupMessageListeners = () => {
   // 确保WebSocket已连接
   if (wsClient && !wsClient.isConnected()) {
     console.log('WebSocket未连接，正在连接...');
-    wsClient.connect();
+    wsClient.connect().then(() => {
+      console.log('WebSocket连接成功，可以接收消息');
+    }).catch(err => {
+      console.error('WebSocket连接失败:', err);
+    });
+  } else {
+    console.log('WebSocket已连接，可以接收消息');
   }
   
   // 注册IM store事件（主要消息处理通道）
@@ -857,6 +902,45 @@ const setupMessageListeners = () => {
         }, 3000);
       }
     },
+    onMessage: (message) => {
+      console.log('Chat.vue收到WebSocket消息:', message);
+      
+      // 处理简化格式的推送消息
+      if (message.formId && message.data) {
+        console.log('收到简化格式消息:', message.data);
+        
+        // 提取消息内容
+        const content = message.data.Content;
+        if (content && message.data.ConversationId === conversationId.value) {
+          console.log(`显示消息内容: ${content}`);
+          
+          // 创建消息对象
+          const newMessage = {
+            id: message.data.MsgId || `server_${Date.now()}`,
+            conversationId: message.data.ConversationId,
+            senderId: message.data.SendId || message.formId,
+            content: content,
+            type: message.data.MType === 0 ? 'text' : 'unknown',
+            timestamp: message.data.SendTime || Date.now(),
+            status: 'received',
+            isSelf: false
+          };
+          
+          // 添加到消息列表
+          if (!messages.value.find(m => m.id === newMessage.id)) {
+            messages.value.push(newMessage);
+            // 滚动到底部
+            scrollToBottom(true);
+          }
+        }
+      }
+      
+      // 处理普通push消息
+      if (message.method === 'push' && message.data) {
+        console.log('收到push消息:', message.data);
+        handleWebSocketPushMessage(message.data);
+      }
+    },
     onError: (error) => {
       console.error('WebSocket错误:', error);
       showToast('WebSocket连接错误，请检查网络');
@@ -867,6 +951,49 @@ const setupMessageListeners = () => {
   return () => {
     if (removeListener) removeListener();
   };
+};
+
+// 处理WebSocket推送消息
+const handleWebSocketPushMessage = (data) => {
+  // 只处理与当前会话相关的消息
+  if (data.conversationId !== conversationId.value) {
+    console.log('消息与当前会话无关，忽略');
+    return;
+  }
+  
+  console.log('处理当前会话推送消息:', data);
+  
+  // 创建消息对象
+  const newMessage = {
+    id: data.msgId || `server_${Date.now()}`,
+    conversationId: data.conversationId,
+    senderId: data.sendId,
+    receiverId: data.recvId,
+    content: data.content,
+    type: data.mType === 0 ? 'text' : 
+          data.mType === 1 ? 'image' : 
+          data.mType === 2 ? 'voice' : 
+          data.mType === 3 ? 'video' : 'unknown',
+    timestamp: data.sendTime || Date.now(),
+    status: 'received',
+    isSelf: data.sendId === userStore.userInfo.id.toString()
+  };
+  
+  // 检查消息是否已存在
+  if (!messages.value.find(m => m.id === newMessage.id)) {
+    console.log('添加新消息到聊天界面:', newMessage);
+    messages.value.push(newMessage);
+    
+    // 滚动到底部
+    if (!isScrolling.value) {
+      scrollToBottom(true);
+    }
+    
+    // 如果不是自己发送的消息，标记为已读
+    if (!newMessage.isSelf) {
+      markAsRead();
+    }
+  }
 };
 
 // 发送消息
@@ -926,7 +1053,8 @@ const onMessageSent = async (content, type = 'text') => {
     
     // 使用IM store的新方法发送消息
     console.log('使用IM store发送消息...');
-    const result = await imStore.sendChatMessage(
+    // 发送消息并立即视为成功
+    imStore.sendChatMessage(
       conversationId.value,
       recvId,
       props.conversationType === 'private' ? CHAT_TYPE.SINGLE : CHAT_TYPE.GROUP,
@@ -934,25 +1062,30 @@ const onMessageSent = async (content, type = 'text') => {
       content
     );
     
-    console.log('消息发送结果:', result);
-    
-    // 更新消息状态
+    // 直接更新消息状态为已发送
     const index = messages.value.findIndex(m => m.id === messageId);
     if (index !== -1) {
-      if (!result.success) {
-        messages.value[index].status = 'failed';
-        console.error('消息发送失败:', result.error);
-        showToast('消息发送失败: ' + (result.error?.message || '未知错误'));
-      } else {
-        messages.value[index].status = 'sent';
-        
-        // 如果服务器返回了新的消息ID，更新本地ID
-        if (result.messageId && result.messageId !== messageId) {
-          const oldId = messages.value[index].id;
-          messages.value[index].id = result.messageId;
-          console.log(`消息ID已更新: ${oldId} -> ${result.messageId}`);
-        }
+      messages.value[index].status = 'sent';
+      
+      // 清空输入框（可以通过引用调用ChatInput组件的方法）
+      if (chatInputEl.value && typeof chatInputEl.value.clearInput === 'function') {
+        chatInputEl.value.clearInput();
       }
+      
+      // 更新会话最新消息
+      if (conversation.value) {
+        conversation.value.lastMessage = {
+          content: type === 'text' ? content : `[${type}]`,
+          timestamp: Date.now()
+        };
+      }
+      
+      // 在UI中提供成功发送的视觉反馈 - 设置为"已发送"状态
+      setTimeout(() => {
+        if (messages.value[index]) {
+          messages.value[index].deliveryStatus = 'delivered';
+        }
+      }, 500);
     }
   } catch (error) {
     console.error('发送消息失败:', error);
@@ -1047,6 +1180,28 @@ const onPanelChange = (isVisible) => {
   }
 }
 
+// 处理消息已读状态更新
+const handleReadStatusUpdate = (data) => {
+  // 只处理当前会话的消息
+  if (data.conversationId !== conversationId.value) return;
+  
+  // 更新消息的已读状态
+  const message = messages.value.find(m => m.id === data.messageId);
+  if (message) {
+    if (!message.readStatus) {
+      message.readStatus = {};
+    }
+    
+    // 更新已读记录
+    if (data.readRecords) {
+      Object.assign(message.readStatus, data.readRecords);
+    } else if (data.userId) {
+      // 单个用户已读更新
+      message.readStatus[data.userId] = data.timestamp || Date.now();
+    }
+  }
+}
+
 // 注册WebSocket事件监听
 const registerWebSocketEvents = () => {
   // 监听新消息
@@ -1057,12 +1212,16 @@ const registerWebSocketEvents = () => {
   
   // 监听输入状态
   imStore.on('typing', handleTyping)
+  
+  // 监听消息已读状态更新
+  imStore.on('read_status_update', handleReadStatusUpdate)
 }
 
 const unregisterWebSocketEvents = () => {
   imStore.off('new_message', handleNewMessage)
   imStore.off('message_recall', handleMessageRecall)
   imStore.off('typing', handleTyping)
+  imStore.off('read_status_update', handleReadStatusUpdate)
 }
 
 const handleNewMessage = (message) => {
@@ -1160,32 +1319,52 @@ const goBack = () => {
 }
 
 // 标记消息为已读
-const markAsRead = () => {
+const markAsRead = async () => {
   // 如果没有会话，返回
   if (!conversation.value) return;
   
-  // 准备标记已读数据
-  const markReadData = {
-    conversationId: conversationId.value,
-    chatType: props.conversationType === 'group' ? CHAT_TYPE.GROUP : CHAT_TYPE.SINGLE,
-    recvId: props.targetId.toString(),
-    msgIds: [] // 空数组表示标记所有消息已读
-  };
-  
-  console.log('标记消息已读:', markReadData);
-  
-  // 调用WebSocket标记已读
-  wsClient.sendMessage({
-    method: wsActions.CONVERSATION_MARK_CHAT,
-    data: markReadData
-  }, (response) => {
-    console.log('标记已读响应:', response);
+  try {
+    // 准备标记已读数据
+    const markReadData = {
+      conversationId: conversationId.value,
+      chatType: props.conversationType === 'group' ? CHAT_TYPE.GROUP : CHAT_TYPE.SINGLE,
+      recvId: props.targetId.toString(),
+      msgIds: [] // 空数组表示标记所有消息已读
+    };
     
-    // 通知Store更新会话未读计数
-    if (!response.error) {
-      imStore.markConversationAsRead(conversationId.value);
+    console.log('标记消息已读:', markReadData);
+    
+    // 调用WebSocket标记已读
+    wsClient.sendMessage({
+      method: wsActions.CONVERSATION_MARK_CHAT,
+      data: markReadData
+    }, (response) => {
+      console.log('标记已读响应:', response);
+      
+      // 通知Store更新会话未读计数
+      if (!response.error) {
+        imStore.markConversationAsRead(conversationId.value);
+        
+        // 更新本地界面未读计数
+        if (conversation.value) {
+          conversation.value.unreadCount = 0;
+        }
+      } else {
+        console.error('标记已读失败:', response.error);
+      }
+    });
+    
+    // 同时通过HTTP API标记已读（确保服务器状态更新）
+    try {
+      const result = await markMessagesAsRead(conversationId.value);
+      console.log('HTTP标记已读响应:', result);
+    } catch (httpError) {
+      console.error('HTTP标记已读失败:', httpError);
+      // 继续执行，不阻断流程
     }
-  });
+  } catch (error) {
+    console.error('标记已读失败:', error);
+  }
 };
 
 const viewGroupMembers = () => {
@@ -1408,6 +1587,27 @@ onMounted(async () => {
   text-align: center;
   padding: 8px 0;
   font-style: italic;
+}
+
+.sending-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--ios-secondaryLabel);
+  padding: 8px 0;
+  margin-top: 4px;
+}
+
+.sending-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ios-tertiarySystemFill);
+  border-top-color: var(--ios-tint);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 6px;
 }
 
 .bottom-spacer {

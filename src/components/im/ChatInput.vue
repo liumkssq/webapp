@@ -429,6 +429,21 @@ function handleFileUploadSelected(event) {
 onMounted(() => {
   adjustTextareaHeight()
 })
+
+// 清空输入框
+const clearInput = () => {
+  textMessage.value = '';
+}
+
+// 暴露方法给父组件
+defineExpose({
+  clearInput,
+  focus: () => {
+    if (textareaRef.value) {
+      textareaRef.value.focus();
+    }
+  }
+});
 </script>
 
 <style scoped>

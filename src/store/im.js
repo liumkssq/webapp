@@ -747,34 +747,13 @@ export const useIMStore = defineStore('im', () => {
     
     console.log('发送聊天消息:', JSON.stringify(message, null, 2));
     
-    // 发送消息并等待响应
-    try {
-      const response = await ensureWebSocketAndSendMessage(message);
-      
-      // 处理响应
-      if (response.error) {
-        console.error('发送消息失败:', response.error);
-        return {
-          success: false,
-          error: response.error,
-          messageId
-        };
-      }
-      
-      console.log('消息发送成功，响应:', response);
-      return {
-        success: true,
-        response,
-        messageId: response.data?.msgId || messageId
-      };
-    } catch (error) {
-      console.error('发送消息过程中出错:', error);
-      return {
-        success: false,
-        error: { message: error.message || '发送消息失败' },
-        messageId
-      };
-    }
+    // 直接视为发送成功，不等待响应
+    wsClient.sendMessage(message);
+    
+    return {
+      success: true,
+      messageId
+    };
   }
   
   return {
