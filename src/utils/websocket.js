@@ -255,30 +255,37 @@ function createWebSocketClient() {
       const message = JSON.parse(data);
       console.log('收到WebSocket消息:', message);
       
+      // 直接处理标准消息格式（content字段在顶层）
+      if (message.msgId && message.conversationId && message.content) {
+        // 这是已经格式正确的消息，直接处理
+        handlePushMessage(message);
+        return;
+      }
+      
       // 处理仅包含formId和data的消息格式（直接推送消息）
-      if (message.formId && message.data && message.data.Content) {
-        // 构建一个push消息格式
-        const pushMessage = {
-          method: 'push',
-          formId: message.formId,
-          data: {
-            msgId: message.data.MsgId,
-            conversationId: message.data.ConversationId,
-            chatType: message.data.ChatType,
-            mType: message.data.MType,
-            content: message.data.Content,
-            sendTime: message.data.SendTime,
+      if (message.formId && message.data) {
+        // 简化，直接查找Content字段（不区分大小写）
+        const content = message.data.Content || message.data.content;
+        if (content) {
+          // 构建一个标准消息格式
+          const pushMessage = {
+            msgId: message.data.MsgId || message.data.msgId,
+            conversationId: message.data.ConversationId || message.data.conversationId,
+            chatType: message.data.ChatType || message.data.chatType,
+            mType: message.data.MType || message.data.mType,
+            content: content, // 提取的内容
+            sendTime: message.data.SendTime || message.data.sendTime,
             contentType: 0 // 设为聊天消息类型
-          }
-        };
+          };
+          
+          // 调用处理push消息的函数
+          handlePushMessage(pushMessage);
+        }
         
-        // 调用处理push消息的函数
-        handlePushMessage(pushMessage.data);
-        
-        // 通知所有监听器
+        // 通知所有监听器（保持原有逻辑）
         listeners.forEach(listener => {
           if (typeof listener.onMessage === 'function') {
-            listener.onMessage(pushMessage);
+            listener.onMessage(message);
           }
         });
         

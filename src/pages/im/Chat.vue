@@ -956,27 +956,56 @@ const setupMessageListeners = () => {
 // 处理WebSocket推送消息
 const handleWebSocketPushMessage = (data) => {
   // 只处理与当前会话相关的消息
-  if (data.conversationId !== conversationId.value) {
+  const currentConvId = conversationId.value;
+  const msgConvId = data.conversationId || data.ConversationId;
+  
+  if (msgConvId !== currentConvId) {
     console.log('消息与当前会话无关，忽略');
     return;
   }
   
   console.log('处理当前会话推送消息:', data);
   
+  // 提取消息内容，支持大小写字段名和多种格式
+  let content = data.content || data.Content;
+  
+  // 处理接收到的消息格式
+  // {
+  //     "msgId": "6808d1e730c4683b61b7b099",
+  //     "conversationId": "1_2",
+  //     "chatType": 2,
+  //     "mType": 0,
+  //     "content": "fas",
+  //     "sendTime": 1745408485750,
+  //     "contentType": 0
+  // }
+  
+  // 确保我们能获取到消息内容，即使字段名为小写
+  if (!content && data.content !== undefined) {
+    content = data.content;
+  }
+  
+  if (!content) {
+    console.log('消息无内容，忽略');
+    return;
+  }
+  
+  // 提取其他字段，支持不同的命名格式
+  const msgId = data.msgId || data.MsgId || `temp_${Date.now()}`;
+  const sendTime = data.sendTime || data.SendTime || Date.now();
+  const messageType = data.mType !== undefined ? data.mType : (data.MType !== undefined ? data.MType : 0);
+  const senderId = data.sendId || data.SendId || '未知用户';
+  
   // 创建消息对象
   const newMessage = {
-    id: data.msgId || `server_${Date.now()}`,
-    conversationId: data.conversationId,
-    senderId: data.sendId,
-    receiverId: data.recvId,
-    content: data.content,
-    type: data.mType === 0 ? 'text' : 
-          data.mType === 1 ? 'image' : 
-          data.mType === 2 ? 'voice' : 
-          data.mType === 3 ? 'video' : 'unknown',
-    timestamp: data.sendTime || Date.now(),
+    id: msgId,
+    conversationId: msgConvId,
+    senderId: senderId,
+    content: content,
+    type: messageType === 0 ? 'text' : 'unknown',
+    timestamp: sendTime,
     status: 'received',
-    isSelf: data.sendId === userStore.userInfo.id.toString()
+    isSelf: false
   };
   
   // 检查消息是否已存在
@@ -985,14 +1014,7 @@ const handleWebSocketPushMessage = (data) => {
     messages.value.push(newMessage);
     
     // 滚动到底部
-    if (!isScrolling.value) {
-      scrollToBottom(true);
-    }
-    
-    // 如果不是自己发送的消息，标记为已读
-    if (!newMessage.isSelf) {
-      markAsRead();
-    }
+    scrollToBottom(true);
   }
 };
 
