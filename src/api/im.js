@@ -99,7 +99,7 @@ export function getChatLogReadRecords(msgId) {
  * @param {Object} data - 参数
  * @param {string} data.sendId - 发送者ID
  * @param {string} data.recvId - 接收者ID
- * @param {number} data.chatType - 聊天类型 1:群聊 2:单聊
+ * @param {number} data.ChatType - 聊天类型 1:群聊 2:单聊
  * @returns {Promise}
  */
 export function setUpUserConversation(data) {
@@ -334,7 +334,7 @@ export function recallMessageById(messageId) {
  * @param {string} data.senderId - 发送者ID
  * @param {string} data.receiverId - 接收者ID
  * @param {string} data.content - 消息内容
- * @param {number} data.chatType - 聊天类型
+ * @param {number} data.ChatType - 聊天类型
  * @returns {Promise}
  */
 export function sendTextMessage(data) {

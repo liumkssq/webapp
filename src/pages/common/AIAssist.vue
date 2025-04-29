@@ -79,10 +79,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import HeaderNavigation from '@/components/common/HeaderNavigation.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
+import { generateContent as aiGenerateContent } from '@/utils/aiAssist.js'
+import { nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const userInput = ref('')
@@ -119,51 +120,39 @@ const sendMessage = async () => {
   const input = userInput.value
   userInput.value = ''
   
-  // 滚动到底部
+  // 滚动到底部 (等待DOM更新)
   await scrollToBottom()
   
   // 显示加载状态
   isLoading.value = true
   
   try {
-    // 模拟AI响应延迟
-    setTimeout(() => {
-      // 模拟AI回复
-      let response
-      
-      if (input.includes('商品描述') || input.includes('优化')) {
-        response = '这是一个优化的商品描述：<br><br>"全新未拆封的iPhone 13，128GB，午夜色。购于官方Apple Store，保修期至2023年9月，附完整发票和包装。屏幕已贴高清钢化膜，赠送官方硅胶保护壳。校内交易，可面交验机，价格可小刀。"<br><br>这样的描述包含了产品状态、购买渠道、保修信息、附件情况和交易方式等关键信息，会让买家更有购买信心。'
-      } else if (input.includes('失物招领') || input.includes('丢失')) {
-        response = '这是一个失物招领启事模板：<br><br>"寻物启事：5月10日下午在图书馆三楼自习室丢失一个黑色笔记本电脑包，内有Dell XPS 13笔记本和充电器。包上有明显的蓝色贴纸标记。如有拾到，请联系手机号：133****8888，微信同号，必有酬谢！"<br><br>这个启事包含了物品特征、丢失地点、时间和联系方式等关键信息。'
-      } else if (input.includes('文章') || input.includes('润色')) {
-        response = '我可以帮你润色文章内容。请直接复制你的文章内容给我，我会帮你改进语言表达、修正语法错误，让文章更加流畅自然。'
-      } else {
-        response = '感谢你的问题！我是校园AI助手，可以帮你优化商品描述、生成失物招领文案、润色文章或提供创意建议。请告诉我更具体的需求，我会尽力协助你。'
-      }
-      
-      // 添加AI回复
-      messages.push({
-        type: 'ai',
-        content: response
-      })
-      
-      // 关闭加载状态
-      isLoading.value = false
-      
-      // 滚动到底部
-      scrollToBottom()
-    }, 1500)
+    // --- 调用真实的 AI 助手 --- 
+    const response = await aiGenerateContent({
+      contentType: 'description', // 暂时使用 description 类型进行聊天
+      context: { description: input } // 将用户输入作为描述上下文
+    });
+
+    // 添加AI回复
+    messages.push({
+      type: 'ai',
+      content: response // LangChain 返回的是纯文本，不需要 formatMessage(?)，但保留以防万一
+    });
+
   } catch (error) {
     console.error('AI响应错误:', error)
-    isLoading.value = false
-    
     // 添加错误消息
     messages.push({
       type: 'ai',
-      content: '抱歉，我遇到了一点问题。请稍后再试。'
+      // content: '抱歉，我遇到了一点问题。请稍后再试。' // Use more specific error
+      content: `抱歉，我遇到了一点问题: ${error.message || '请稍后再试。'}`
     })
     
-    scrollToBottom()
+    // scrollToBottom() // Moved to finally block
+  } finally { // 使用 finally 确保 loading 状态总是被重置
+    isLoading.value = false;
+    // 确保滚动到底部 (等待DOM更新)
+    await scrollToBottom();
   }
 }
 

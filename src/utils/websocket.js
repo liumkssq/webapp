@@ -251,102 +251,82 @@ function createWebSocketClient() {
    * 处理WebSocket收到消息事件
    */
   function _handleMessage(data) {
+    // <<< --- ADD LOGS HERE --- >>>
+    console.log('[WebSocket Received] Raw data:', data); // Log the raw string data
+
     try {
-      const message = JSON.parse(data);
-      console.log('收到WebSocket消息:', message);
-      
-      // 直接处理标准消息格式（content字段在顶层）
-      if (message.msgId && message.conversationId && message.content) {
-        // 这是已经格式正确的消息，直接处理
-        handlePushMessage(message);
-        return;
-      }
-      
-      // 处理仅包含formId和data的消息格式（直接推送消息）
-      if (message.formId && message.data) {
-        // 简化，直接查找Content字段（不区分大小写）
-        const content = message.data.Content || message.data.content;
-        if (content) {
-          // 构建一个标准消息格式
-          const pushMessage = {
-            msgId: message.data.MsgId || message.data.msgId,
-            conversationId: message.data.ConversationId || message.data.conversationId,
-            chatType: message.data.ChatType || message.data.chatType,
-            mType: message.data.MType || message.data.mType,
-            content: content, // 提取的内容
-            sendTime: message.data.SendTime || message.data.sendTime,
-            contentType: 0 // 设为聊天消息类型
-          };
-          
-          // 调用处理push消息的函数
-          handlePushMessage(pushMessage);
+        const message = JSON.parse(data);
+        console.log('[WebSocket Received] Parsed message:', JSON.stringify(message)); // Log the parsed object
+        console.log(`[WebSocket Received] Checking for callback ID: ${message.id} (Type: ${typeof message.id})`); // Log ID and its type
+        console.log('[WebSocket Received] Current callback IDs:', Object.keys(messageCallbacks)); // Log keys currently in the map
+
+        // --- Add Pong Handling ---
+        // Assuming server sends pong frame type similar to heartbeat or a specific pong type/method
+        // Adjust the condition based on actual server pong format
+        if (message.frameType === FrameType.HEARTBEAT /* Replace with actual Pong indicator if different */) {
+            console.log('[WebSocket Received] Pong received.');
+            waitingForPong = false; // Reset the flag
+            return; // Pong handled, nothing else to do
         }
-        
-        // 通知所有监听器（保持原有逻辑）
+        // --- End Pong Handling ---
+
+        // <<< --- ADD LOG INSIDE CALLBACK CHECK --- >>>
+        if (message.id && messageCallbacks[message.id]) {
+             console.log(`[WebSocket Received] Callback FOUND for ID: ${message.id}`); // Log if callback is found
+            const callback = messageCallbacks[message.id];
+            delete messageCallbacks[message.id];
+            // Safely execute the callback
+            try {
+              callback(message);
+            } catch (callbackError) {
+              console.error(`[WebSocket Received] Error executing callback for ID ${message.id}:`, callbackError);
+              // Decide if connection should close on callback error, usually not.
+              // ws.close(3001, 'Callback execution error'); // Example: Close with custom code if needed
+            }
+            // if (message.reply === true) { // Check if early return is needed
+            //    console.log(`[WebSocket Received] Returning early due to reply flag.`);
+            //    return;
+            // }
+        } else {
+             console.log(`[WebSocket Received] Callback NOT FOUND for ID: ${message.id}`); // Log if callback is NOT found
+        }
+        // <<< --- END ADDED LOGS --- >>>
+
+
+        // Check for push messages (adjust format as needed based on server)
+        // Example: Assuming server push has a distinct structure or method
+        if (message.method === 'push' && message.data) {
+             console.log('[WebSocket Received] Handling server push message.');
+             handlePushMessage(message.data); // Pass only the data part if needed
+             // Notify listeners about the push message specifically if required
+             listeners.forEach(listener => {
+                 if (typeof listener.onPushMessage === 'function') {
+                     listener.onPushMessage(message.data);
+                 } else if (typeof listener.onMessage === 'function') {
+                     // Fallback to generic onMessage if specific handler doesn't exist
+                     listener.onMessage(message);
+                 }
+             });
+             return; // Push handled
+        }
+
+        // Handle other message types/methods if necessary
+        // ... existing logic for dispatchMessageByMethod, dispatchMessageByType ...
+
+
+        // Fallback notification if no specific handler matched
+        // Consider if this is still needed or if unhandled messages should be logged differently
+        console.log('[WebSocket Received] No specific handler matched, notifying generic listeners.');
         listeners.forEach(listener => {
           if (typeof listener.onMessage === 'function') {
             listener.onMessage(message);
           }
         });
-        
-        return;
-      }
-      
-      // 处理错误消息
-      if (message.data && typeof message.data === 'string' && message.data.includes('不具备访问权限')) {
-        console.error('WebSocket认证失败:', message.data);
-        // 通知认证失败
-        listeners.forEach(listener => {
-          if (typeof listener.onError === 'function') {
-            listener.onError(new Error(`认证失败: ${message.data}`));
-          }
-        });
-        
-        // 关闭连接，触发重新登录流程
-        if (ws) {
-          ws.close(3000, '认证失败');
-        }
-        return;
-      }
-      
-      // 处理心跳响应
-      if (message.method === 'pong') {
-        handlePong();
-        return;
-      }
-      
-      // 处理回调
-      if (message.id && messageCallbacks[message.id]) {
-        // 调用回调并移除
-        const callback = messageCallbacks[message.id];
-        delete messageCallbacks[message.id];
-          callback(message);
-        
-        // 如果是响应消息，不需要继续处理
-        if (message.reply === true) {
-          return;
-        }
-      }
-      
-      // 处理不同类型的消息
-      if (message.method) {
-        // 分发消息到特定处理器
-        dispatchMessageByMethod(message);
-      } else if (message.type) {
-        // 兼容旧版API使用type而非method的情况
-        dispatchMessageByType(message);
-      } else {
-        console.warn('收到未知格式的消息，无法处理:', message);
-        }
-        
-        // 通知所有监听器
-        listeners.forEach(listener => {
-          if (typeof listener.onMessage === 'function') {
-            listener.onMessage(message);
-          }
-        });
+
     } catch (error) {
-      console.error('解析或处理WebSocket消息错误:', error, data);
+        console.error('[WebSocket Received] Error parsing or handling message:', error, data);
+        // Consider if parsing error should close the connection, usually not unless fatal.
+        // ws.close(3002, 'Message parsing error');
     }
   }
   
@@ -629,13 +609,45 @@ function createWebSocketClient() {
       
       // 发送上线消息
       sendMessage(onlineMessage, (response) => {
-        console.log('上线消息响应:', response);
-        
+        // <<< --- MODIFIED CALLBACK --- >>>
+        console.log('[sendOnlineMessage Callback] Received response:', JSON.stringify(response));
+
         if (response.error) {
-          console.error('上线消息发送失败:', response.error);
+            // Log the error, but DO NOT close the connection here automatically
+            console.error('[sendOnlineMessage Callback] Error response:', response.error);
+            // Example: Notify UI about the failure if needed
+            // showToast('Failed to register online status');
+            // DO NOT call ws.close() here for timeout or server error in response
         } else {
-          console.log('上线消息发送成功');
+            console.log('[sendOnlineMessage Callback] Success response. Data:', response.data);
+            try {
+                // Safely process the online users list
+                const onlineUsers = response.data; // Assuming response.data is the list
+                console.log('[sendOnlineMessage Callback] Processing online users:', onlineUsers);
+
+                // Example: Update Pinia store (ensure this call is safe and handles errors)
+                // const imStore = useIMStore(); // Get store instance if needed
+                // if (imStore && typeof imStore.setOnlineUsers === 'function') {
+                //     imStore.setOnlineUsers(onlineUsers || []); // Update store safely
+                // } else {
+                //     console.warn('[sendOnlineMessage Callback] IM Store or setOnlineUsers function not available.');
+                // }
+
+                // Add any other logic needed after successful online registration
+
+                console.log('[sendOnlineMessage Callback] Finished processing successfully.');
+
+            } catch (processingError) {
+                // Log processing errors, but DO NOT close connection
+                console.error('[sendOnlineMessage Callback] Error processing response data:', processingError);
+                // Example: Notify UI about the processing error
+                // showToast('Error updating online users list');
+                // DO NOT call ws.close() here
+            }
+            // Ensure NO ws.close() call is present in the success path
+            // ws.close(); // <<< REMOVE THIS IF IT EXISTS >>>
         }
+        // <<< --- END MODIFIED CALLBACK --- >>>
       });
     } catch (error) {
       console.error('发送上线消息错误:', error);

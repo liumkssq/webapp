@@ -248,7 +248,7 @@ const ensureConversationId = async () => {
       const response = await setUpUserConversation({
         sendId: currentUserId.value.toString(),
         recvId: targetUserId.value.toString(),
-        chatType: CHAT_TYPE.SINGLE // 单聊
+        ChatType: CHAT_TYPE.SINGLE
       });
       
       if (response.code === 200 && response.data) {

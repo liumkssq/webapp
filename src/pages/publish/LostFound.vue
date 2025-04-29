@@ -350,11 +350,12 @@
       v-model:show="showContentGenerator"
       position="bottom"
       round
-      :style="{ height: '85%' }"
+      :style="{ height: '85%', width: '100%', boxSizing: 'border-box' }"
     >
       <content-generator
         :product-info="lostFoundForm"
         :initial-prompt="generateInitialPrompt()"
+        context-type="lostfound"
         @close="showContentGenerator = false"
         @use-content="handleUseGeneratedContent"
       />
@@ -363,14 +364,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import ContentGenerator from '@/components/ai/ContentGenerator.vue'
+import ImageAnalyzer from '@/components/ai/ImageAnalyzer.vue'
+import IosTop from '@/components/Ios/IosTop.vue'
 import { useUserStore } from '@/store/user'
 import { showToast } from 'vant'
-import ImageAnalyzer from '@/components/ai/ImageAnalyzer.vue'
-import ContentGenerator from '@/components/ai/ContentGenerator.vue'
-import LocationField from '@/components/form/LocationField.vue'
-import IosTop from '@/components/Ios/IosTop.vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const userStore = useUserStore()

@@ -55,10 +55,14 @@
       <!-- 商品基本信息 -->
       <div class="product-info">
         <div class="product-price">
-          <span class="current-price">¥{{ product.price }}</span>
+          <span class="current-price">
+            <span class="currency-symbol">¥</span><span class="amount">{{ product.price }}</span>
+            <!-- Removed '元' for now based on standard practice -->
+          </span>
           <span class="original-price" v-if="product.originalPrice > product.price">¥{{ product.originalPrice }}</span>
           <span class="discount-badge" v-if="product.originalPrice > product.price">
             {{ Math.round((1 - product.price / product.originalPrice) * 100) }}% OFF
+            <!-- Ensured only OFF is shown -->
           </span>
         </div>
         <div class="product-title">{{ product.title }}</div>
@@ -94,8 +98,10 @@
           </div>
         </div>
         <div class="seller-rate">
-          <div class="rate-value">{{ product.seller.goodRate }}%</div>
-          <div class="rate-label">好评率</div>
+          <!-- Updated Structure -->
+          <span class="rate-label">好</span>
+          <span class="rate-value">{{ product.seller.goodRate }}%评</span>
+          <span class="rate-label">率</span>
           <i class="van-icon van-icon-arrow"></i>
         </div>
       </div>
@@ -444,13 +450,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/store/user'
-import { getProductDetail, favoriteProduct } from '@/api/product'
 import api from '@/api'
-import HeaderNav from '@/components/HeaderNav.vue'
+import { favoriteProduct, getProductDetail } from '@/api/product'
 import FooterNav from '@/components/FooterNav.vue'
+import HeaderNav from '@/components/HeaderNav.vue'
+import { useUserStore } from '@/store/user'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
@@ -917,18 +923,42 @@ const toggleFavorite = async () => {
 // 联系卖家
 const contactSeller = () => {
   console.log('contactSeller clicked!') // 调试日志
-  
+
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
   }
-  
+
   if (isCurrentUser.value) {
     showToast('不能联系自己')
     return
   }
-  
-  showContactPopup.value = true
+
+  // --- 修改开始 ---
+  // 不再显示联系方式弹窗
+  // showContactPopup.value = true
+
+  // 直接跳转到聊天页面
+  if (product.value && product.value.seller && product.value.seller.id) {
+    const sellerId = product.value.seller.id;
+    const sellerName = product.value.seller.name || '卖家'; // 获取卖家名称
+    console.log(`Navigating to chat with seller ID: ${sellerId}, Name: ${sellerName}`);
+
+    // 注意：这里通常不需要传递 conversationId，
+    // ChatDetail 页面会在加载时根据 senderId 和 receiverId 查找或创建会话。
+    router.push({
+      path: `/im/chat/${sellerId}`,
+      query: {
+        name: sellerName // 传递卖家名称作为聊天标题
+        // conversationId: 'OPTIONAL_IF_YOU_HAVE_IT' // 通常不需要
+      }
+    });
+
+  } else {
+    console.error('无法获取卖家信息以开始聊天');
+    showToast('无法联系卖家，信息不完整');
+  }
+  // --- 修改结束 ---
 }
 
 // 拨打电话
@@ -2039,32 +2069,718 @@ onBeforeUnmount(() => {
   z-index: 101;
 }
 
+.action-icons {
+  display: flex;
+  gap: 24px; /* 增大图标间距 */
+}
+
+.action-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ios-secondaryLabel, #8a8a8e); /* 图标和文字默认颜色 */
+}
+.action-icon i {
+  font-size: 22px; /* 图标大小 */
+  margin-bottom: 2px; /* 图标和文字间距 */
+}
+/* 收藏激活状态 */
+.action-icon i.icon-favorite-filled {
+  color: var(--ios-systemRed, #ff3b30);
+}
+.action-icon:has(i.icon-favorite-filled) .icon-text {
+  color: var(--ios-systemRed, #ff3b30);
+}
+
+.icon-text {
+  font-size: 10px; /* iOS TabBar 文字大小 */
+}
+
+.action-buttons {
+  display: flex;
+}
+
 .action-btn {
-  border-radius: 24px;
-  padding: 12px 24px;
+  border-radius: 20px; /* 更圆润的按钮 */
+  padding: 10px 20px; /* 调整按钮大小 */
   font-size: 15px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.action-btn.buy {
-  background: var(--primary-color, #007AFF);
-  color: white;
-}
-
-.action-btn.buy:active {
-  transform: scale(0.96);
-  background: #0062cc;
+  font-weight: 600; /* Semibold */
+  border: none; /* 移除 contact 按钮的边框，用背景区分 */
+  cursor: pointer;
 }
 
 .action-btn.contact {
-  border: 1px solid var(--primary-color, #007AFF);
-  color: var(--primary-color, #007AFF);
-  margin-right: 10px;
+  background: var(--ios-quaternarySystemFill, rgba(120, 120, 128, 0.08)); /* iOS 次要按钮背景 */
+  color: var(--ios-link, #007aff);
+  margin-right: 12px; /* 调整按钮间距 */
+}
+.action-btn.contact:active {
+  background: var(--ios-tertiarySystemFill, rgba(120, 120, 128, 0.12));
+  transform: scale(0.98); /* 轻微缩放反馈 */
 }
 
-.action-btn.contact:active {
-  background: rgba(0, 122, 255, 0.1);
-  transform: scale(0.96);
+.action-btn.buy {
+  background: var(--ios-link, #007aff); /* iOS 主要按钮颜色 */
+  color: white;
 }
+.action-btn.buy:active {
+  background: #005ecf; /* 点击加深颜色 */
+  transform: scale(0.98);
+}
+
+/* 评论输入框 */
+.comment-input-wrapper {
+  background: var(--ios-secondarySystemBackground, #f2f2f7); /* 匹配页面背景 */
+  box-shadow: none; /* 移除阴影 */
+  border-top: 0.5px solid rgba(60, 60, 67, 0.2); /* iOS 分割线 */
+  padding: 8px 12px; /* 调整内边距 */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)); /* 适配底部安全区域 */
+}
+
+.comment-input {
+  background: var(--ios-systemBackground, white); /* 输入框背景 */
+  border-radius: 18px; /* iOS 搜索框/输入框圆角 */
+  padding: 6px 12px; /* 调整内边距 */
+  border: 0.5px solid rgba(60, 60, 67, 0.2); /* iOS 边框 */
+}
+
+.comment-input input {
+  padding: 4px 0; /* 调整输入框内文字垂直居中 */
+  font-size: 16px; /* iOS 标准输入字体大小 */
+}
+
+.comment-submit {
+  background: var(--ios-link, #007aff);
+  border-radius: 16px; /* 调整圆角 */
+  padding: 6px 14px; /* 调整按钮大小 */
+  font-size: 15px;
+  font-weight: 600; /* Semibold */
+}
+.comment-submit:disabled {
+  background: var(--ios-quaternaryLabel, #d1d1d6); /* iOS 禁用颜色 */
+  color: var(--ios-tertiaryLabel, #c7c7cc);
+}
+
+/* 其他微调 */
+.van-icon {
+  vertical-align: middle; /* 尝试让图标垂直居中 */
+}
+
+/* --- iOS 风格美化 --- */
+
+/* 全局容器微调 */
+.product-content {
+  padding: 0 16px; /* 页面左右留白 */
+  background-color: var(--ios-secondarySystemBackground, #f2f2f7); /* iOS 页面背景色 */
+}
+
+/* 通用卡片样式 */
+.ios-card {
+  background: var(--ios-systemBackground, white);
+  border-radius: 12px; /* iOS 常用圆角 */
+  margin: 16px 0; /* 上下间距 */
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); /* 更柔和的阴影 */
+  overflow: hidden; /* 确保内容不溢出圆角 */
+}
+
+/* 移除原有特定卡片的背景和边距，统一使用ios-card或van-cell-group inset */
+.product-info,
+.seller-info,
+.seller-products, /* 如果外部容器需要卡片化 */
+.product-detail .detail-card,
+.product-detail .description-card,
+.similar-products,
+.comment-section {
+  /* background: none;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 0; */
+  /* 采用下面的方式继承或应用 .ios-card */
+}
+
+/* 应用通用卡片样式到各个部分 */
+.product-info { /* 基本信息卡片已存在，微调 */
+  margin: 16px 0;
+  padding: 20px; /* 维持原有较大内边距 */
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.seller-info { /* 卖家信息卡片已存在，微调 */
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.product-detail { /* 商品详情容器，本身不是卡片 */
+  margin: 16px 0;
+}
+
+/* 商品详情 - 细节卡片 */
+.product-detail .detail-card {
+  background: var(--ios-systemBackground, white);
+  border-radius: 12px;
+  padding: 0 16px; /* 使用 Cell 的内边距，这里设为0或根据需要调整 */
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.product-detail .detail-items {
+  /* 移除原有样式 */
+}
+
+.product-detail .detail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0; /* 调整内边距 */
+  border-bottom: 1px solid var(--ios-separator, #e5e5ea); /* iOS 分割线 */
+  font-size: 15px; /* iOS 常用字体大小 */
+}
+
+.product-detail .detail-item:last-child {
+  border-bottom: none;
+}
+
+.product-detail .item-label {
+  display: flex;
+  align-items: center;
+  color: var(--ios-label, #000); /* iOS 主要文字颜色 */
+}
+
+.product-detail .item-label i {
+  margin-right: 8px;
+  color: var(--ios-secondaryLabel, #8a8a8e); /* iOS 次要图标颜色 */
+  font-size: 18px;
+}
+
+.product-detail .item-value {
+  color: var(--ios-secondaryLabel, #8a8a8e); /* iOS 次要文字颜色 */
+  text-align: right;
+}
+
+.product-detail .location-value {
+  display: flex;
+  align-items: center;
+}
+.product-detail .location-value i {
+  margin-left: 8px;
+  color: var(--ios-link, #007aff); /* iOS 链接颜色 */
+  cursor: pointer;
+}
+
+/* 商品详情 - 描述卡片 */
+.product-detail .description-card {
+  background: var(--ios-systemBackground, white);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 8px; /* 与标题间距 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.product-description .section-title {
+  padding: 0 4px; /* 给标题一点呼吸空间 */
+}
+
+.description-content {
+  font-size: 15px;
+  line-height: 1.6; /* 增加行高提高可读性 */
+  color: var(--ios-label, #333);
+}
+
+.no-description {
+  text-align: center;
+  padding: 20px;
+  color: var(--ios-tertiaryLabel, #c7c7cc);
+}
+.no-description i {
+  font-size: 24px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* 相似商品 */
+.similar-products {
+  /* 应用通用卡片样式 */
+  background: var(--ios-systemBackground, white);
+  border-radius: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.similar-products .section-title {
+   margin-bottom: 8px; /* 调整标题和滚动区域间距 */
+}
+
+.product-scroll {
+  gap: 16px; /* 增加项目间距 */
+}
+
+.similar-item {
+  flex: 0 0 150px; /* 稍微增大宽度 */
+  border-radius: 10px; /* 统一圆角 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* 调整阴影 */
+}
+
+.similar-image {
+  height: 150px; /* 1:1 比例 */
+}
+
+.similar-info {
+  padding: 10px; /* 调整内边距 */
+}
+
+.similar-title {
+  font-size: 14px;
+  font-weight: 500; /* Medium weight */
+}
+
+.similar-meta {
+  font-size: 12px;
+  color: var(--ios-secondaryLabel, #8a8a8e);
+}
+
+/* 评论区 */
+.comment-section {
+  /* 应用通用卡片样式 */
+  background: var(--ios-systemBackground, white);
+  border-radius: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.comment-section .section-title {
+  margin-bottom: 12px;
+}
+
+.comment-list {
+  margin-bottom: 0; /* 移除底部边距，由卡片内边距控制 */
+}
+
+.comment-item {
+  padding: 16px 0; /* 增加上下内边距 */
+  border-bottom: 1px solid var(--ios-separator, #e5e5ea);
+  display: flex; /* 改为 flex 布局 */
+  gap: 12px; /* 头像和内容间距 */
+}
+
+.comment-item:last-child {
+  border-bottom: none;
+}
+
+.comment-user {
+  margin-right: 0; /* 移除原有 margin */
+  flex-shrink: 0;
+}
+
+.comment-avatar {
+  width: 36px; /* 调整头像大小 */
+  height: 36px;
+  border-radius: 18px; /* 保持圆形 */
+  border: none; /* 移除边框 */
+}
+
+.comment-content {
+  /* flex: 1 已有 */
+}
+
+.comment-header {
+  margin-bottom: 4px; /* 调整间距 */
+}
+
+.comment-name {
+  font-size: 14px; /* 调整字体大小 */
+  font-weight: 600; /* Semibold */
+}
+
+.user-label {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 5px; /* 微调内边距 */
+  margin-left: 6px; /* 与名字间距 */
+  vertical-align: middle; /* 垂直居中 */
+}
+
+.comment-time {
+  font-size: 12px;
+  color: var(--ios-tertiaryLabel, #c7c7cc); /* 更浅的颜色 */
+  margin-left: 8px;
+}
+
+.comment-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ios-label, #000);
+  margin-bottom: 10px; /* 增加与操作按钮间距 */
+}
+
+.comment-actions {
+  font-size: 13px;
+  color: var(--ios-secondaryLabel, #8a8a8e);
+}
+
+.reply-btn, .like-btn {
+  color: var(--ios-secondaryLabel, #8a8a8e);
+  transition: color 0.2s ease; /* 添加过渡效果 */
+}
+.reply-btn:active, .like-btn:active {
+  color: var(--ios-tertiaryLabel, #c7c7cc); /* 点击反馈 */
+}
+
+.like-btn i.active {
+  color: var(--ios-systemRed, #ff3b30); /* iOS 红色 */
+}
+.like-btn.active .like-count{ /* 点赞数也变色 */
+  color: var(--ios-systemRed, #ff3b30);
+}
+
+/* 回复列表样式 */
+.reply-list {
+  background: var(--ios-secondarySystemBackground, #f2f2f7); /* iOS 次级背景色 */
+  border-radius: 10px;
+  padding: 10px 12px; /* 调整内边距 */
+  margin-top: 12px; /* 增加与评论操作间距 */
+}
+
+.reply-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ios-separator, #e5e5ea);
+}
+.reply-item:first-child {
+   padding-top: 0;
+}
+.reply-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.reply-content {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reply-name {
+  font-weight: 600; /* Semibold */
+}
+
+.reply-to {
+  color: var(--ios-secondaryLabel, #8a8a8e);
+}
+.reply-to-name {
+  color: var(--ios-link, #007aff); /* iOS 链接颜色 */
+}
+
+.reply-text {
+   color: var(--ios-label, #000);
+}
+
+.reply-actions {
+  margin-top: 6px; /* 增加与回复内容间距 */
+  font-size: 12px;
+  color: var(--ios-tertiaryLabel, #c7c7cc); /* 更浅的颜色 */
+}
+.reply-actions .reply-btn {
+   color: var(--ios-secondaryLabel, #8a8a8e); /* 回复按钮颜色深一点 */
+   font-size: 12px;
+}
+.reply-actions .reply-btn i {
+   font-size: 14px;
+}
+
+/* 加载状态 */
+.loading-container {
+   background-color: var(--ios-secondarySystemBackground, #f2f2f7); /* 匹配页面背景 */
+}
+.loading-card {
+   /* 已有样式，检查是否需要调整 */
+   background: var(--ios-systemBackground, white);
+   border-radius: 12px;
+}
+.loading-tips {
+   background: var(--ios-tertiarySystemBackground, #f9f9f9); /* 更浅的背景 */
+   border-radius: 8px;
+}
+
+/* 底部操作栏 */
+.bottom-action-bar {
+  background: rgba(249, 249, 249, 0.85); /* iOS 毛玻璃背景色 */
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-top: 0.5px solid rgba(60, 60, 67, 0.29); /* iOS 分割线颜色和粗细 */
+  padding: 8px 16px; /* 微调内边距 */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)); /* 适配 iPhone X 等底部安全区域 */
+}
+
+.action-icons {
+  display: flex;
+  gap: 24px; /* 增大图标间距 */
+}
+
+.action-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ios-secondaryLabel, #8a8a8e); /* 图标和文字默认颜色 */
+}
+.action-icon i {
+  font-size: 22px; /* 图标大小 */
+  margin-bottom: 2px; /* 图标和文字间距 */
+}
+/* 收藏激活状态 */
+.action-icon i.icon-favorite-filled {
+  color: var(--ios-systemRed, #ff3b30);
+}
+.action-icon:has(i.icon-favorite-filled) .icon-text {
+  color: var(--ios-systemRed, #ff3b30);
+}
+
+.icon-text {
+  font-size: 10px; /* iOS TabBar 文字大小 */
+}
+
+.action-buttons {
+  display: flex;
+}
+
+.action-btn {
+  border-radius: 20px; /* 更圆润的按钮 */
+  padding: 10px 20px; /* 调整按钮大小 */
+  font-size: 15px;
+  font-weight: 600; /* Semibold */
+  border: none; /* 移除 contact 按钮的边框，用背景区分 */
+  cursor: pointer;
+}
+
+.action-btn.contact {
+  background: var(--ios-quaternarySystemFill, rgba(120, 120, 128, 0.08)); /* iOS 次要按钮背景 */
+  color: var(--ios-link, #007aff);
+  margin-right: 12px; /* 调整按钮间距 */
+}
+.action-btn.contact:active {
+  background: var(--ios-tertiarySystemFill, rgba(120, 120, 128, 0.12));
+  transform: scale(0.98); /* 轻微缩放反馈 */
+}
+
+.action-btn.buy {
+  background: var(--ios-link, #007aff); /* iOS 主要按钮颜色 */
+  color: white;
+}
+.action-btn.buy:active {
+  background: #005ecf; /* 点击加深颜色 */
+  transform: scale(0.98);
+}
+
+/* 评论输入框 */
+.comment-input-wrapper {
+  background: var(--ios-secondarySystemBackground, #f2f2f7); /* 匹配页面背景 */
+  box-shadow: none; /* 移除阴影 */
+  border-top: 0.5px solid rgba(60, 60, 67, 0.2); /* iOS 分割线 */
+  padding: 8px 12px; /* 调整内边距 */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)); /* 适配底部安全区域 */
+}
+
+.comment-input {
+  background: var(--ios-systemBackground, white); /* 输入框背景 */
+  border-radius: 18px; /* iOS 搜索框/输入框圆角 */
+  padding: 6px 12px; /* 调整内边距 */
+  border: 0.5px solid rgba(60, 60, 67, 0.2); /* iOS 边框 */
+}
+
+.comment-input input {
+  padding: 4px 0; /* 调整输入框内文字垂直居中 */
+  font-size: 16px; /* iOS 标准输入字体大小 */
+}
+
+.comment-submit {
+  background: var(--ios-link, #007aff);
+  border-radius: 16px; /* 调整圆角 */
+  padding: 6px 14px; /* 调整按钮大小 */
+  font-size: 15px;
+  font-weight: 600; /* Semibold */
+}
+.comment-submit:disabled {
+  background: var(--ios-quaternaryLabel, #d1d1d6); /* iOS 禁用颜色 */
+  color: var(--ios-tertiaryLabel, #c7c7cc);
+}
+
+/* 其他微调 */
+.van-icon {
+  vertical-align: middle; /* 尝试让图标垂直居中 */
+}
+
+/* 商品基本信息 */
+.product-info {
+  padding: 16px;
+}
+.product-title {
+  font-size: 20px; /* 调整标题字体大小 */
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.product-price {
+  margin-bottom: 12px;
+  display: flex; /* Ensure items align baseline */
+  align-items: baseline; /* Align based on text baseline */
+}
+
+/* --- New Price Styling --- */
+.current-price {
+  /* Remove direct styling from parent */
+  color: var(--ios-systemRed, #ff3b30); /* Keep color consistent */
+  display: inline-flex; /* Use inline-flex for alignment */
+  align-items: baseline; /* Align symbol and amount */
+  margin-right: 8px; /* Space between price and original price */
+}
+.current-price .currency-symbol {
+  font-size: 16px; /* Smaller font for ¥ */
+  font-weight: 400; /* Regular weight */
+  margin-right: 1px; /* Slight space */
+  align-self: flex-start; /* Align ¥ slightly higher */
+  margin-top: 2px; /* Fine-tune vertical alignment */
+}
+.current-price .amount {
+  font-size: 26px; /* Large font for amount */
+  font-weight: 700; /* Bold */
+  line-height: 1; /* Ensure compact height */
+}
+/* --- End New Price Styling --- */
+
+.original-price {
+  font-size: 15px;
+  color: var(--ios-secondaryLabel);
+  text-decoration: line-through;
+  margin-left: 0; /* Reset margin, use gap or parent margin */
+  margin-right: 8px; /* Space before discount */
+}
+.discount-badge {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background-color: var(--ios-systemRed);
+  color: white;
+  margin-left: 0; /* Reset margin */
+  font-weight: 500;
+  white-space: nowrap; /* Prevent wrapping */
+}
+.product-meta {
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 0.5px solid var(--ios-separator-light);
+  font-size: 13px;
+  color: var(--ios-secondaryLabel);
+  display: flex;
+  /* justify-content: space-around; */
+  justify-content: flex-start; /* Align items to the start */
+  gap: 20px; /* Consistent spacing between items */
+  align-items: center; /* Vertically align icon and text */
+}
+.product-meta span {
+  display: flex;
+  align-items: center;
+}
+.product-meta span i {
+  margin-right: 4px;
+  font-size: 16px;
+  color: var(--ios-systemGray);
+}
+
+/* ... rest of existing styles ... */
+
+/* 卖家信息卡片 */
+.seller-info {
+  padding: 12px 16px; /* 微调内边距 */
+  display: flex;
+  align-items: center;
+  gap: 10px; /* 调整整体间距 */
+}
+.seller-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+}
+.seller-meta {
+  flex: 1;
+}
+.seller-name {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 3px; /* 微调间距 */
+  display: flex;
+  align-items: center; /* 确保垂直居中 */
+  gap: 4px; /* 名字和徽章间距 */
+}
+.seller-name .van-icon { /* 认证图标 */
+  color: var(--ios-link);
+  font-size: 15px;
+  /* vertical-align: text-bottom; */ /* 尝试调整垂直对齐 */
+}
+.user-badge { /* Lv 徽章 */
+  /* margin-left: 6px; */ /* 使用 gap */
+  font-size: 11px; /* 减小字号 */
+  font-weight: 500;
+  color: var(--ios-secondaryLabel);
+  display: inline-flex; /* 改为 inline-flex */
+  align-items: center;
+  background-color: var(--ios-systemGray6);
+  padding: 1px 4px; /* 调整内边距 */
+  border-radius: 3px; /* 调整圆角 */
+  /* vertical-align: middle; */ /* 尝试调整垂直对齐 */
+}
+.user-badge i {
+  font-size: 11px; /* 图标与文字同大小 */
+  margin-right: 2px;
+  color: var(--ios-systemGray);
+}
+.seller-details {
+  font-size: 12px; /* 确认字体大小 */
+  color: var(--ios-secondaryLabel);
+  line-height: 1.4;
+  margin-top: 3px; /* 调整与名称行的距离 */
+}
+.seller-details span {
+  margin-right: 8px;
+}
+
+/* 好评率区域精确样式 */
+.seller-rate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background-color: var(--ios-systemGray6, #f2f2f7);
+  border-radius: 8px; /* 根据截图调整圆角 */
+  padding: 5px 10px; /* 根据截图调整内边距 */
+  padding-right: 22px; /* 为箭头留出更多空间 */
+  position: relative;
+  flex-shrink: 0;
+}
+.seller-rate .rate-label {
+  font-size: 10px; /* 减小"好"和"率"的字体 */
+  color: var(--ios-secondaryLabel);
+  line-height: 1.2;
+}
+.seller-rate .rate-value {
+  font-size: 13px; /* 调整百分比字体大小 */
+  font-weight: 500; /* Medium weight */
+  color: var(--ios-label);
+  line-height: 1.2;
+  margin: 1px 0; /* 微调垂直间距 */
+}
+.seller-rate > .van-icon-arrow {
+  position: absolute;
+  right: 8px; /* 调整箭头位置 */
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ios-systemGray3, #c7c7cc); /* 调整箭头颜色 */
+  font-size: 12px; /* 调整箭头大小 */
+}
+
+
+/* ... rest of existing styles ... */
 </style>

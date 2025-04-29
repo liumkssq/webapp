@@ -140,7 +140,7 @@ const createConversation = async (user) => {
     const response = await setUpUserConversation({
       sendId: userStore.currentUser.id,
       recvId: user.id,
-      chatType: 1 // 单聊
+      ChatType: 1 // 单聊
     })
     
     if (response.code === 200) {

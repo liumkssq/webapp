@@ -42,6 +42,11 @@
         <div class="empty-text">暂无消息，开始聊天吧</div>
       </div>
       
+      <!-- 添加调试信息，方便排查问题 -->
+      <div v-if="!loading.messages && messages.length > 0" class="debug-info" style="color: grey; font-size: 10px; text-align: center;">
+        已加载 {{ messages.length }} 条消息
+      </div>
+      
       <!-- 消息列表 -->
       <template v-for="(message, index) in messages" :key="message.id">
         <!-- 时间分割线 -->
@@ -438,13 +443,13 @@ const loadConversation = async () => {
     const setupData = {
       sendId: userStore.userInfo?.id?.toString() || '',
       recvId: props.targetId?.toString() || '',
-      chatType: props.conversationType === 'group' ? CHAT_TYPE.GROUP : CHAT_TYPE.SINGLE
+      ChatType: props.conversationType === 'group' ? CHAT_TYPE.GROUP : CHAT_TYPE.SINGLE
     };
     
     // 确保ChatType字段正确设置，必须使用数字
-    if (!setupData.chatType && setupData.chatType !== 0) {
-      setupData.chatType = 2; // 默认为单聊(2)
-      console.log('没有指定chatType，使用默认值: 2 (单聊)');
+    if (!setupData.ChatType && setupData.ChatType !== 0) {
+      setupData.ChatType = 2; // 默认为单聊(2)
+      console.log('没有指定ChatType，使用默认值: 2 (单聊)');
     }
     
     // 确保两个ID都存在
@@ -509,6 +514,10 @@ const loadConversation = async () => {
           if (props.conversationType === 'private' && !targetUser.value) {
             await loadUserDetail();
           }
+
+
+          await loadMessages(true);
+          markAsRead();
         } else {
           console.error('获取会话详情失败:', res.message);
           showToast('获取会话详情失败: ' + (res.message || '未知错误'));
@@ -677,65 +686,77 @@ const loadMessages = async (initial = false) => {
     loading.value.more = true;
   }
   
+  // 确定起始时间
+  let startTime = null;
+  if (!initial && messages.value.length > 0) {
+    startTime = messages.value[0].timestamp;
+  }
+  
+  // 使用/api/im/chatlog接口获取消息历史
+  const params = {
+    conversationId: conversationId.value,
+    count: PAGE_SIZE,
+    startSendTime: startTime
+  };
+  
+  console.log('请求聊天历史: /api/im/chatlog', params);
   try {
-    // 确定起始时间
-    let startTime = null;
-    if (!initial && messages.value.length > 0) {
-      startTime = messages.value[0].timestamp;
-    }
-    
-    // 使用/api/im/chatlog接口获取消息历史
-    const params = {
-      conversationId: conversationId.value,
-      count: PAGE_SIZE,
-      startSendTime: startTime
-    };
-    
-    console.log('请求聊天历史: /api/im/chatlog', params);
     const res = await getChatLog(params);
     console.log('聊天历史响应:', res);
     
-    if (res.code === 200 && res.data) {
-      // 格式化消息
-      const newMessages = (res.data.messageList || []).map(msg => ({
-        id: msg.msgId,
-        conversationId: msg.conversationId,
-        type: msg.mType === 0 ? 'text' : (msg.mType === 1 ? 'image' : 'unknown'),
-        content: msg.content,
-        senderId: msg.sendId,
-        senderName: msg.senderName || '用户',
-        timestamp: msg.sendTime,
-        status: 'sent',
-        isSelf: msg.sendId === userStore.userInfo.id.toString(),
-        readStatus: msg.readRecords || {} // 新增: 保存已读状态
-      }));
+    // 修改判断条件：直接检查res和res.list是否存在
+    if (res && Array.isArray(res.list)) { 
+      // 使用res.list访问数据
+      const messageList = res.list; 
+      console.log(`获取到 ${messageList.length} 条消息记录`, messageList);
       
-      // 加载每条消息的已读状态
-      if (props.conversationType === 'group' && newMessages.length > 0) {
-        for (const msg of newMessages) {
-          if (msg.isSelf) {
-            // 只加载自己发送的消息的已读状态
-            const readStatus = await getMessageReadStatus(msg.id);
-            msg.readStatus = readStatus;
-          }
-        }
-      }
+      // 格式化消息
+      const newMessages = messageList.map(msg => {
+        const currentUserId = userStore.userInfo.id.toString();
+        const isSelf = msg.sendId === currentUserId;
+        
+        return {
+          id: msg.id,
+          conversationId: msg.conversationId,
+          type: 'text', // 全部设为文本类型
+          content: msg.msgContent, // 使用msgContent作为内容
+          senderId: msg.sendId,
+          receiverId: msg.recvId,
+          senderName: isSelf ? userStore.userInfo.nickname || '我' : targetUser.value?.nickname || `用户${msg.sendId}`,
+          senderAvatar: isSelf ? userStore.userInfo.avatar || getDefaultAvatar(msg.sendId) : targetUser.value?.avatar || getDefaultAvatar(msg.sendId),
+          timestamp: msg.SendTime, // 使用SendTime作为时间戳
+          status: 'sent',
+          isSelf: isSelf,
+          createTime: msg.SendTime // 为时间分隔线提供
+        };
+      });
+      
+      console.log('格式化后的消息:', newMessages);
       
       if (initial) {
+        // 按时间排序，确保最早的消息在上方
+        newMessages.sort((a, b) => a.timestamp - b.timestamp);
         messages.value = newMessages;
       } else {
-        messages.value = [...newMessages, ...messages.value];
+        // 加载更多时，将新消息添加到列表顶部，并按时间排序
+        const combinedMessages = [...newMessages, ...messages.value];
+        combinedMessages.sort((a, b) => a.timestamp - b.timestamp);
+        messages.value = combinedMessages;
       }
       
-      // 如果返回的消息数量少于请求数量，说明没有更多了
-      hasMoreMessages.value = newMessages.length >= PAGE_SIZE;
-      
-      console.log(`加载了 ${newMessages.length} 条消息`);
+      // 使用 messageList.length 判断是否还有更多
+      hasMoreMessages.value = messageList.length >= PAGE_SIZE; 
+      console.log(`已加载 ${newMessages.length} 条消息, 总消息数: ${messages.value.length}, 是否还有更多: ${hasMoreMessages.value}`);
     } else {
-      console.error('获取消息历史失败:', res.message);
+      // 如果res.list不存在或不是数组，视为获取失败或数据为空
+      console.error('获取消息历史失败或数据格式不正确:', res);
+      showToast('获取聊天记录失败');
+      hasMoreMessages.value = false; // 没有获取到有效数据，标记为没有更多
     }
   } catch (error) {
     console.error('加载消息历史出错:', error);
+    showToast('加载聊天记录失败:' + error.message);
+    hasMoreMessages.value = false; // 出错也标记为没有更多
   } finally {
     if (initial) {
       loading.value.messages = false;
@@ -745,10 +766,21 @@ const loadMessages = async (initial = false) => {
     
     // 如果是初始加载，滚动到底部
     if (initial) {
-      scrollToBottom();
+      setTimeout(() => {
+        scrollToBottom();
+      }, 300); // 延迟确保DOM已更新
+    } else {
+      // 加载更多时，尝试恢复滚动位置
+      nextTick(() => {
+        if (messageListEl.value) {
+          const newScrollHeight = messageListEl.value.scrollHeight;
+          messageListEl.value.scrollTop = lastScrollTop.value + (newScrollHeight - lastScrollHeight.value);
+          console.log('恢复滚动位置至:', messageListEl.value.scrollTop);
+        }
+      });
     }
   }
-};
+}
 
 // 重试发送消息
 const retryMessage = (message) => {
@@ -1530,7 +1562,7 @@ const markAsRead = async () => {
     // 准备标记已读数据
     const markReadData = {
       conversationId: conversationId.value,
-      chatType: props.conversationType === 'group' ? CHAT_TYPE.GROUP : CHAT_TYPE.SINGLE,
+      ChatType: props.conversationType === 'group' ? CHAT_TYPE.GROUP : CHAT_TYPE.SINGLE,
       recvId: props.targetId.toString(),
       msgIds: [] // 空数组表示标记所有消息已读
     };
@@ -1597,49 +1629,26 @@ watch(() => route.params.id, (newId) => {
 
 // 生命周期钩子
 onMounted(async () => {
-  console.log('Chat组件已挂载', props);
-  console.log('路由参数:', route.params);
-  console.log('查询参数:', route.query);
-  console.log('查询参数conversationId:', route.query.conversationId);
-  
-  // 检查路由参数中是否有targetId
-  let targetUserId = props.targetId;
-  
-  // 如果props中没有targetId，尝试从路由参数获取
-  if (!targetUserId && route.params.id) {
-    console.log('从路由参数获取targetId:', route.params.id);
-    targetUserId = route.params.id;
-  }
-  
-  // 确保有有效的targetId
-  if (!targetUserId) {
-    console.error('缺少targetId，无法初始化聊天');
-    showToast('无法加载聊天，缺少用户ID');
-    router.push('/im/conversations');
-    return;
-  }
-  
-  // 将获取的targetId设置回props（如果props是响应式的）或保存在本地变量中供后续使用
-  if (typeof props.targetId === 'undefined') {
-    // Vue props是只读的，不能直接修改，但可以保存在本地变量中
-    console.log('将targetId保存到本地变量:', targetUserId);
-  }
+  console.log('Chat组件已挂载');
   
   // 优先使用查询参数中的conversationId
   if (route.query.conversationId) {
     console.log('使用查询参数中的conversationId:', route.query.conversationId);
   }
   
-  // 强制设置targetId以确保后续函数可以正常工作
-  props.targetId = targetUserId;
-  
   // 先初始化WebSocket连接
   await initializeChatPage();
   
-  // 加载会话数据
+  // 加载会话数据和聊天历史
   await loadConversation();
   
-  // 注册WebSocket消息监听
+  // 添加直接加载消息的逻辑
+  if (!messages.value || messages.value.length === 0) {
+    console.log('页面挂载后开始加载聊天记录');
+    loadMessages(true);
+  }
+  
+  // 设置监听器和其他初始化
   const cleanupMessageListeners = setupMessageListeners();
   
   // 添加滚动事件监听器

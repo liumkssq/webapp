@@ -302,15 +302,14 @@
 </template>
 
 <script setup>
-import '@/style/loading.css' // 引入加载样式
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/store/user'
-import { getLostFoundDetail, updateLostFoundStatus, commentLostFound, likeLostFound, unlikeLostFound } from '@/api/lostFound'
-import HeaderNav from '@/components/HeaderNav.vue'
-import FooterNav from '@/components/FooterNav.vue'
+import { getLostFoundDetail, likeLostFound, unlikeLostFound } from '@/api/lostFound';
+import HeaderNav from '@/components/HeaderNav.vue';
+import { useUserStore } from '@/store/user';
+import '@/style/loading.css'; // 引入加载样式
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 // 导入Vant组件
-import { Dialog, Button, Cell, CellGroup, Image as VanImage, Divider, Field, RadioGroup, Radio, Tag, Icon, Toast, Empty, Grid, GridItem, Swipe, SwipeItem, ShareSheet, Skeleton } from 'vant'
+import { Dialog, Toast, Image as VanImage } from 'vant';
 
 const route = useRoute()
 const router = useRouter()
@@ -447,16 +446,37 @@ const getTagColor = (tag) => {
 const handlePrimaryAction = () => {
   if (!userStore.isLoggedIn) {
     Toast.fail('请先登录');
+    // Redirect to login, consider passing redirect query
+    router.push('/login?redirect=' + encodeURIComponent(route.fullPath));
     return;
   }
-  
+
   // 如果当前用户是发布者
   if (userStore.userId === item.value.publisherId) {
     // 显示状态更新弹窗
+    newStatus.value = item.value.status || 'pending'; // Initialize with current status
     showStatusUpdatePopup.value = true;
   } else {
-    // 联系发布者
-    contactPublisher();
+    // 联系发布者 - 修改为直接跳转到聊天页面
+    // contactPublisher(); // 不再调用旧的联系函数
+
+    // --- 修改开始 ---
+    if (item.value && item.value.publisherId) {
+      const publisherId = item.value.publisherId;
+      const publisherName = item.value.publisherName || '发布者';
+      console.log(`Navigating to chat with publisher ID: ${publisherId}, Name: ${publisherName}`);
+
+      router.push({
+        path: `/im/chat/${publisherId}`,
+        query: {
+          name: publisherName
+        }
+      });
+    } else {
+      console.error('无法获取发布者信息以开始聊天');
+      Toast.fail('无法联系发布者，信息不完整');
+    }
+    // --- 修改结束 ---
   }
 };
 

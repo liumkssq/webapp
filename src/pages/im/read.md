@@ -4,7 +4,7 @@ websocket @ws://127.0.0.1:10090/ws   {
   "method": "conversation.chat",
   "data": {
     "conversationId": "1_2",
-    "chatType": 2,
+    "ChatType": 2,
     "sendId": "1",
     "recvId": "2",
     "sendTime": 1687341245000,

@@ -461,7 +461,7 @@ const fetchConversations = async (isRefresh = false) => {
           id: conversationId,
           targetId: targetId,
           type: data.ChatType === 1 ? 'group' : 'private',
-          chatType: data.ChatType || 2, // 默认为单聊(2) 
+          ChatType: data.ChatType || 2, // 默认为单聊(2)
           unreadCount: data.unread || 0,
           targetInfo,
           lastMessage: data.lastMessage || defaultLastMessage
