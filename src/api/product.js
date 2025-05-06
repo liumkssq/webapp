@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request from '@/utils/request';
 
 // 添加商品评论
 export function commentProduct(productId, data) {
@@ -130,8 +130,8 @@ export function getProductList(params) {
 
 /**
  * 获取商品详情
- * @param {number|string} id 商品ID
- * @returns {Promise} Promise对象
+ * @param {string|number} id 商品ID
+ * @returns {Promise}
  */
 export function getProductDetail(id) {
   return request({
@@ -220,16 +220,14 @@ export function getUserProducts(userId, params) {
 }
 
 /**
- * 收藏/取消收藏商品
- * @param {number|string} id 商品ID
- * @param {boolean} favorite 是否收藏
- * @returns {Promise} Promise对象
+ * 收藏商品
+ * @param {string|number} id 商品ID
+ * @returns {Promise}
  */
-export function favoriteProduct(id, favorite) {
+export function favoriteProduct(id) {
   return request({
     url: `/api/product/favorite/${id}`,
-    method: 'post',
-    data: { favorite }
+    method: 'post'
   })
 }
 
@@ -247,15 +245,30 @@ export function getFavoriteProducts(params) {
 }
 
 /**
- * 商品举报
- * @param {number|string} id 商品ID
- * @param {Object} data 举报信息
- * @returns {Promise} Promise对象
+ * 举报商品
+ * @param {string|number} id 商品ID
+ * @param {Object} data 举报数据，包含reason、description和可选的images数组
+ * @returns {Promise}
  */
 export function reportProduct(id, data) {
+  console.log('[API] 调用reportProduct API，商品ID:', id, '数据:', data);
+  
   return request({
     url: `/api/product/report/${id}`,
     method: 'post',
     data
   })
+  .then(response => {
+    console.log('[API] 举报商品成功响应:', response);
+    return response;
+  })
+  .catch(error => {
+    console.error('[API] 举报商品失败:', error);
+    // 返回友好的错误格式，确保前端可以处理
+    return {
+      code: 500,
+      message: error.message || '举报失败，请稍后重试',
+      success: false
+    };
+  });
 }

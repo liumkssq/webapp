@@ -312,6 +312,10 @@
           <i class="icon-share"></i>
           <div class="icon-text">分享</div>
         </div>
+        <div class="action-icon" @click="showReportDialog = true">
+          <i class="icon-warning"></i>
+          <div class="icon-text">举报</div>
+        </div>
       </div>
       <div class="action-buttons">
         <button class="action-btn contact" @click="contactSeller">联系卖家</button>
@@ -444,6 +448,60 @@
       {{ toast.message }}
     </div>
     
+    <!-- 举报对话框 -->
+    <van-dialog
+      v-model:show="showReportDialog"
+      title="举报商品"
+      show-cancel-button
+      @confirm="submitReport"
+      confirm-button-color="#ee0a24"
+    >
+      <div class="dialog-content">
+        <p class="dialog-subtitle">请选择举报原因：</p>
+        <van-radio-group v-model="reportReason">
+          <van-cell-group inset>
+            <van-cell clickable @click="reportReason = 'fake'">
+              <template #title>
+                <van-radio name="fake">虚假信息</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'spam'">
+              <template #title>
+                <van-radio name="spam">广告/垃圾信息</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'rights'">
+              <template #title>
+                <van-radio name="rights">侵犯权益</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'illegal'">
+              <template #title>
+                <van-radio name="illegal">违法违规</van-radio>
+              </template>
+            </van-cell>
+            <van-cell clickable @click="reportReason = 'other'">
+              <template #title>
+                <van-radio name="other">其他原因</van-radio>
+              </template>
+            </van-cell>
+          </van-cell-group>
+        </van-radio-group>
+        
+        <van-field
+          v-if="reportReason === 'other'"
+          v-model="reportDetail"
+          rows="3"
+          autosize
+          type="textarea"
+          maxlength="200"
+          placeholder="请详细说明原因"
+          show-word-limit
+          class="report-detail"
+        />
+      </div>
+    </van-dialog>
+    
     <!-- 底部导航 -->
     <FooterNav />
   </div>
@@ -481,6 +539,11 @@ const toast = reactive({
   show: false,
   message: ''
 })
+
+// 举报相关
+const showReportDialog = ref(false);
+const reportReason = ref('fake'); // Default reason
+const reportDetail = ref('');
 
 // 计算当前用户是否是卖家
 const isCurrentUser = computed(() => {
@@ -1308,6 +1371,104 @@ const viewMoreSimilar = () => {
 onBeforeUnmount(() => {
   stopAutoPlay();
 })
+
+// 提交举报函数
+const submitReport = async () => {
+  if (!userStore.isLoggedIn) {
+    showToast('请先登录')
+    router.push('/login?redirect=' + route.fullPath)
+    return
+  }
+  
+  if (reportReason.value === 'other' && !reportDetail.value.trim()) {
+    showToast('请填写举报原因')
+    return
+  }
+  
+  try {
+    console.log('[举报Debug] 正在提交举报:', reportReason.value, reportDetail.value)
+    
+    // 构建举报数据
+    const reportData = {
+      reason: reportReason.value,
+      description: reportDetail.value,
+      images: [] // 可选的举报证据图片
+    }
+    
+    // 记录请求前状态
+    console.log('[举报Debug] 请求前: 商品ID:', product.value.id, '举报数据:', reportData)
+    
+    // 直接使用fetch API发送请求，避免可能的请求库处理问题
+    const url = `/api/product/report/${product.value.id}`
+    console.log('[举报Debug] 请求URL:', url)
+    
+    const token = localStorage.getItem('token')
+    const headers = {
+      'Content-Type': 'application/json'
+    }
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    
+    const fetchResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(reportData)
+    })
+    
+    // 记录原始响应
+    console.log('[举报Debug] Fetch原始响应状态:', fetchResponse.status, fetchResponse.statusText)
+    
+    // 如果返回的是text/plain或非JSON格式，直接获取文本
+    const contentType = fetchResponse.headers.get('content-type')
+    console.log('[举报Debug] 响应内容类型:', contentType)
+    
+    let responseData
+    
+    if (contentType && contentType.includes('application/json')) {
+      responseData = await fetchResponse.json()
+      console.log('[举报Debug] 解析的JSON响应:', responseData)
+    } else {
+      const textResponse = await fetchResponse.text()
+      console.log('[举报Debug] 文本响应:', textResponse)
+      
+      // 尝试将文本解析为JSON
+      try {
+        responseData = JSON.parse(textResponse)
+        console.log('[举报Debug] 从文本解析的JSON:', responseData)
+      } catch (e) {
+        console.log('[举报Debug] 无法解析响应为JSON:', e)
+        responseData = { 
+          code: fetchResponse.ok ? 200 : fetchResponse.status,
+          message: textResponse || '处理完成',
+          success: fetchResponse.ok 
+        }
+      }
+    }
+    
+    // 处理响应
+    if (fetchResponse.ok || (responseData && (responseData.code === 200 || responseData.code === 0))) {
+      console.log('[举报Debug] 请求成功')
+      
+      // 重置表单并关闭对话框
+      reportReason.value = 'fake'
+      reportDetail.value = ''
+      showReportDialog.value = false
+      
+      // 显示成功消息
+      showToast(responseData?.message || responseData?.msg || '举报已提交，感谢您的反馈')
+    } else {
+      console.error('[举报Debug] 请求失败', responseData)
+      
+      // 显示错误消息
+      showToast(responseData?.message || responseData?.msg || `举报失败 (${fetchResponse.status})`)
+    }
+  } catch (error) {
+    console.error('[举报Debug] 捕获到异常:', error)
+    showToast('举报提交失败，请稍后重试')
+  }
+}
 </script>
 
 <style scoped>
@@ -2783,4 +2944,19 @@ onBeforeUnmount(() => {
 
 
 /* ... rest of existing styles ... */
+
+/* 对话框内容样式 */
+.dialog-content {
+  padding: 16px;
+}
+
+.dialog-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.report-detail {
+  margin-top: 16px;
+}
 </style>
