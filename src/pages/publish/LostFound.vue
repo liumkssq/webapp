@@ -457,21 +457,74 @@ const getContactMethodLabel = (method) => {
   return found ? found.label : ''
 }
 
-// 添加图片
-const addImage = () => {
-  // 在实际应用中，这里应该调用文件选择器
+// 修改addImage方法
+const addImage = async () => {
+  // 检查图片数量限制
   if (lostFoundForm.images.length >= 4) {
     showToast('最多上传4张图片')
     return
   }
   
-  // 模拟上传图片
-  const mockImage = {
-    id: Date.now(),
-    url: `https://picsum.photos/300/200?random=${Math.floor(Math.random() * 1000)}`
-  }
+  // 创建文件输入元素
+  const fileInput = document.createElement('input')
+  fileInput.type = 'file'
+  fileInput.accept = 'image/*'
+  fileInput.style.display = 'none'
+  document.body.appendChild(fileInput)
   
-  lostFoundForm.images.push(mockImage)
+  // 监听文件选择事件
+  fileInput.addEventListener('change', async (event) => {
+    try {
+      const file = event.target.files[0]
+      if (!file) {
+        document.body.removeChild(fileInput)
+        return
+      }
+      
+      // 验证文件类型和大小
+      if (!file.type.includes('image')) {
+        showToast('请选择图片文件')
+        document.body.removeChild(fileInput)
+        return
+      }
+      
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      if (file.size > maxSize) {
+        showToast('图片大小不能超过10MB')
+        document.body.removeChild(fileInput)
+        return
+      }
+      
+      // 显示上传中的提示
+      showToast('上传中...')
+      
+      // 更新导入上传方法
+      const { smartUploadImage } = await import('@/api/upload')
+      
+      // 上传图片到OSS
+      const result = await smartUploadImage(file, 'lostfound')
+      
+      // 添加图片到表单
+      if (result && result.url) {
+        lostFoundForm.images.push({
+          id: Date.now(),
+          url: result.url
+        })
+        showToast('上传成功')
+      } else {
+        showToast('上传失败，请重试')
+      }
+    } catch (error) {
+      console.error('图片上传出错:', error)
+      showToast('上传失败: ' + (error.message || '请重试'))
+    } finally {
+      // 移除文件输入元素
+      document.body.removeChild(fileInput)
+    }
+  })
+  
+  // 触发文件选择对话框
+  fileInput.click()
 }
 
 // 移除图片
@@ -480,32 +533,51 @@ const removeImage = (index) => {
 }
 
 // AI分析图片
-const analyzeImages = () => {
-  showToast('AI正在分析图片...')
+const analyzeImages = async () => {
+  if (lostFoundForm.images.length === 0) {
+    showToast('请先上传图片');
+    return;
+  }
+
+  showToast('AI正在分析图片...');
   
-  // 模拟等待时间，实际应用中应调用AI分析API
-  setTimeout(() => {
-    const descriptions = [
-      '这是一个蓝色的钱包，量身设计，有多个卡位和一个拾节部分。',
-      '这是一部白色iPhone手机，屏幕完好，右下角有一个小碰痕。',
-      '这是一副金属框架眼镜，圆形镜片，镜腿上有品牌标志。',
-      '这是一个黑色电脑包，带有肩带和多个功能口袋，拉链完好。'
-    ]
+  try {
+    // 导入AI图片分析函数
+    const { analyzeImages } = await import('@/utils/aiAssist');
     
-    // 根据图片数量随机生成分析结果
-    const analysisResult = lostFoundForm.images.map((_, i) => {
-      return descriptions[i % descriptions.length]
-    }).join('\n')
+    // 显示加载中状态
+    showImageAnalyzer.value = true;
     
-    // 将AI分析结果添加到物品描述中
-    if (lostFoundForm.description) {
-      lostFoundForm.description += '\n\nAI分析结果:\n' + analysisResult
-    } else {
-      lostFoundForm.description = 'AI分析结果:\n' + analysisResult
+    // 调用AI图片分析，传入图片数组、上下文类型和已有表单信息
+    const analysisResult = await analyzeImages(lostFoundForm.images, {
+      contextType: 'lostfound',
+      existingTitle: lostFoundForm.title,
+      existingDescription: lostFoundForm.description
+    });
+    
+    // 检查是否有错误
+    if (analysisResult.error) {
+      showToast('分析失败：' + analysisResult.error);
+      showImageAnalyzer.value = false;
+      return;
     }
     
-    showToast('AI分析完成')
-  }, 1500)
+    // 如果没有现有描述，可以直接应用分析结果
+    if (!lostFoundForm.description && analysisResult.description) {
+      lostFoundForm.description = analysisResult.description;
+    }
+    
+    // 如果没有标题，使用推荐标题
+    if (!lostFoundForm.title && analysisResult.title) {
+      lostFoundForm.title = analysisResult.title;
+    }
+    
+    showToast('AI分析完成');
+  } catch (error) {
+    console.error('AI图片分析出错:', error);
+    showToast('分析失败: ' + (error.message || '未知错误'));
+    showImageAnalyzer.value = false;
+  }
 }
 
 // 选择分类

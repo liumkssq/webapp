@@ -1,6 +1,4 @@
 import axios from 'axios'
-import { showToast } from 'vant'
-import router from '../router'
 
 // 创建axios实例
 const service = axios.create({
@@ -51,6 +49,27 @@ service.interceptors.request.use(
     const token = localStorage.getItem('token')
     if (token) {
       config.headers['Authorization'] = 'Bearer ' + token
+      // 确保token没有意外的空格
+      if (token.includes(' ')) {
+        console.warn('[请求] 令牌包含空格，可能导致认证问题')
+      }
+    } else {
+      console.warn(`[请求] ${config.url} 未提供认证令牌`)
+      // 除登录接口外，其他接口可能需要认证
+      if (!config.url.includes('/login') && !config.url.includes('/register')) {
+        console.error('[请求] 尝试在未认证状态下访问需要认证的接口')
+      }
+    }
+    
+    // 对DELETE请求特殊处理，确保包含请求体
+    if (config.method.toLowerCase() === 'delete' && !config.data) {
+      // 对于路径中包含ID的DELETE请求，自动添加ID到请求体
+      const urlParts = config.url.split('/')
+      const possibleId = urlParts[urlParts.length - 1]
+      if (possibleId && !isNaN(possibleId)) {
+        console.log(`[请求] DELETE请求添加ID到请求体: ${possibleId}`)
+        config.data = { id: possibleId }
+      }
     }
     
     // 打印请求信息
@@ -185,11 +204,31 @@ service.put = (url, data, config = {}) => {
 
 // 封装DELETE请求
 service.delete = (url, params, config = {}) => {
+  // 如果第二个参数是对象但不是config对象，则视为data
+  let requestConfig = config;
+  let requestParams = params;
+  let requestData = null;
+  
+  // 检查是否传入了data作为第二个参数
+  if (params && typeof params === 'object' && !params.headers && !params.params) {
+    requestData = params;
+    requestParams = null;
+  }
+  
+  // 支持(url, params, data, config)格式调用
+  if (arguments.length >= 3 && typeof arguments[2] === 'object') {
+    if (typeof config === 'object') {
+      requestConfig = arguments[3] || {};
+      requestData = arguments[2];
+    }
+  }
+  
   return service({
     url,
     method: 'delete',
-    params,
-    ...config
+    params: requestParams,
+    data: requestData,
+    ...requestConfig
   })
 }
 

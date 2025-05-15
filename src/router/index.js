@@ -301,6 +301,54 @@ const routes = [
     })
   },
   
+  // 支付相关路由
+  {
+    path: '/payment/status',
+    name: 'PaymentStatus',
+    component: () => import('../pages/payment/Status.vue'),
+    props: route => ({ 
+      paySn: route.query.paySn,
+      orderSn: route.query.orderSn
+    }),
+    meta: {
+      requiresAuth: false, // 修改为false，允许未登录用户访问支付状态页面
+      title: '支付状态查询'
+    }
+  },
+  {
+    path: '/payment/result',
+    name: 'PaymentResult',
+    component: () => import('../pages/payment/Result.vue'),
+    props: route => ({
+      status: route.query.status,
+      orderSn: route.query.orderSn,
+      paySn: route.query.paySn || route.query.out_trade_no,
+      // 支付宝返回的参数
+      out_trade_no: route.query.out_trade_no,
+      trade_no: route.query.trade_no,
+      total_amount: route.query.total_amount,
+      seller_id: route.query.seller_id,
+      app_id: route.query.app_id,
+      sign: route.query.sign
+    }),
+    meta: {
+      requiresAuth: false, // 支付结果页不需要登录
+      title: '支付结果'
+    }
+  },
+  // 支付宝回调路径
+  {
+    path: '/pay/result',
+    redirect: to => {
+      console.log('重定向支付回调，原始参数:', to.query);
+      // 保留所有查询参数
+      return { 
+        path: '/payment/result',
+        query: to.query
+      };
+    }
+  },
+  
   // 用户相关路由
   {
     path: '/user/me',
@@ -542,6 +590,37 @@ const routes = [
     name: 'Drafts',
     component: () => import('../pages/NotFound.vue'), // Placeholder
     meta: { requiresAuth: true, title: '草稿箱' }
+  },
+  
+  // 添加关于我们和联系客服页面路由
+  {
+    path: '/about',
+    name: 'About',
+    component: () => import('../pages/NotFound.vue'), // 临时使用NotFound
+    meta: { title: '关于我们' }
+  },
+  
+  // 为支付宝回调创建的别名路由
+  {
+    path: '/pay/result',
+    name: 'AlipayReturnRedirect',
+    component: () => import('../pages/payment/Status.vue'),
+    props: route => ({
+      // 从支付宝回调参数中提取流水号
+      paySn: route.query.out_trade_no,
+      orderSn: route.query.out_trade_no,
+      // 不传递status，让组件自己查询最新支付状态
+    }),
+    meta: {
+      requiresAuth: false,
+      title: '支付状态查询'
+    }
+  },
+  {
+    path: '/customer-service',
+    name: 'CustomerService',
+    component: () => import('../pages/NotFound.vue'), // 临时使用NotFound
+    meta: { title: '联系客服' }
   },
   
   // 404页面 (Must be last)

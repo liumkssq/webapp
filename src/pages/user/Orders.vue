@@ -47,15 +47,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
 import { useUserStore } from '@/store/user';
-import { showToast, showDialog } from 'vant';
-import { getUserOrders, cancelOrder, confirmOrderReceipt } from '@/api/order';
+import { showDialog, showToast } from 'vant';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+// 已注释API导入
+// import { getUserOrders, cancelOrder, confirmOrderReceipt } from '@/api/order';
 
 // 导入组件
-import HeaderNav from '@/components/HeaderNav.vue';
 import FooterNav from '@/components/FooterNav.vue';
+import HeaderNav from '@/components/HeaderNav.vue';
 import OrderCard from '@/components/order/OrderCard.vue';
 
 const router = useRouter();
@@ -117,6 +118,190 @@ const getStatusFromQuery = (type) => {
         default: return null;
     }
 };
+
+// 创建模拟订单数据
+const mockOrderList = [
+  {
+    id: 1,
+    orderNo: "ORD20250512001",
+    status: 1, // 待付款
+    createTime: "2025-05-12 10:30:00",
+    paymentMethod: "ALIPAY",
+    items: [
+      {
+        id: 101,
+        name: "二手书籍《算法导论》",
+        description: "九成新，有少量笔记",
+        price: 45.00,
+        quantity: 1,
+        image: "https://img.picui.cn/free/2025/05/12/order-item-1.jpg"
+      }
+    ],
+    totalAmount: 45.00,
+    freight: 5.00,
+    actualAmount: 50.00
+  },
+  {
+    id: 2,
+    orderNo: "ORD20250511002",
+    status: 2, // 待发货
+    createTime: "2025-05-11 15:20:00",
+    payTime: "2025-05-11 15:25:00",
+    paymentMethod: "WECHAT",
+    items: [
+      {
+        id: 102,
+        name: "二手笔记本电脑",
+        description: "戴尔XPS 13，2023年款，i5处理器",
+        price: 3200.00,
+        quantity: 1,
+        image: "https://img.picui.cn/free/2025/05/11/order-item-2.jpg"
+      }
+    ],
+    totalAmount: 3200.00,
+    freight: 0.00,
+    actualAmount: 3200.00
+  },
+  {
+    id: 3,
+    orderNo: "ORD20250510003",
+    status: 3, // 待收货
+    createTime: "2025-05-10 09:15:00",
+    payTime: "2025-05-10 09:20:00",
+    paymentMethod: "CAMPUS_CARD",
+    items: [
+      {
+        id: 103,
+        name: "自行车",
+        description: "捷安特山地车，骑行一年，无明显磨损",
+        price: 650.00,
+        quantity: 1,
+        image: "https://img.picui.cn/free/2025/05/10/order-item-3.jpg"
+      }
+    ],
+    totalAmount: 650.00,
+    freight: 0.00,
+    actualAmount: 650.00
+  },
+  {
+    id: 4,
+    orderNo: "ORD20250509004",
+    status: 4, // 已完成
+    createTime: "2025-05-09 14:30:00",
+    payTime: "2025-05-09 14:35:00",
+    paymentMethod: "ALIPAY",
+    items: [
+      {
+        id: 104,
+        name: "耳机",
+        description: "AirPods Pro 2代，购买3个月",
+        price: 850.00,
+        quantity: 1,
+        image: "https://img.picui.cn/free/2025/05/09/order-item-4.jpg"
+      }
+    ],
+    totalAmount: 850.00,
+    freight: 5.00,
+    actualAmount: 855.00
+  },
+  {
+    id: 5,
+    orderNo: "ORD20250508005",
+    status: 5, // 已取消
+    createTime: "2025-05-08 11:40:00",
+    paymentMethod: "WECHAT",
+    items: [
+      {
+        id: 105,
+        name: "电动滑板车",
+        description: "小米滑板车1S，骑行约500公里",
+        price: 1200.00,
+        quantity: 1,
+        image: "https://img.picui.cn/free/2025/05/08/order-item-5.jpg"
+      }
+    ],
+    totalAmount: 1200.00,
+    freight: 0.00,
+    actualAmount: 1200.00
+  }
+];
+
+// 模拟API调用
+const getUserOrders = async (params) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 700))
+  
+  return {
+    code: 200,
+    data: {
+      list: [...mockOrderList],
+      total: mockOrderList.length,
+      page: params.page || 1,
+      pageSize: params.pageSize || 10
+    },
+    message: '获取成功'
+  }
+}
+
+const cancelOrder = async (orderId) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 检查订单是否存在
+  const orderIndex = mockOrderList.findIndex(o => o.id === Number(orderId))
+  if (orderIndex === -1) {
+    return {
+      code: 404,
+      message: '订单不存在'
+    }
+  }
+  
+  // 检查订单状态
+  if (mockOrderList[orderIndex].status !== 1) {
+    return {
+      code: 400,
+      message: '只有待付款订单才可以取消'
+    }
+  }
+  
+  // 更新订单状态
+  mockOrderList[orderIndex].status = 5
+  
+  return {
+    code: 200,
+    message: '取消成功'
+  }
+}
+
+const confirmOrderReceipt = async (orderId) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 检查订单是否存在
+  const orderIndex = mockOrderList.findIndex(o => o.id === Number(orderId))
+  if (orderIndex === -1) {
+    return {
+      code: 404,
+      message: '订单不存在'
+    }
+  }
+  
+  // 检查订单状态
+  if (mockOrderList[orderIndex].status !== 3) {
+    return {
+      code: 400,
+      message: '只有待收货订单才可以确认收货'
+    }
+  }
+  
+  // 更新订单状态
+  mockOrderList[orderIndex].status = 4
+  
+  return {
+    code: 200,
+    message: '确认收货成功'
+  }
+}
 
 const fetchUserOrders = async () => {
   loading.value = true;

@@ -27,17 +27,41 @@
       @delete="showDeleteConfirm"
     />
     
+    <!-- 快捷用语区域 -->
+    <div v-if="showQuickReplies" class="quick-replies-container">
+      <div class="quick-replies-header">
+        <span>常用回复</span>
+        <van-icon name="cross" @click="toggleQuickReplies" />
+      </div>
+      <div class="quick-replies-list">
+        <div 
+          v-for="(reply, index) in quickReplies" 
+          :key="index" 
+          class="quick-reply-item"
+          @click="sendQuickReply(reply)"
+        >
+          {{ reply }}
+        </div>
+      </div>
+    </div>
+    
     <!-- 输入框 -->
-    <chat-input
-      :loading-image="loadingImage"
-      :loading-voice="loadingVoice"
-      @send-text="sendTextMessage"
-      @send-image="sendImageMessage"
-      @send-voice="sendVoiceMessage"
-      @send-location="sendLocationMessage"
-      @send-product="sendProductMessage"
-      @send-emoji="sendEmojiMessage"
-    />
+    <div class="input-wrapper">
+      <div v-if="!showQuickReplies" class="quick-reply-button" @click="toggleQuickReplies">
+        <van-icon name="comment-o" />
+        <span>快捷回复</span>
+      </div>
+      <chat-input
+        :loading-image="loadingImage"
+        :loading-voice="loadingVoice"
+        @send-text="sendTextMessage"
+        @send-image="sendImageMessage"
+        @send-voice="sendVoiceMessage"
+        @send-location="sendLocationMessage"
+        @send-product="sendProductMessage"
+        @send-emoji="sendEmojiMessage"
+      />
+    </div>
     
     <!-- 操作菜单 -->
     <van-action-sheet
@@ -69,22 +93,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { showToast, showLoadingToast, closeToast } from "vant";
-import { useIntervalFn } from "@vueuse/core";
-import MessageList from "@/components/im/MessageList.vue";
-import ChatInput from "@/components/im/ChatInput.vue";
 import {
-  getConversationDetail,
-  getChatLog,
-  sendTextMessage as apiSendText,
-  sendImageMessage as apiSendImage,
-  sendVoiceMessage as apiSendVoice,
-  markAsRead,
+  clearMessages as apiClearMessages,
   deleteMessage as apiDeleteMessage,
-  clearMessages as apiClearMessages
+  sendImageMessage as apiSendImage,
+  sendTextMessage as apiSendText,
+  getChatLog,
+  getConversationDetail,
+  markAsRead
 } from "@/api/im";
+import ChatInput from "@/components/im/ChatInput.vue";
+import MessageList from "@/components/im/MessageList.vue";
+import { useIntervalFn } from "@vueuse/core";
+import { closeToast, showLoadingToast, showToast } from "vant";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
 const router = useRouter();
@@ -108,6 +131,9 @@ const messageToDelete = ref(null);
 const showActions = ref(false);
 const showDeleteDialog = ref(false);
 const showClearDialog = ref(false);
+const showQuickReplies = ref(false);
+const quickReplies = ref([]);
+const isKeyboardVisible = ref(false);
 
 // 操作菜单配置
 const actions = [
@@ -117,6 +143,41 @@ const actions = [
 // 导航返回
 const onClickLeft = () => {
   router.back();
+};
+
+// 监听键盘显示/隐藏事件
+const setupKeyboardEvents = () => {
+  // 在移动设备上，可以通过窗口大小变化来检测键盘显示/隐藏
+  const handleResize = () => {
+    const windowHeight = window.innerHeight;
+    // 窗口高度明显减少时，可能是键盘弹出
+    if (windowHeight < window.outerHeight * 0.8) {
+      isKeyboardVisible.value = true;
+      // 键盘弹出时隐藏快捷用语
+      showQuickReplies.value = false;
+    } else {
+      isKeyboardVisible.value = false;
+    }
+  };
+  
+  window.addEventListener('resize', handleResize);
+  
+  // 清理函数
+  return () => {
+    window.removeEventListener('resize', handleResize);
+  };
+};
+
+// 切换快捷用语显示状态
+const toggleQuickReplies = () => {
+  showQuickReplies.value = !showQuickReplies.value;
+  
+  // 如果快捷用语被打开，滚动到页面底部
+  if (showQuickReplies.value) {
+    nextTick(() => {
+      messageListRef.value?.scrollToBottom();
+    });
+  }
 };
 
 // 加载会话详情
@@ -487,12 +548,86 @@ const { pause: pauseRefresh } = useIntervalFn(() => {
   }
 }, 10000);
 
+// 初始化快捷用语数据
+const initQuickReplies = () => {
+  // 基础快捷用语 - 所有场景通用
+  const baseReplies = [
+    "你好！请问还在吗？",
+    "好的，没问题",
+    "稍等一下",
+    "已收到，谢谢"
+  ];
+  
+  // 根据会话类型设置不同的快捷用语
+  if (conversation.value?.targetInfo?.type === 'merchant' || conversation.value?.targetInfo?.isSeller) {
+    // 和卖家聊天的快捷用语 - 校园交易场景
+    quickReplies.value = [
+      ...baseReplies,
+      "您好，这个商品还有库存吗？",
+      "可以便宜一点吗？我是学生党",
+      "什么时候方便交易呢？",
+      "可以在哪个教学楼或宿舍附近交易？",
+      "能发一下商品的实物照片吗？",
+      "有什么优惠活动吗？",
+      "可以预留到明天下课后吗？",
+      "可以帮我送货到宿舍吗？",
+      "请问商品的使用情况怎么样？",
+      "可以当面验货吗？"
+    ];
+  } else if (conversation.value?.targetInfo?.type === 'buyer' || conversation.value?.targetInfo?.isBuyer) {
+    // 和买家聊天的快捷用语
+    quickReplies.value = [
+      ...baseReplies,
+      "商品还在售，随时可以交易",
+      "可以，这个价格可以接受",
+      "需要送货上门吗？",
+      "我有空的时间是：上午10点-12点，下午2点-5点",
+      "我在图书馆/食堂/宿舍区附近，你选个地方吧",
+      "已经为您预留了，什么时候方便取货？",
+      "我的微信/支付宝是：（填写后发送）",
+      "你在哪个宿舍楼？我可以送过去",
+      "这个商品情况很好，放心购买"
+    ];
+  } else {
+    // 普通聊天的快捷用语
+    quickReplies.value = [
+      ...baseReplies,
+      "在吗？有空聊聊吗",
+      "晚点联系你",
+      "谢谢你的帮助！",
+      "下午有空吗？",
+      "要不要一起去吃饭？",
+      "你在哪个区/宿舍？",
+      "需要帮忙吗？",
+      "周末有什么计划？",
+      "考试准备得怎么样了？"
+    ];
+  }
+};
+
+// 发送快捷用语
+const sendQuickReply = (content) => {
+  sendTextMessage(content);
+  showToast({
+    message: "已发送",
+    icon: "success",
+    position: "bottom"
+  });
+  showQuickReplies.value = false;
+};
+
 // 组件挂载
 onMounted(async () => {
+  // 设置键盘事件监听
+  const cleanupKeyboardEvents = setupKeyboardEvents();
+  
   // 加载会话详情和初始消息
   if (conversationId.value) {
     await fetchConversation();
     await fetchMessages();
+    
+    // 初始化快捷用语
+    initQuickReplies();
     
     // 标记为已读
     try {
@@ -505,11 +640,12 @@ onMounted(async () => {
     showToast("无效的会话ID");
     setTimeout(() => router.push("/im/conversations"), 1500);
   }
-});
-
-// 组件卸载
-onUnmounted(() => {
-  pauseRefresh();
+  
+  // 组件卸载时清理事件
+  onUnmounted(() => {
+    pauseRefresh();
+    cleanupKeyboardEvents();
+  });
 });
 </script>
 
@@ -519,10 +655,88 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background-color: #f5f5f5;
+  position: relative;
 }
 
 .message-list {
   flex: 1;
   overflow: hidden;
+  padding-bottom: 60px; /* 为输入框留出空间 */
+}
+
+.quick-replies-container {
+  position: fixed;
+  bottom: 60px; /* 输入框的高度 */
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  max-height: 40vh;
+  overflow-y: auto;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.quick-replies-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #333;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.quick-replies-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-reply-item {
+  padding: 8px 12px;
+  background-color: #f0f9ff;
+  border: 1px solid #e0f2fe;
+  border-radius: 16px;
+  font-size: 14px;
+  color: #0369a1;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.quick-reply-item:active {
+  background-color: #e0f2fe;
+  transform: scale(0.98);
+}
+
+.input-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  z-index: 11;
+}
+
+.quick-reply-button {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background-color: #f0f9ff;
+  border-radius: 16px;
+  color: #0369a1;
+  font-size: 14px;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.quick-reply-button .van-icon {
+  margin-right: 4px;
+  font-size: 16px;
 }
 </style>

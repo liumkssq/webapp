@@ -38,9 +38,9 @@
     </div>
     
     <!-- 商品列表 -->
-    <div class="product-grid" v-if="products.length > 0">
+    <div class="product-grid" v-if="sortedProducts.length > 0">
       <div 
-        v-for="product in products" 
+        v-for="product in sortedProducts" 
         :key="product.id" 
         class="product-card"
         @click="goToProductDetail(product.id)"
@@ -80,14 +80,14 @@
     </div>
     
     <!-- 加载中 -->
-    <div class="loading-container" v-if="loading && !products.length">
+    <div class="loading-container" v-if="loading && !sortedProducts.length">
       <div class="loading-spinner"></div>
       <div class="loading-text">加载中...</div>
     </div>
     
     <!-- 空状态 -->
     <empty-state
-      v-if="!loading && !products.length"
+      v-if="!loading && !sortedProducts.length"
       icon="shopping_bag"
       :text="emptyText"
       :action-text="showEmptyAction ? emptyActionText : ''"
@@ -95,26 +95,45 @@
     />
     
     <!-- 上拉加载更多 -->
-    <div class="load-more" v-if="products.length > 0 && hasMore">
+    <div class="load-more" v-if="sortedProducts.length > 0 && hasMore">
       <div class="loading-spinner small" v-if="loadingMore"></div>
       <div class="load-more-text" v-else>上拉加载更多</div>
     </div>
     
     <!-- 没有更多数据 -->
-    <div class="no-more" v-if="products.length > 0 && !hasMore && !loading">
+    <div class="no-more" v-if="sortedProducts.length > 0 && !hasMore && !loading">
       已经到底了~
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getProductList } from '@/api/product'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 // 组件props
 const props = defineProps({
+  // 商品数据，直接由父组件传入
+  products: {
+    type: Array,
+    default: () => []
+  },
+  // 是否有更多数据可加载
+  hasMore: {
+    type: Boolean,
+    default: false
+  },
+  // 是否正在加载
+  loading: {
+    type: Boolean,
+    default: false
+  },
+  // 是否正在加载更多
+  loadingMore: {
+    type: Boolean,
+    default: false
+  },
   // 分类ID，不传则获取全部
   categoryId: {
     type: [String, Number],
@@ -153,16 +172,11 @@ const props = defineProps({
 })
 
 // 组件事件
-const emit = defineEmits(['refresh', 'emptyAction'])
+const emit = defineEmits(['refresh', 'emptyAction', 'filterChange'])
 
 const router = useRouter()
 
-// 状态变量
-const loading = ref(false)
-const loadingMore = ref(false)
-const products = ref([])
-const page = ref(1)
-const hasMore = ref(true)
+// 状态变量 - 移除了loading, products, page, hasMore相关的本地状态
 const activeFilters = reactive({
   sort: 'latest',    // 排序: latest-最新, price_asc-价格低到高, price_desc-价格高到低
   price: 'all',      // 价格: all-全部, under50, 50_100, 100_500, above500
@@ -260,293 +274,18 @@ const selectFilterOption = (value) => {
   // 设置选中的值
   activeFilters[showFilterMenuType.value] = value;
   
-  // 重置页码并重新获取数据
-  page.value = 1;
-  products.value = [];
-  fetchProducts();
+  console.log(`[ProductList.vue] Filter selected: ${showFilterMenuType.value} = ${value}`);
+  
+  // 特殊处理condition筛选
+  if (showFilterMenuType.value === 'condition') {
+    console.log(`[ProductList.vue] Condition filter changed to: ${value}`);
+  }
+  
+  // 向父组件发送筛选改变事件
+  emit('filterChange', { ...activeFilters });
   
   // 关闭筛选菜单
   closeFilterMenu();
-};
-
-// 获取商品列表
-const fetchProducts = async (isLoadMore = false) => {
-  if (isLoadMore) {
-    loadingMore.value = true;
-  } else {
-    loading.value = true;
-  }
-  
-  try {
-    // 构建查询参数
-    const params = {
-      page: page.value,
-      limit: props.pageSize
-    };
-    
-    // 添加分类ID
-    if (props.categoryId && props.categoryId !== 'all') {
-      params.category = props.categoryId;
-    }
-    
-    // 添加用户ID
-    if (props.userId) {
-      params.userId = props.userId;
-    }
-    
-    // 添加排序参数
-    if (activeFilters.sort !== 'latest') {
-      params.sort = activeFilters.sort;
-    }
-    
-    // 添加价格范围
-    if (activeFilters.price !== 'all') {
-      // 设置价格范围
-      if (activeFilters.price === 'under50') {
-        params.maxPrice = 50;
-      } else if (activeFilters.price === '50_100') {
-        params.minPrice = 50;
-        params.maxPrice = 100;
-      } else if (activeFilters.price === '100_500') {
-        params.minPrice = 100;
-        params.maxPrice = 500;
-      } else if (activeFilters.price === 'above500') {
-        params.minPrice = 500;
-      }
-    }
-    
-    // 添加成色条件
-    if (activeFilters.condition !== 'all') {
-      params.condition = activeFilters.condition;
-    }
-    
-    console.log('[ProductList] 开始请求商品列表，参数:', params);
-    
-    // 直接通过fetch尝试获取，以便查看原始数据结构
-    try {
-      const fetchResponse = await fetch(`/api/product/list?page=${params.page}&limit=${params.limit}${props.categoryId && props.categoryId !== 'all' ? '&category=' + props.categoryId : ''}`);
-      const fetchData = await fetchResponse.json();
-      console.log('[ProductList] 直接fetch获取的原始数据:', fetchData);
-    } catch (fetchError) {
-      console.error('[ProductList] 直接fetch获取失败:', fetchError);
-    }
-    
-    const response = await getProductList(params);
-    console.log('[ProductList] 商品列表API响应原始数据:', response);
-    
-    // 处理响应数据
-    if (response) {
-      console.log('[ProductList] 响应状态码:', response.code);
-      
-      // 检查响应的各种可能格式
-      if (response.code === 200 && response.data) {
-        console.log('[ProductList] 标准响应格式，处理list数据');
-        
-        // 检查是否有list字段
-        if (response.data.list && Array.isArray(response.data.list)) {
-          handleProductData(response.data.list, isLoadMore);
-          
-          // 更新分页信息
-          hasMore.value = products.value.length < (response.data.total || 0);
-        } else if (Array.isArray(response.data)) {
-          // 直接是数组的情况
-          console.log('[ProductList] 响应数据是数组格式');
-          handleProductData(response.data, isLoadMore);
-          
-          // 假设还有更多数据
-          hasMore.value = response.data.length >= props.pageSize;
-        } else {
-          console.warn('[ProductList] 响应数据格式异常:', response.data);
-      if (isLoadMore) {
-            // 加载更多时不清空现有数据
-          } else {
-            products.value = [];
-          }
-        }
-      } else if (Array.isArray(response)) {
-        // 直接返回数组的情况
-        console.log('[ProductList] 直接返回数组格式');
-        handleProductData(response, isLoadMore);
-        
-        // 假设还有更多数据
-        hasMore.value = response.length >= props.pageSize;
-      } else {
-        console.error('[ProductList] 无法识别的响应格式:', response);
-        if (!isLoadMore) {
-          products.value = [];
-        }
-      }
-    } else {
-      console.error('[ProductList] 获取商品列表失败: 空响应');
-      if (!isLoadMore) {
-        products.value = [];
-      }
-    }
-  } catch (error) {
-    console.error('[ProductList] 获取商品列表异常:', error);
-    if (!isLoadMore) {
-      products.value = [];
-    }
-  } finally {
-    loading.value = false;
-    loadingMore.value = false;
-    
-    // 输出最终产品数据状态
-    console.log('[ProductList] 最终products数据状态:', {
-      length: products.value.length,
-      hasMore: hasMore.value,
-      firstItem: products.value[0] ? {
-        id: products.value[0].id,
-        title: products.value[0].title,
-        images: products.value[0].images,
-        processedImage: getProductImage(products.value[0])
-      } : null
-    });
-    
-    // 打印出所有产品以便调试
-    products.value.forEach((product, index) => {
-      console.log(`[ProductList] 产品[${index}]:`, {
-        id: product.id,
-        title: product.title,
-        images: product.images,
-        processedImage: getProductImage(product)
-      });
-    });
-  }
-};
-
-// 处理商品数据
-const handleProductData = (productsData, isLoadMore) => {
-  if (!Array.isArray(productsData)) {
-    console.error('[ProductList] 处理商品数据失败: 不是数组', productsData);
-    return;
-  }
-  
-  console.log(`[ProductList] 处理${productsData.length}个商品数据`);
-  
-  // 数据转换和处理
-  const newProducts = productsData.map(product => {
-    console.log(`[ProductList] 处理商品[${product.id}]:`, product.title);
-    
-    // 创建统一的卖家信息
-    const seller = product.seller || {
-      id: product.sellerId || '未知ID',
-      name: product.sellerName || '未知用户',
-      avatar: product.sellerAvatar || '/avatar-placeholder.png'
-    };
-    
-    // 处理商品时间
-    const createTime = product.createdAt || product.createTime || new Date().toISOString();
-    
-    // 确保价格是数字并处理
-    const price = typeof product.price === 'number' ? product.price : 
-                   (parseFloat(product.price) || 0);
-    
-    // 处理图片数据 - 针对特定格式的优化
-    let processedImages = [];
-    
-    try {
-      // 先检查是否有图片数据
-      if (product.images) {
-        // 如果是数组
-        if (Array.isArray(product.images)) {
-          // 处理数组中的每个元素
-          for (const img of product.images) {
-            if (typeof img === 'string') {
-              // 特殊处理JSON字符串格式的图片
-              if (img.startsWith('[') && img.includes('http')) {
-                try {
-                  // 尝试直接解析
-                  const parsed = JSON.parse(img);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    console.log(`[ProductList] 成功解析商品[${product.id}]的JSON图片:`, parsed[0]);
-                    processedImages.push(parsed[0]);
-                  }
-                } catch (e) {
-                  // 解析失败，尝试清理字符串后再解析
-                  console.error(`[ProductList] 解析商品[${product.id}]的JSON图片失败, 尝试清理:`, e);
-                  try {
-                    // 手动提取URL
-                    const urlMatch = img.match(/https?:\/\/[^"\\]+/g);
-                    if (urlMatch && urlMatch.length > 0) {
-                      console.log(`[ProductList] 手动提取商品[${product.id}]的图片URL:`, urlMatch[0]);
-                      processedImages.push(urlMatch[0]);
-                    } else {
-                      // 如果无法提取，直接使用整个字符串
-                      processedImages.push(img);
-                    }
-                  } catch (innerError) {
-                    console.error(`[ProductList] 手动提取商品[${product.id}]的图片URL失败:`, innerError);
-                    processedImages.push(img);
-                  }
-                }
-              } else {
-                // 普通URL字符串
-                processedImages.push(img);
-              }
-            } else if (img) {
-              // 非字符串但有效值
-              processedImages.push(img);
-            }
-          }
-        } 
-        // 如果是字符串
-        else if (typeof product.images === 'string') {
-          if (product.images.startsWith('[')) {
-            try {
-              const parsed = JSON.parse(product.images);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                processedImages = parsed;
-              } else {
-                processedImages = [product.images];
-              }
-            } catch (e) {
-              processedImages = [product.images];
-            }
-          } else {
-            processedImages = [product.images];
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`[ProductList] 处理商品[${product.id}]图片时出错:`, error);
-    }
-    
-    // 如果处理后仍然没有图片，使用默认图片
-    if (!processedImages || processedImages.length === 0) {
-      processedImages = [`https://picsum.photos/id/${(parseInt(product.id) % 30) + 1}/400/400`];
-    }
-    
-    console.log(`[ProductList] 商品[${product.id}]最终处理后的图片:`, processedImages[0]);
-    
-    return {
-      ...product,
-      seller,
-      createTime,
-      price,
-      images: processedImages,
-      // 确保状态字段统一
-      status: product.status === '\u0000' ? '在售' : (product.status || '在售')
-    };
-  });
-  
-  // 更新商品列表
-  if (isLoadMore) {
-    products.value = [...products.value, ...newProducts];
-  } else {
-    products.value = newProducts;
-  }
-  
-  // 如果有数据，且还有更多，自动增加页码
-  if (newProducts.length > 0 && hasMore.value) {
-    page.value += 1;
-  }
-  
-  // 触发刷新事件
-  emit('refresh', {
-    total: products.value.length + (hasMore.value ? '以上' : ''),
-    current: products.value.length
-  });
 };
 
 // 优化获取商品图片函数，添加缓存避免重复处理
@@ -670,103 +409,67 @@ const handleEmptyAction = () => {
   emit('emptyAction')
 }
 
-// 加载更多数据
-const loadMore = () => {
-  if (loading.value || loadingMore.value || !hasMore.value) return
-  
-  page.value++
-  fetchProducts(true)
-}
-
-// 刷新列表
+// 刷新列表 - 触发父组件刷新
 const refresh = () => {
-  page.value = 1
-  products.value = []
-  hasMore.value = true
-  fetchProducts()
+  emit('refresh')
 }
 
-// 监听分类和用户变化，重新获取数据
-watch(() => props.categoryId, () => {
-  page.value = 1
-  products.value = []
-  hasMore.value = true
-  fetchProducts()
-})
-
-watch(() => props.userId, () => {
-  page.value = 1
-  products.value = []
-  hasMore.value = true
-  fetchProducts()
-})
-
-// 上拉加载更多处理
-let scrollListener = null
-const handleScroll = () => {
-  const scrollTop = document.documentElement.scrollTop || document.body.scrollTop
-  const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight
-  const clientHeight = document.documentElement.clientHeight || window.innerHeight
+// 优化商品排序时的性能 - 现在直接使用传入的props.products
+const sortedProducts = computed(() => {
+  console.time('产品排序耗时');
   
-  // 距离底部100px时加载更多
-  if (scrollTop + clientHeight >= scrollHeight - 100) {
-    loadMore()
+  try {
+    if (!props.products || props.products.length === 0) {
+      console.timeEnd('产品排序耗时');
+      return [];
+    }
+    
+    // 使用Array.from创建浅拷贝而不是深拷贝，提高性能
+    let result = Array.from(props.products);
+    
+    // 只在非服务器排序的情况下进行客户端排序
+    // 当activeFilters.sort为'price_asc'或'price_desc'时，后端已经排序，无需再次客户端排序
+    if (activeFilters.sort === 'latest' || 
+        (activeFilters.sort !== 'price_asc' && 
+         activeFilters.sort !== 'price_desc' && 
+         activeFilters.sort !== 'popular')) {
+      // 默认不做额外处理，使用后端排序
+      console.log('[ProductList.vue] Using server-side sorting');
+    } else {
+      // 执行客户端排序
+      console.log(`[ProductList.vue] Applying client-side sorting for: ${activeFilters.sort}`);
+      
+    if (activeFilters.sort === 'price_asc') {
+      result.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
+    } else if (activeFilters.sort === 'price_desc') {
+      result.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
+      } else if (activeFilters.sort === 'popular') {
+        // 按照受欢迎程度排序，例如按点赞数或收藏数
+        result.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+      }
   }
-}
+  
+  console.timeEnd('产品排序耗时');
+  return result;
+  } catch (error) {
+    console.error('排序过程中发生错误:', error);
+    console.timeEnd('产品排序耗时');
+    return props.products || [];
+  }
+});
 
 onMounted(() => {
-  fetchProducts()
-  
-  // 添加滚动监听
-  scrollListener = window.addEventListener('scroll', handleScroll)
+  // 移除了自动数据获取和滚动监听
 })
 
 onUnmounted(() => {
-  // 移除滚动监听
-  if (scrollListener) {
-    window.removeEventListener('scroll', handleScroll)
-  }
+  // 移除了滚动监听清理
 })
 
 // 暴露方法给父组件
 defineExpose({
   refresh
 })
-
-// 优化商品排序时的性能
-const sortedProducts = computed(() => {
-  console.time('产品排序耗时');
-  // 先深拷贝一份，避免修改原始数据
-  let result = [];
-  
-  try {
-    if (!products.value || products.value.length === 0) {
-      console.timeEnd('产品排序耗时');
-      return [];
-    }
-    
-    // 使用Array.from创建浅拷贝而不是深拷贝，提高性能
-    result = Array.from(products.value);
-    
-    // 根据排序条件排序
-    if (activeFilters.sort === 'price_asc') {
-      result.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
-    } else if (activeFilters.sort === 'price_desc') {
-      result.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
-    } else if (activeFilters.sort === 'dateDesc') {
-      result.sort((a, b) => {
-        const dateA = a.createTime ? new Date(a.createTime).getTime() : 0;
-        const dateB = b.createTime ? new Date(b.createTime).getTime() : 0;
-        return dateB - dateA;
-      });
-    }
-  } catch (error) {
-    console.error('排序过程中发生错误:', error);
-  }
-  
-  console.timeEnd('产品排序耗时');
-  return result;
-});
 </script>
 
 <style scoped>

@@ -34,15 +34,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { deleteProduct as apiDeleteProduct, getUserProducts, updateProduct } from '@/api/product';
 import { useUserStore } from '@/store/user';
-import { showToast, showDialog, showLoadingToast, closeToast } from 'vant';
-import { getUserProducts, updateProduct, deleteProduct as apiDeleteProduct } from '@/api/product';
+import { closeToast, showDialog, showLoadingToast, showToast } from 'vant';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 // 导入组件
-import HeaderNav from '@/components/HeaderNav.vue';
 import FooterNav from '@/components/FooterNav.vue';
+import HeaderNav from '@/components/HeaderNav.vue';
 import ProductCard from '@/components/cards/ProductCard.vue';
 
 const router = useRouter();
@@ -52,6 +52,7 @@ const products = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const productToDelete = ref(null);
+const showDeleteDialog = ref(false);
 
 onMounted(() => {
   if (!userStore.isLoggedIn) {
@@ -76,13 +77,17 @@ const fetchUserProducts = async () => {
       }
     }
     console.log(`Fetching products for user ID: ${userStore.userInfo.id}`);
-    const response = await getUserProducts({ publisherId: userStore.userInfo.id, page: 1, pageSize: 50 });
+    const response = await getUserProducts(userStore.userInfo.id);
+    console.log('getUserProducts原始响应:', response);
 
-    if (response.code === 200) {
-      products.value = response.data?.list || [];
+    // 尝试处理不同的响应格式
+    if (response) {
+      // 直接提取列表数据
+      const productList = response.list || response.data?.list || [];
+      products.value = productList;
       console.log('用户商品列表:', products.value);
     } else {
-      throw new Error(response.message || '未能加载商品列表');
+      throw new Error(response?.message || '未能加载商品列表');
     }
   } catch (err) {
     console.error("获取用户商品失败:", err);
@@ -107,10 +112,17 @@ const confirmDeleteProduct = (product) => {
   productToDelete.value = product;
   showDialog({
     title: '删除商品',
-    message: `确定要删除商品 "${product.name || '此商品'}" 吗？`,
+    message: `确定要删除商品 "${product.title || '此商品'}" 吗？`,
     showCancelButton: true,
-  }).then(({ confirm }) => {
-    if (confirm) {
+  }).then((result) => {
+    console.log(`确认删除商品，ID: ${product.id}`);
+    console.log('Dialog result:', result);
+    
+    // 处理不同类型的结果格式
+    const isConfirmed = typeof result === 'boolean' ? result : 
+                       (result && (result.confirm || result === 'confirm'));
+  
+    if (isConfirmed) {
       deleteProduct();
     } else {
       productToDelete.value = null;
@@ -122,26 +134,66 @@ const confirmDeleteProduct = (product) => {
 const deleteProduct = async () => {
   if (!productToDelete.value) return;
   const productId = productToDelete.value.id;
+  
+  // 首先检查是否有认证令牌
+  const token = localStorage.getItem('token');
+  if (!token) {
+    showToast('未登录或会话已过期，请重新登录');
+    userStore.clearUserInfo();
+    router.push('/login');
+    return;
+  }
+  
+  console.log(`开始删除商品，ID: ${productId}`);
 
   try {
     showLoadingToast({
       message: '正在删除...',
       forbidClick: true,
     });
+    
+    // 详细记录删除请求
+    console.log(`发送删除请求，参数:`, { id: productId, token: '已设置' });
+    
     const response = await apiDeleteProduct(productId);
-    if (response.code === 200) {
+    console.log('删除商品响应:', response);
+    
+    if (response && (response.code === 200 || response.code === 0)) {
       closeToast();
       showToast('商品删除成功');
       // 从本地列表中移除商品
       products.value = products.value.filter(p => p.id !== productId);
     } else {
-      throw new Error(response.message || '删除失败');
+      // 处理错误响应
+      const errorMsg = response?.message || '删除失败';
+      throw new Error(errorMsg);
     }
   } catch (err) {
     console.error("删除商品失败:", err);
-    showToast(err.message || '删除商品时出错');
-  } finally {
     closeToast();
+    
+    // 处理特定错误
+    if (err.code === 401) {
+      showDialog({
+        title: '会话已过期',
+        message: '您的登录信息已过期，请重新登录',
+        confirmButtonText: '去登录',
+      }).then(() => {
+        userStore.clearUserInfo();
+        router.push('/login');
+      });
+      return;
+    }
+    
+    // 一般错误提示
+    showToast({
+      message: err.message || '删除失败，请稍后重试',
+      type: 'fail',
+      duration: 2000,
+    });
+  } finally {
+    // 关闭确认对话框
+    showDeleteDialog.value = false;
     productToDelete.value = null;
   }
 };

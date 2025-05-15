@@ -1,457 +1,307 @@
 <template>
+  <!-- 产品详情页面 -->
   <div class="product-detail-page">
-    <!-- 引入通用头部导航组件 -->
-    <HeaderNav :title="'商品详情'" />
+    <!-- Header -->
+    <HeaderNav :title="product?.title || '商品详情'" :showBack="true" />
     
-    <!-- 商品详情内容 -->
-    <div class="product-content" v-if="!loading">
-      <!-- 商品轮播图：iOS样式的全屏轮播 -->
+    <!-- 加载中显示骨架屏 -->
+    <div v-if="loading" class="loading-container">
+      <div class="loading-card">
+        <div class="loading-header">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">加载商品信息...</div>
+        </div>
+        <div class="loading-progress">
+          <div class="progress-bar" :style="{ width: loadingProgress + '%' }"></div>
+        </div>
+        <div class="loading-tips">
+          <div class="tip-icon">
+            <i class="van-icon van-icon-info-o"></i>
+          </div>
+          <div class="tip-text">正在从服务器获取商品详情，请稍候...</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 主要内容 -->
+    <div v-else class="product-content">
+      <!-- 商品轮播图 -->
       <div class="product-carousel">
         <div class="carousel-container">
-          <!-- 轮播图主区域 -->
           <div class="carousel-main">
-            <div class="carousel-track" :style="{transform: `translateX(-${currentImageIndex * 100}%)`}">
-              <div 
-                v-for="(image, index) in product.images" 
-                :key="index" 
-                class="carousel-slide"
-                @click="previewImage(index)"
-              >
+            <div class="carousel-track"
+              :style="{ transform: `translateX(-${currentImageIndex * 100}%)` }">
+              <div v-for="(image, index) in product.images || []" :key="index" class="carousel-slide"
+                @click="previewImage(index)">
                 <img :src="image" :alt="product.title" class="carousel-image">
               </div>
             </div>
-            
-            <!-- 箭头导航 -->
-            <div class="carousel-arrows" v-if="product.images && product.images.length > 1">
-              <div class="carousel-arrow carousel-arrow-left" @click.stop="prevImage">
-                <i class="van-icon van-icon-arrow-left"></i>
-              </div>
-              <div class="carousel-arrow carousel-arrow-right" @click.stop="nextImage">
-                <i class="van-icon van-icon-arrow"></i>
-              </div>
+          </div>
+          
+          <div class="carousel-arrows">
+            <div class="carousel-arrow carousel-arrow-left" @click="prevImage">
+              <i class="van-icon van-icon-arrow-left"></i>
             </div>
-            
-            <!-- 页码指示器 -->
-            <div class="carousel-pagination">
-              <span class="pagination-text">{{ currentImageIndex + 1 }} / {{ product.images && product.images.length }}</span>
+            <div class="carousel-arrow carousel-arrow-right" @click="nextImage">
+              <i class="van-icon van-icon-arrow"></i>
             </div>
           </div>
           
-          <!-- 缩略图导航 -->
-          <div class="carousel-thumbnails" v-if="product.images && product.images.length > 1">
-            <div 
-              v-for="(image, index) in product.images" 
-              :key="index"
-              class="carousel-thumbnail"
-              :class="{active: currentImageIndex === index}"
-              @click.stop="currentImageIndex = index"
-            >
-              <img :src="image" :alt="`缩略图 ${index + 1}`" class="thumbnail-image">
-            </div>
+          <div v-if="product.images && product.images.length > 1" class="carousel-pagination">
+            <span class="pagination-text">{{ currentImageIndex + 1 }}</span>
+            /
+            <span>{{ product.images.length }}</span>
+          </div>
+        </div>
+        
+        <div v-if="product.images && product.images.length > 1" class="carousel-thumbnails">
+          <div v-for="(image, index) in product.images" :key="index"
+            :class="['carousel-thumbnail', { 'active': currentImageIndex === index }]"
+            @click="currentImageIndex = index">
+            <img :src="image" :alt="`缩略图 ${index + 1}`">
           </div>
         </div>
       </div>
       
       <!-- 商品基本信息 -->
       <div class="product-info">
+        <h1 class="product-title">{{ product.title }}</h1>
         <div class="product-price">
-          <span class="current-price">
-            <span class="currency-symbol">¥</span><span class="amount">{{ product.price }}</span>
-            <!-- Removed '元' for now based on standard practice -->
-          </span>
-          <span class="original-price" v-if="product.originalPrice > product.price">¥{{ product.originalPrice }}</span>
-          <span class="discount-badge" v-if="product.originalPrice > product.price">
-            {{ Math.round((1 - product.price / product.originalPrice) * 100) }}% OFF
-            <!-- Ensured only OFF is shown -->
-          </span>
+          <div class="current-price">¥{{ product.price }}</div>
+          <div v-if="product.originalPrice && product.originalPrice > product.price" class="original-price">
+            ¥{{ product.originalPrice }}
+          </div>
         </div>
-        <div class="product-title">{{ product.title }}</div>
+        
+        <div class="product-tags">
+          <span v-if="product.condition" class="product-tag">{{ product.condition }}</span>
+          <span v-if="product.category" class="product-tag">{{ product.category }}</span>
+          <span v-if="product.deliveryMethod" class="product-tag">{{ product.deliveryMethod }}</span>
+        </div>
+        
         <div class="product-meta">
-          <span class="product-condition">
-            <i class="van-icon van-icon-label"></i> {{ product.condition }}
-          </span>
-          <span class="view-count">
+          <div class="meta-item">
             <i class="van-icon van-icon-eye-o"></i>
-            {{ formatNumber(product.viewCount) }}
-          </span>
-          <span class="publish-time">
+            <span>{{ product.viewCount || 0 }}人浏览</span>
+          </div>
+          <div class="meta-item">
             <i class="van-icon van-icon-clock-o"></i>
-            {{ formatTime(product.createTime, 'short') }}
-          </span>
+            <span>{{ formatTime(product.createTime) }}</span>
+          </div>
         </div>
       </div>
       
       <!-- 卖家信息 -->
-      <div class="seller-info" @click="goToUserProfile(product.seller.id)">
-        <img :src="product.seller.avatar" class="seller-avatar" :alt="product.seller.name">
+      <div class="seller-info" @click="goToUserProfile(product.seller?.id)">
+        <img :src="product.seller?.avatar" class="seller-avatar" alt="卖家头像">
         <div class="seller-meta">
           <div class="seller-name">
-            {{ product.seller.name }}
-            <i class="van-icon van-icon-certificate" v-if="product.seller.verified"></i>
-            <span class="user-badge" v-if="product.seller.level">
-              <i class="van-icon van-icon-gem-o"></i> Lv{{ product.seller.level }}
-            </span>
+            {{ product.seller?.name }}
+            <i v-if="product.seller?.verified" class="van-icon van-icon-certificate icon-verified"></i>
           </div>
-          <div class="seller-details">
-            <span class="seller-school">{{ product.seller.school }}</span>
-            <span class="seller-join-date" v-if="product.seller.joinDate">加入于 {{ formatTime(product.seller.joinDate, 'date') }}</span>
-          </div>
+          <div class="seller-school">{{ product.seller?.school || '校园用户' }}</div>
         </div>
         <div class="seller-rate">
-          <!-- Updated Structure -->
-          <span class="rate-label">好</span>
-          <span class="rate-value">{{ product.seller.goodRate }}%评</span>
-          <span class="rate-label">率</span>
-          <i class="van-icon van-icon-arrow"></i>
-        </div>
-      </div>
-      
-      <!-- 卖家其他商品 -->
-      <div class="seller-products" v-if="product.seller.otherProducts && product.seller.otherProducts.length > 0">
-        <div class="section-title">
-          <span>Ta的其他商品</span>
-          <span class="more-link" @click="goToSellerProducts(product.seller.id)">
-            查看更多
-            <i class="van-icon van-icon-arrow"></i>
-          </span>
-        </div>
-        <div class="seller-product-scroll">
-          <div 
-            v-for="item in product.seller.otherProducts" 
-            :key="item.id" 
-            class="seller-product-item"
-            @click="goToProductDetail(item.id)"
-          >
-            <div class="seller-product-image">
-              <img :src="item.images[0]" :alt="item.title">
-              <div class="seller-product-status" v-if="item.status !== '在售'">{{ item.status }}</div>
-            </div>
-            <div class="seller-product-info">
-              <div class="seller-product-title">{{ item.title }}</div>
-              <div class="seller-product-price">¥{{ item.price }}</div>
-            </div>
-          </div>
+          <i class="van-icon van-icon-good-job-o"></i>
+          <span>{{ product.seller?.goodRate || 0 }}%</span>
         </div>
       </div>
       
       <!-- 商品详情 -->
       <div class="product-detail">
-        <div class="section-title">
-          <i class="van-icon van-icon-info-o"></i> 商品详情
-        </div>
+        <!-- 基本信息 -->
         <div class="detail-card">
           <div class="detail-items">
+            <div v-if="product.location" class="detail-item">
+              <div class="item-label">
+                <i class="van-icon van-icon-location-o"></i>
+                <span>交易地点</span>
+              </div>
+              <div class="item-value location-value" @click="viewLocation">
+                {{ product.location }}
+                <i class="van-icon van-icon-arrow"></i>
+              </div>
+            </div>
+            
             <div class="detail-item">
               <div class="item-label">
-                <i class="van-icon van-icon-filter-o"></i> 商品类别
+                <i class="van-icon van-icon-label-o"></i>
+                <span>商品状态</span>
               </div>
-              <div class="item-value">{{ product.category }}</div>
+              <div class="item-value">{{ product.condition || '未知' }}</div>
             </div>
+            
             <div class="detail-item">
               <div class="item-label">
-                <i class="van-icon van-icon-clock-o"></i> 发布时间
+                <i class="van-icon van-icon-shopping-cart-o"></i>
+                <span>配送方式</span>
               </div>
-              <div class="item-value">{{ formatTime(product.createTime) }}</div>
-            </div>
-            <div class="detail-item">
-              <div class="item-label">
-                <i class="van-icon van-icon-logistics"></i> 交易方式
-              </div>
-              <div class="item-value">{{ product.deliveryMethod }}</div>
-            </div>
-            <div class="detail-item" v-if="product.location">
-              <div class="item-label">
-                <i class="van-icon van-icon-location-o"></i> 交易地点
-              </div>
-              <div class="item-value location-value">
-                <span>{{ product.location }}</span>
-                <i class="van-icon van-icon-map-marked" @click="viewLocation"></i>
-              </div>
+              <div class="item-value">{{ product.deliveryMethod || '校园自提' }}</div>
             </div>
           </div>
         </div>
         
-        <div class="product-description">
-          <div class="section-title">
-            <i class="van-icon van-icon-description"></i> 商品描述
+        <!-- 商品描述 -->
+        <div class="description-card">
+          <div class="description-header">
+            <i class="van-icon van-icon-description"></i>
+            <span>商品描述</span>
           </div>
-          <div class="description-card">
-            <div class="description-content" v-if="product.description">
-              {{ product.description }}
-            </div>
-            <div class="no-description" v-else>
-              <i class="van-icon van-icon-info-o"></i>
-              <span>卖家暂时没有添加商品描述</span>
-            </div>
+          <div class="description-content">
+            <p>{{ product.description || '暂无描述信息' }}</p>
           </div>
         </div>
       </div>
       
-      <!-- 相似商品推荐 -->
-      <div class="similar-products" v-if="product.similarProducts && product.similarProducts.length > 0">
+      <!-- 评论区 -->
+      <div class="comment-section">
         <div class="section-title">
-          <span>相似商品推荐</span>
-          <span class="more-link" @click="viewMoreSimilar">
-            查看更多 <i class="van-icon van-icon-arrow"></i>
-          </span>
-        </div>
-        <div class="product-scroll">
-          <div 
-            v-for="item in product.similarProducts" 
-            :key="item.id" 
-            class="similar-item"
-            @click="goToProductDetail(item.id)"
-          >
-            <div class="similar-image">
-              <img :src="item.images[0]" :alt="item.title">
-              <div class="price-tag">¥{{ item.price }}</div>
-            </div>
-            <div class="similar-info">
-              <div class="similar-title">{{ item.title }}</div>
-              <div class="similar-meta">
-                <span class="similar-date">{{ formatTime ? formatTime(item.createTime, 'short') : formatSimpleTime(item.createTime) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 商品评论 -->
-      <div class="comment-section" v-if="product.comments && product.comments.length > 0">
-        <div class="section-title">
-          <span>留言 {{ product.commentCount }}</span>
+          <span>留言 {{ commentTotal || 0 }}</span>
           <span class="comment-action" @click="showComment">
             <i class="van-icon van-icon-edit"></i> 我要留言
           </span>
         </div>
         
-        <!-- 评论列表 -->
-        <div class="comment-list">
-          <div 
-            v-for="comment in product.comments" 
-            :key="comment.id" 
-            class="comment-item"
-          >
-            <!-- 评论信息 -->
-            <div class="comment-user" @click="goToUserProfile(comment.author.id)">
-              <img :src="comment.author.avatar" class="comment-avatar" :alt="comment.author.name">
+        <div v-if="product.comments && product.comments.length > 0" class="comment-list">
+          <div v-for="comment in product.comments" :key="comment.id" class="comment-item">
+            <div class="comment-user">
+              <img 
+                :src="comment.author?.avatar || comment.userAvatar || `https://picsum.photos/id/${120 + ((comment.userId || 0) % 10)}/100/100`" 
+                class="comment-avatar" 
+                alt="评论用户头像"
+                @error="handleAvatarError($event, comment.userId)"
+              >
             </div>
             <div class="comment-content">
               <div class="comment-header">
-                <span class="comment-name">{{ comment.author.name }}</span>
-                <span class="user-label" v-if="comment.author.id === product.seller.id">卖家</span>
-                <span class="comment-time">{{ formatTime ? formatTime(comment.createTime) : formatSimpleTime(comment.createTime) }}</span>
+                <span class="comment-name">{{ comment.author?.name || comment.userName || `用户${comment.userId}` }}</span>
+                <span class="comment-time">{{ formatTime(comment.createTime || comment.createdAt) }}</span>
               </div>
-              <div class="comment-text">
-                {{ comment.content }}
-              </div>
-              
-              <!-- 评论操作 -->
+              <div class="comment-text">{{ comment.content }}</div>
               <div class="comment-actions">
-                <span class="reply-btn" @click="replyComment(comment)">
-                  <i class="van-icon van-icon-chat-o"></i> 回复
-                </span>
-                <span class="like-btn" @click="likeComment(comment)">
-                  <i :class="['van-icon', comment.isLiked ? 'van-icon-like-fill active' : 'van-icon-like-o']"></i>
-                  <span class="like-count">{{ comment.likeCount > 0 ? comment.likeCount : '' }}</span>
-                </span>
-              </div>
-              
-              <!-- 回复列表 -->
-              <div class="reply-list" v-if="comment.replies && comment.replies.length > 0">
-                <div 
-                  v-for="reply in comment.replies" 
-                  :key="reply.id" 
-                  class="reply-item"
-                >
-                  <div class="reply-content">
-                    <span class="reply-name">{{ reply.author.name }}</span>
-                    <span class="user-label" v-if="reply.author.id === product.seller.id">卖家</span>
-                    <span class="reply-to" v-if="reply.replyTo">回复 <span class="reply-to-name">{{ reply.replyTo.name }}</span></span>
-                    <span class="reply-text">{{ reply.content }}</span>
-                  </div>
-                  <div class="reply-actions">
-                  <span class="reply-time">{{ formatTime ? formatTime(reply.createTime) : formatSimpleTime(reply.createTime) }}</span>
-                  <span class="reply-btn" @click="replyComment(comment, reply)">
-                  <i class="van-icon van-icon-chat-o"></i> 回复
-                  </span>
-                  </div>
-                </div>
+                <span class="comment-action-item" @click="replyToComment(comment)">回复</span>
               </div>
             </div>
           </div>
         </div>
+        
+        <div v-else-if="!loadingComments" class="empty-comment">
+          <div class="empty-comment-icon">
+            <i class="van-icon van-icon-comment-o"></i>
+          </div>
+          <div class="empty-comment-text">暂无留言</div>
+        </div>
+        
+        <div v-if="commentTotal > product.comments?.length && !noMoreComments" class="load-more" @click="loadMoreComments">
+          <span v-if="!loadingComments">加载更多</span>
+          <span v-else>加载中...</span>
+        </div>
+        
+        <div v-if="showCommentInput" class="comment-input-wrapper">
+          <div class="comment-input">
+            <input 
+              v-model="commentText" 
+              :placeholder="replyTo ? `回复 ${replyTo.author?.name || '用户'}` : '写下你的留言...'" 
+              @keyup.enter="submitComment"
+            />
+            <button @click="submitComment">发送</button>
+            <span v-if="replyTo" class="cancel-reply" @click="cancelReply">取消回复</span>
+          </div>
+        </div>
       </div>
-    </div>
-    
-    <!-- 加载中 -->
-    <div class="loading-container" v-if="loading">
-      <div class="loading-card">
-        <div class="loading-header">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">{{ loadingStatus }}</div>
+      
+      <!-- 相似商品 -->
+      <div v-if="product.similarProducts && product.similarProducts.length > 0" class="similar-products">
+        <div class="section-title">
+          <span>相似商品</span>
+          <span class="more-action" @click="viewMoreSimilar">
+            <span>查看更多</span>
+            <i class="van-icon van-icon-arrow"></i>
+          </span>
         </div>
-        <div class="loading-progress">
-          <div class="progress-bar" :style="{width: `${loadingProgress}%`}"></div>
-        </div>
-        <div class="loading-tips">
-          <div class="tip-icon"><i class="material-icons">info</i></div>
-          <div class="tip-text">如果加载时间过长，将自动显示示例商品</div>
+        
+        <div class="similar-list">
+          <div v-for="item in product.similarProducts.slice(0, 4)" :key="item.id" class="similar-item" @click="goToProductDetail(item.id)">
+            <div class="similar-image">
+              <img :src="item.image || 'https://picsum.photos/id/1/200/200'" alt="相似商品图片">
+              <div class="price-tag">¥{{ item.price }}</div>
+            </div>
+            <div class="similar-info">
+              <div class="similar-title">{{ item.title }}</div>
+              <div class="similar-meta">{{ item.condition || '二手' }} · {{ formatTime(item.createTime, 'short') }}</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
     
     <!-- 底部操作栏 -->
-    <div class="bottom-action-bar">
+    <div v-if="!loading" class="bottom-action-bar">
       <div class="action-icons">
         <div class="action-icon" @click="toggleFavorite">
-          <i :class="[product.isLiked ? 'icon-favorite-filled' : 'icon-favorite']"></i>
-          <div class="icon-text">{{ product.isLiked ? '已收藏' : '收藏' }}</div>
+          <i :class="['van-icon', product.isLiked ? 'van-icon-star icon-favorite-filled' : 'van-icon-star-o']"></i>
+          <span class="icon-text">{{ product.isLiked ? '已收藏' : '收藏' }}</span>
         </div>
         <div class="action-icon" @click="shareProduct">
-          <i class="icon-share"></i>
-          <div class="icon-text">分享</div>
+          <i class="van-icon van-icon-share-o"></i>
+          <span class="icon-text">分享</span>
         </div>
-        <div class="action-icon" @click="showReportDialog = true">
-          <i class="icon-warning"></i>
-          <div class="icon-text">举报</div>
+        <div class="action-icon" @click="handleReport">
+          <i class="van-icon van-icon-warning-o"></i>
+          <span class="icon-text">举报</span>
         </div>
       </div>
       <div class="action-buttons">
-        <button class="action-btn contact" @click="contactSeller">联系卖家</button>
-        <button class="action-btn buy" @click="buyProduct">立即购买</button>
+        <button v-if="!isCurrentUser" class="action-btn contact" @click="contactSeller">联系卖家</button>
+        <button v-if="!isCurrentUser" class="action-btn buy" @click="buyProduct">立即购买</button>
+        <button v-else class="action-btn contact" @click="router.push(`/product/edit/${product.id}`)">编辑商品</button>
       </div>
     </div>
     
-    <!-- 留言输入框 -->
-    <div class="comment-input-wrapper" v-if="showCommentInput">
+    <!-- 评论输入区 -->
+    <div v-if="showCommentInput" class="comment-input-wrapper">
       <div class="comment-input">
         <input 
-          type="text" 
           v-model="commentText" 
-          :placeholder="replyTo ? `回复 ${replyTo.name}` : '对此商品有疑问?在此留言'" 
-          ref="commentInputEl"
+          type="text" 
+          placeholder="写下你的留言..."
+          @keyup.enter="submitComment"
         >
         <button 
           class="comment-submit" 
           :disabled="!commentText.trim()" 
           @click="submitComment"
-        >发送</button>
+        >
+          发送
+        </button>
       </div>
     </div>
     
-    <!-- 联系方式弹窗 -->
-    <div class="contact-popup" v-if="showContactPopup">
-      <div class="popup-mask" @click="showContactPopup = false"></div>
-      <div class="popup-content">
-        <div class="popup-header">
-          <div class="popup-title">联系卖家</div>
-          <div class="popup-close" @click="showContactPopup = false">
-            <i class="icon-close"></i>
-          </div>
-        </div>
-        <div class="contact-list">
-          <div class="contact-item" v-if="product.contactInfo.phone && product.contactInfo.showPhone">
-            <div class="contact-icon phone">
-              <i class="icon-phone"></i>
-            </div>
-            <div class="contact-info">
-              <div class="contact-name">手机号</div>
-              <div class="contact-value">{{ product.contactInfo.phone }}</div>
-            </div>
-            <button class="contact-action" @click="callPhone(product.contactInfo.phone)">拨打</button>
-          </div>
-          <div class="contact-item" v-if="product.contactInfo.wechat && product.contactInfo.showWechat">
-            <div class="contact-icon wechat">
-              <i class="icon-wechat"></i>
-            </div>
-            <div class="contact-info">
-              <div class="contact-name">微信号</div>
-              <div class="contact-value">{{ product.contactInfo.wechat }}</div>
-            </div>
-            <button class="contact-action" @click="copyWechat(product.contactInfo.wechat)">复制</button>
-          </div>
-          <div class="contact-item">
-            <div class="contact-icon chat">
-              <i class="icon-chat"></i>
-            </div>
-            <div class="contact-info">
-              <div class="contact-name">站内聊天</div>
-              <div class="contact-value">在线交流更方便</div>
-            </div>
-            <button class="contact-action" @click="goToChat(product.seller.id)">聊天</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 底部安全区域 -->
+    <div class="safe-area-bottom"></div>
     
     <!-- 图片预览 -->
-    <div class="image-preview" v-if="showImagePreview" @click="closePreview">
-      <div class="preview-container">
-        <img :src="previewSrc" alt="预览图片">
+    <div v-if="showImagePreview" class="image-preview" @click="closePreview">
+      <div class="preview-wrapper">
+        <img :src="previewSrc" alt="商品图片预览" class="preview-image">
       </div>
       <div class="preview-close">
-        <i class="icon-close"></i>
+        <i class="van-icon van-icon-cross"></i>
       </div>
     </div>
     
-    <!-- 分享弹窗 -->
-    <div class="share-popup" v-if="showSharePopup">
-      <div class="popup-mask" @click="showSharePopup = false"></div>
-      <div class="popup-content">
-        <div class="popup-header">
-          <div class="popup-title">分享到</div>
-          <div class="popup-close" @click="showSharePopup = false">
-            <i class="icon-close"></i>
-          </div>
-        </div>
-        <div class="share-options">
-          <div class="share-option" @click="shareVia('wechat')">
-            <div class="option-icon wechat">
-              <i class="icon-wechat"></i>
-            </div>
-            <div class="option-name">微信</div>
-          </div>
-          <div class="share-option" @click="shareVia('moments')">
-            <div class="option-icon moments">
-              <i class="icon-moments"></i>
-            </div>
-            <div class="option-name">朋友圈</div>
-          </div>
-          <div class="share-option" @click="shareVia('qq')">
-            <div class="option-icon qq">
-              <i class="icon-qq"></i>
-            </div>
-            <div class="option-name">QQ</div>
-          </div>
-          <div class="share-option" @click="shareVia('weibo')">
-            <div class="option-icon weibo">
-              <i class="icon-weibo"></i>
-            </div>
-            <div class="option-name">微博</div>
-          </div>
-          <div class="share-option" @click="shareVia('link')">
-            <div class="option-icon link">
-              <i class="icon-link"></i>
-            </div>
-            <div class="option-name">复制链接</div>
-          </div>
-        </div>
-        <div class="cancel-btn" @click="showSharePopup = false">
-          取消
-        </div>
-      </div>
-    </div>
-    
-    <!-- 提示消息 -->
-    <div class="toast" v-if="toast.show">
-      {{ toast.message }}
-    </div>
+    <!-- 分享操作表 -->
+    <van-share-sheet
+      v-model:show="showSharePopup"
+      title="分享给好友"
+      :options="shareOptions"
+      @select="onShareSelect"
+    />
     
     <!-- 举报对话框 -->
     <van-dialog
       v-model:show="showReportDialog"
-      title="举报商品"
+      title="举报内容"
       show-cancel-button
       @confirm="submitReport"
       confirm-button-color="#ee0a24"
@@ -501,18 +351,15 @@
         />
       </div>
     </van-dialog>
-    
-    <!-- 底部导航 -->
-    <FooterNav />
   </div>
 </template>
 
 <script setup>
 import api from '@/api'
-import { favoriteProduct, getProductDetail } from '@/api/product'
-import FooterNav from '@/components/FooterNav.vue'
+import { favoriteProduct, getProductComments, getProductDetail, reportProduct, unfavoriteProduct } from '@/api/product'
 import HeaderNav from '@/components/HeaderNav.vue'
 import { useUserStore } from '@/store/user'
+import { Toast } from 'vant'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -556,36 +403,79 @@ const formatNumber = (num) => {
   return num > 999 ? (num / 1000).toFixed(1) + 'k' : num
 }
 
-// 简化版形式化时间
-const formatSimpleTime = (time) => {
-  if (!time) return ''
+// 格式化时间显示
+const formatTime = (timestamp, format = 'auto') => {
+  if (!timestamp) return ''
   
-  const date = new Date(time)
-  const now = new Date()
-  const diff = Math.floor((now - date) / 1000)
-  
-  // 小于1分钟
-  if (diff < 60) {
-    return '刚刚'
-  }
-  // 小于1小时
-  else if (diff < 3600) {
-    return Math.floor(diff / 60) + '分钟前'
-  }
-  // 小于24小时
-  else if (diff < 86400) {
-    return Math.floor(diff / 3600) + '小时前'
-  }
-  // 小于30天
-  else if (diff < 2592000) {
-    return Math.floor(diff / 86400) + '天前'
-  }
-  // 超过30天
-  else {
-    const year = date.getFullYear()
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const day = date.getDate().toString().padStart(2, '0')
-    return `${year}-${month}-${day}`
+  try {
+    // 处理ISO 8601格式的时间字符串
+    const date = new Date(timestamp)
+    
+    // 检查日期是否有效
+    if (isNaN(date.getTime())) {
+      console.warn('[时间格式化] 无效的时间格式:', timestamp)
+      return '时间格式错误'
+    }
+    
+    const now = new Date()
+    const diffMs = now - date
+    const diff = Math.floor(diffMs / 1000)
+    
+    // 处理未来时间（如2025年，可能是测试数据）
+    if (diff < 0) {
+      console.log('[时间格式化] 检测到未来时间:', timestamp)
+      return '刚刚' // 对于测试数据，显示为"刚刚"
+    }
+    
+    // 短格式：只返回时间差
+    if (format === 'short') {
+      if (diff < 60) {
+        return '刚刚'
+      } else if (diff < 3600) {
+        return `${Math.floor(diff / 60)}分钟前`
+      } else if (diff < 86400) {
+        return `${Math.floor(diff / 3600)}小时前`
+      } else if (diff < 604800) {
+        return `${Math.floor(diff / 86400)}天前`
+      } else {
+        return `${Math.floor(diff / 604800)}周前`
+      }
+    }
+    
+    // 只返回日期部分
+    if (format === 'date') {
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+    }
+    
+    // 自动格式（默认）
+    if (diff < 60) {
+      return '刚刚'
+    } else if (diff < 3600) {
+      return `${Math.floor(diff / 60)}分钟前`
+    } else if (diff < 86400) {
+      return `${Math.floor(diff / 3600)}小时前`
+    } else if (diff < 604800) {
+      return `${Math.floor(diff / 86400)}天前`
+    } else {
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      const hour = date.getHours().toString().padStart(2, '0')
+      const minute = date.getMinutes().toString().padStart(2, '0')
+      
+      // 如果是当年，不显示年份
+      if (year === now.getFullYear()) {
+        return `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour}:${minute}`
+      } else {
+        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour}:${minute}`
+      }
+    }
+  } catch (error) {
+    console.error('[时间格式化] 异常:', error, timestamp)
+    return '时间格式错误'
   }
 }
 
@@ -667,6 +557,13 @@ const generateDefaultProduct = (id) => {
   };
 };
 
+// 评论分页相关状态
+const commentPage = ref(1)
+const commentLimit = ref(10)
+const loadingComments = ref(false)
+const noMoreComments = ref(false)
+const commentTotal = ref(0)
+
 // 获取商品详情
 const fetchProductDetail = async () => {
   loading.value = true
@@ -714,6 +611,9 @@ const fetchProductDetail = async () => {
     if (res && res.code === 200) {
       console.log('[详细日志] 成功获取商品详情:', res.data)
       processProductData(res.data, productId);
+      
+      // 获取商品评论列表
+      fetchComments(1);
     } else {
       console.error('[详细日志] API请求失败:', res)
       throw new Error('API请求失败');
@@ -905,6 +805,9 @@ const processProductData = (data, productId) => {
     
     console.log('[详细日志] 标准格式处理后的商品数据:', product.value);
   }
+  
+  // 添加这一行，在处理完商品数据后获取评论
+  fetchComments(1);
 }
 
 // 使用ID 78的模拟数据
@@ -968,15 +871,24 @@ const toggleFavorite = async () => {
     let res
     
     if (product.value.isLiked) {
-      res = await api.product.unfavoriteProduct(productId)
+      // 当前已收藏，点击后取消收藏
+      console.log('取消收藏商品:', productId)
+      res = await unfavoriteProduct(productId)
+      if (res && (res.code === 200 || res.success)) {
+        product.value.isLiked = false
+        showToast('已取消收藏')
+      }
     } else {
+      // 当前未收藏，点击后添加收藏
+      console.log('收藏商品:', productId)
       res = await favoriteProduct(productId)
+      if (res && (res.code === 200 || res.success)) {
+        product.value.isLiked = true
+        showToast('收藏成功')
+      }
     }
     
-    if (res.code === 200) {
-      product.value.isLiked = res.data.isLiked
-      showToast(product.value.isLiked ? '收藏成功' : '已取消收藏')
-    }
+    console.log('收藏操作响应:', res)
   } catch (error) {
     console.error('收藏操作失败', error)
     showToast('操作失败，请稍后重试')
@@ -1050,7 +962,7 @@ const goToChat = (sellerId) => {
 }
 
 // 立即购买
-const buyProduct = () => {
+const buyProduct = async () => {
   console.log('buyProduct clicked!') // 调试日志
   
   if (!userStore.isLoggedIn) {
@@ -1063,37 +975,123 @@ const buyProduct = () => {
     return
   }
   
-  // 实际应用中这里应该跳转到购买/预约页面
-  contactSeller()
+  try {
+    // 显示加载中提示
+    showToast('正在创建订单...')
+    
+    // 1. 创建订单
+    const productId = product.value.id
+    const orderData = {
+      productId: productId,
+      quantity: 1, // 默认购买数量为1
+      remark: '' // 可以后续添加备注功能
+    }
+    
+    console.log('创建订单数据:', orderData)
+    const orderRes = await api.order.createOrder(orderData)
+    console.log('订单创建响应:', orderRes)
+    
+    // 获取订单编号，处理多种可能的响应格式
+    let orderSn = null;
+    
+    // 标准响应格式：{code: 200, data: {sn: "xxx"}}
+    if (orderRes && orderRes.code === 200 && orderRes.data && orderRes.data.sn) {
+      orderSn = orderRes.data.sn;
+      console.log('从标准响应格式获取订单SN:', orderSn);
+    } 
+    // 直接返回格式：{sn: "xxx"}
+    else if (orderRes && orderRes.sn) {
+      orderSn = orderRes.sn;
+      console.log('从直接响应获取订单SN:', orderSn);
+    }
+    
+    if (!orderSn) {
+      console.error('无法获取订单编号:', orderRes);
+      throw new Error(orderRes?.message || '订单创建失败，请稍后重试');
+    }
+    
+    // 获取订单编号
+    showToast('订单创建成功')
+    
+    // 记录创建订单成功信息
+    console.log('订单创建成功，准备跳转到订单详情页', orderSn)
+    
+    // 跳转到订单详情页面 - 使用查询参数而非路径参数
+    router.push({
+      path: '/user/order/1', // 使用一个已存在的订单ID作为路径参数
+      query: { 
+        sn: orderSn,
+        from: 'product', 
+        new: 'true' 
+      }
+    })
+    
+    // 记录跳转指令已执行
+    console.log('跳转指令已执行')
+    
+  } catch (error) {
+    console.error('购买过程发生错误:', error)
+    showToast(error.message || '购买失败，请稍后重试')
+  }
 }
 
 // 显示留言框
 const showComment = () => {
+  // 检查是否有token作为登录状态
+  const token = localStorage.getItem('token');
+  
+  console.log('[评论] 显示留言框状态检查 - token:', token ? '存在' : '不存在');
+  
+  if (!token) {
+    console.warn('[评论] 用户未登录，将跳转到登录页面');
+    showToast('请先登录')
+    router.push('/login?redirect=' + route.fullPath)
+    return
+  }
+  
   showCommentInput.value = true
+  console.log("[评论] 显示评论输入框，showCommentInput设置为:", showCommentInput.value)
+  
   // 等待DOM更新后聚焦
   setTimeout(() => {
-    document.querySelector('.comment-input input').focus()
-  }, 100)
+    const inputEl = document.querySelector('.comment-input input')
+    if (inputEl) {
+      inputEl.focus()
+      console.log("[评论] 成功聚焦到输入框")
+    } else {
+      console.warn("[评论] 未找到评论输入框元素, DOM选择器失败")
+      
+      // 打印DOM树以帮助诊断
+      const commentWrapper = document.querySelector('.comment-input-wrapper')
+      if (commentWrapper) {
+        console.log("[评论] 找到了评论包装器，但内部没有input元素:", commentWrapper.innerHTML)
+      } else {
+        console.warn("[评论] 找不到评论包装器元素，可能DOM尚未更新")
+      }
+    }
+  }, 200) // 增加等待时间，确保DOM已更新
 }
 
 // 回复评论
-const replyComment = (comment, reply = null) => {
+const replyToComment = (comment) => {
   if (!userStore.isLoggedIn) {
     router.push('/login?redirect=' + route.fullPath)
     return
   }
   
-  replyTo.value = reply ? {
-    id: reply.author.id,
-    name: reply.author.name,
-    commentId: comment.id
-  } : {
-    id: comment.author.id,
-    name: comment.author.name,
-    commentId: comment.id
-  }
+  replyTo.value = comment
+  showCommentInput.value = true
   
-  showComment()
+  // 等待DOM更新后聚焦
+  setTimeout(() => {
+    const inputEl = document.querySelector('.comment-input input')
+    if (inputEl) {
+      inputEl.focus()
+      console.log("[评论] 聚焦到回复输入框")
+    } else {
+      console.warn("[评论] 未找到回复输入框元素")
+    }
+  }, 50)
 }
 
 // 提交评论
@@ -1104,45 +1102,107 @@ const submitComment = async () => {
   }
   
   if (!commentText.value.trim()) {
+    showToast('评论内容不能为空')
     return
   }
   
   try {
+    console.log('[评论] 开始提交评论')
     const productId = product.value.id
     const data = {
       content: commentText.value,
       replyToId: replyTo.value ? replyTo.value.id : null
     }
     
-    const res = await api.product.commentProduct(productId, data)
+    showToast('正在提交评论...')
     
-    if (res.code === 200) {
-      // 如果是回复评论
-      if (replyTo.value && replyTo.value.commentId) {
-        const comment = product.value.comments.find(c => c.id === replyTo.value.commentId)
-        if (comment) {
-          if (!comment.replies) {
-            comment.replies = []
-          }
-          comment.replies.push(res.data)
+    // 获取在localStorage中保存的当前用户信息，以便立即添加评论显示
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    const currentUserId = userInfo.id || userStore.userId || localStorage.getItem('userId')
+    
+    console.log('[评论] 当前用户信息:', userInfo)
+    
+    // 创建一个临时评论对象，用于立即显示
+    const tempComment = {
+      id: Date.now(), // 临时ID
+      content: commentText.value,
+      userId: currentUserId,
+      userName: userInfo.nickname || userInfo.username || userStore.nickname || '当前用户',
+      userAvatar: userInfo.avatar || '',
+      createdAt: new Date().toISOString(),
+      _isTemp: true, // 标记为临时评论
+      author: {
+        id: currentUserId,
+        name: userInfo.nickname || userInfo.username || userStore.nickname || '当前用户',
+        avatar: evaluateAvatarUrl(userInfo.avatar, currentUserId)
+      }
+    }
+    
+    // 添加回复信息
+    if (replyTo.value) {
+      tempComment.replyToId = replyTo.value.id
+      tempComment.replyTo = {
+        id: replyTo.value.id,
+        name: replyTo.value.author?.name || replyTo.value.userName || `用户${replyTo.value.userId}`
+      }
+    }
+    
+    // 先添加到本地评论列表，提供即时反馈
+    if (!product.value.comments) {
+      product.value.comments = []
+    }
+    
+    // 将新评论添加到列表顶部
+    product.value.comments.unshift(tempComment)
+    commentTotal.value = commentTotal.value + 1
+    
+    // 清空输入和回复状态
+    commentText.value = ''
+    replyTo.value = null
+    
+    // 发送到服务器
+    console.log('[评论] 提交评论数据:', data)
+    
+    const commentRes = await api.product.commentProduct(productId, data)
+    console.log('[评论] 评论提交响应:', commentRes)
+    
+    if (commentRes && commentRes.code === 200) {
+      console.log('[评论] 评论提交成功')
+      showToast('评论成功')
+      
+      // 用服务器返回的评论ID替换临时ID
+      if (commentRes.data && commentRes.data.id) {
+        const serverCommentId = commentRes.data.id
+        const tempCommentIndex = product.value.comments.findIndex(c => c._isTemp)
+        if (tempCommentIndex !== -1) {
+          product.value.comments[tempCommentIndex].id = serverCommentId
+          product.value.comments[tempCommentIndex]._isTemp = false
         }
-      } else {
-        // 如果是新评论
-        if (!product.value.comments) {
-          product.value.comments = []
-        }
-        product.value.comments.unshift(res.data)
-        product.value.commentCount = (product.value.commentCount || 0) + 1
       }
       
-      commentText.value = ''
-      replyTo.value = null
-      showCommentInput.value = false
-      showToast('留言成功')
+      // 刷新评论列表获取最新数据
+      // 这次可能不需要，因为我们已经添加了本地版本
+      // fetchComments(1)
+    } else {
+      console.error('[评论] 评论提交失败:', commentRes)
+      showToast('评论提交失败，请稍后重试')
+      
+      // 移除临时评论
+      product.value.comments = product.value.comments.filter(c => !c._isTemp)
+      commentTotal.value = Math.max(0, commentTotal.value - 1)
     }
   } catch (error) {
-    console.error('留言提交失败', error)
-    showToast('留言失败，请稍后重试')
+    console.error('[评论] 评论提交发生异常:', error)
+    showToast('评论提交失败，请稍后重试')
+    
+    // 移除临时评论
+    if (product.value.comments) {
+      product.value.comments = product.value.comments.filter(c => !c._isTemp)
+      commentTotal.value = Math.max(0, commentTotal.value - 1)
+    }
+  } finally {
+    // 关闭评论输入框
+    showCommentInput.value = false
   }
 }
 
@@ -1162,61 +1222,6 @@ const viewLocation = () => {
 }
 
 // 格式化时间
-const formatTime = (timestamp, format = 'auto') => {
-  if (!timestamp) return ''
-  
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = Math.floor((now - date) / 1000)
-  
-  // 短格式：只返回时间差
-  if (format === 'short') {
-    if (diff < 60) {
-      return '刚刚'
-    } else if (diff < 3600) {
-      return `${Math.floor(diff / 60)}分钟前`
-    } else if (diff < 86400) {
-      return `${Math.floor(diff / 3600)}小时前`
-    } else if (diff < 604800) {
-      return `${Math.floor(diff / 86400)}天前`
-    } else {
-      return `${Math.floor(diff / 604800)}周前`
-    }
-  }
-  
-  // 只返回日期部分
-  if (format === 'date') {
-    const year = date.getFullYear()
-    const month = date.getMonth() + 1
-    const day = date.getDate()
-    return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
-  }
-  
-  // 自动格式（默认）
-  if (diff < 60) {
-    return '刚刚'
-  } else if (diff < 3600) {
-    return `${Math.floor(diff / 60)}分钟前`
-  } else if (diff < 86400) {
-    return `${Math.floor(diff / 3600)}小时前`
-  } else if (diff < 604800) {
-    return `${Math.floor(diff / 86400)}天前`
-  } else {
-    const year = date.getFullYear()
-    const month = date.getMonth() + 1
-    const day = date.getDate()
-    const hour = date.getHours().toString().padStart(2, '0')
-    const minute = date.getMinutes().toString().padStart(2, '0')
-    
-    // 如果是当年，不显示年份
-    if (year === now.getFullYear()) {
-      return `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour}:${minute}`
-    } else {
-      return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour}:${minute}`
-    }
-  }
-}
-
 // 图片轮播相关功能
 // 切换到上一张图片
 const prevImage = () => {
@@ -1372,103 +1377,247 @@ onBeforeUnmount(() => {
   stopAutoPlay();
 })
 
-// 提交举报函数
-const submitReport = async () => {
+// 举报商品
+const handleReport = () => {
   if (!userStore.isLoggedIn) {
-    showToast('请先登录')
-    router.push('/login?redirect=' + route.fullPath)
-    return
+    showToast('请先登录');
+    router.push('/login?redirect=' + route.fullPath);
+    return;
   }
   
+  // 显示举报对话框
+  showReportDialog.value = true;
+};
+
+// 提交举报
+const submitReport = async () => {
   if (reportReason.value === 'other' && !reportDetail.value.trim()) {
-    showToast('请填写举报原因')
-    return
+    showToast('请填写举报原因');
+    return;
   }
   
   try {
-    console.log('[举报Debug] 正在提交举报:', reportReason.value, reportDetail.value)
+    console.log('[举报] 提交举报:', reportReason.value, reportDetail.value);
     
-    // 构建举报数据
+    // 准备举报数据
     const reportData = {
       reason: reportReason.value,
-      description: reportDetail.value,
-      images: [] // 可选的举报证据图片
-    }
+      description: reportDetail.value.trim()
+    };
     
-    // 记录请求前状态
-    console.log('[举报Debug] 请求前: 商品ID:', product.value.id, '举报数据:', reportData)
+    // 调用API提交举报
+    const result = await reportProduct(product.value.id, reportData);
+    console.log('[举报] 提交举报响应:', result);
     
-    // 直接使用fetch API发送请求，避免可能的请求库处理问题
-    const url = `/api/product/report/${product.value.id}`
-    console.log('[举报Debug] 请求URL:', url)
-    
-    const token = localStorage.getItem('token')
-    const headers = {
-      'Content-Type': 'application/json'
-    }
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    
-    const fetchResponse = await fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(reportData)
-    })
-    
-    // 记录原始响应
-    console.log('[举报Debug] Fetch原始响应状态:', fetchResponse.status, fetchResponse.statusText)
-    
-    // 如果返回的是text/plain或非JSON格式，直接获取文本
-    const contentType = fetchResponse.headers.get('content-type')
-    console.log('[举报Debug] 响应内容类型:', contentType)
-    
-    let responseData
-    
-    if (contentType && contentType.includes('application/json')) {
-      responseData = await fetchResponse.json()
-      console.log('[举报Debug] 解析的JSON响应:', responseData)
+    if (result && (result.code === 200 || result.success === true)) {
+      showToast('举报已提交，感谢您的反馈');
+      
+      // 重置表单
+      reportReason.value = 'fake';
+      reportDetail.value = '';
+      showReportDialog.value = false;
     } else {
-      const textResponse = await fetchResponse.text()
-      console.log('[举报Debug] 文本响应:', textResponse)
-      
-      // 尝试将文本解析为JSON
-      try {
-        responseData = JSON.parse(textResponse)
-        console.log('[举报Debug] 从文本解析的JSON:', responseData)
-      } catch (e) {
-        console.log('[举报Debug] 无法解析响应为JSON:', e)
-        responseData = { 
-          code: fetchResponse.ok ? 200 : fetchResponse.status,
-          message: textResponse || '处理完成',
-          success: fetchResponse.ok 
-        }
-      }
-    }
-    
-    // 处理响应
-    if (fetchResponse.ok || (responseData && (responseData.code === 200 || responseData.code === 0))) {
-      console.log('[举报Debug] 请求成功')
-      
-      // 重置表单并关闭对话框
-      reportReason.value = 'fake'
-      reportDetail.value = ''
-      showReportDialog.value = false
-      
-      // 显示成功消息
-      showToast(responseData?.message || responseData?.msg || '举报已提交，感谢您的反馈')
-    } else {
-      console.error('[举报Debug] 请求失败', responseData)
-      
-      // 显示错误消息
-      showToast(responseData?.message || responseData?.msg || `举报失败 (${fetchResponse.status})`)
+      // 处理可能的错误响应
+      const errorMsg = result?.message || '举报提交失败，请稍后重试';
+      showToast(errorMsg);
     }
   } catch (error) {
-    console.error('[举报Debug] 捕获到异常:', error)
-    showToast('举报提交失败，请稍后重试')
+    console.error('[举报] 提交举报失败:', error);
+    showToast('举报提交失败，请稍后重试');
+  }
+};
+
+// 分享商品
+const handleShare = () => {
+  showSharePopup.value = true;
+};
+
+// 处理分享选择
+const onShareSelect = (option) => {
+  Toast.text(`已选择 ${option.name}`);
+  
+  if (option.name === '复制链接') {
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => {
+        Toast.success('链接已复制到剪贴板');
+      })
+      .catch(() => {
+        Toast.fail('复制失败，请手动复制链接');
+      });
+  } else {
+    // 这里可以接入实际的分享SDK
+    Toast.text(`分享到${option.name}功能暂未接入，敬请期待`);
+  }
+  
+  showSharePopup.value = false;
+};
+
+// 获取商品评论列表
+const fetchComments = async (page = 1) => {
+  if (loadingComments.value || !product.value.id) return
+  
+  loadingComments.value = true
+  commentPage.value = page
+  
+  try {
+    const params = {
+      page: page,
+      limit: commentLimit.value
+    }
+    
+    console.log(`[评论] 获取商品${product.value.id}的第${page}页评论`)
+    const res = await getProductComments(product.value.id, params)
+    console.log('[评论] 获取评论响应结果:', res)
+    
+    // 判断响应格式并提取评论数据
+    let commentsData = null
+    let totalComments = 0
+    
+    // 处理直接返回的数据格式 {comments: [], total: 0, page: 1, limit: 10}
+    if (res && res.comments) {
+      commentsData = res.comments || []
+      totalComments = res.total || 0
+      console.log('[评论] 直接数据格式响应, 评论数:', commentsData.length, '总数:', totalComments)
+    } 
+    // 标准API响应格式 {code: 200, data: {comments: [], total: 0}}
+    else if (res && res.code === 200 && res.data) {
+      commentsData = res.data.comments || []
+      totalComments = res.data.total || 0
+      console.log('[评论] 标准API格式响应, 评论数:', commentsData.length, '总数:', totalComments)
+    } 
+    // 处理其他可能的响应格式
+    else if (res && typeof res === 'object') {
+      // 尝试查找任何包含评论的数组
+      const possibleCommentsKeys = ['comments', 'commentList', 'list', 'items']
+      for (const key of possibleCommentsKeys) {
+        if (Array.isArray(res[key])) {
+          commentsData = res[key]
+          break
+        }
+      }
+      
+      // 尝试查找总数
+      const possibleTotalKeys = ['total', 'totalCount', 'count', 'totalItems']
+      for (const key of possibleTotalKeys) {
+        if (typeof res[key] === 'number') {
+          totalComments = res[key]
+          break
+        }
+      }
+      
+      console.log('[评论] 尝试从非标准响应提取数据，找到评论:', commentsData?.length || 0, '总数:', totalComments)
+    }
+    
+    // 如果成功找到评论数据，更新评论总数和处理评论
+    if (commentsData && Array.isArray(commentsData)) {
+      // 更新评论总数
+      commentTotal.value = totalComments
+      console.log('[评论] 评论总数:', commentTotal.value, '当前页评论数:', commentsData.length)
+      
+      // 直接使用评论中的userName和userAvatar创建author对象
+      commentsData.forEach(comment => {
+        // 确保createTime字段存在
+        if (!comment.createTime && comment.createdAt) {
+          comment.createTime = comment.createdAt
+        }
+        
+        // 直接使用评论数据中的userName和userAvatar
+        comment.author = {
+          id: comment.userId,
+          name: comment.userName || `用户${comment.userId}`,
+          avatar: comment.userAvatar || `https://picsum.photos/id/${120 + ((comment.userId || 0) % 10)}/100/100`
+        }
+      })
+      
+      console.log('[评论] 处理后的评论数据:', commentsData)
+      
+      // 更新评论显示
+      if (page === 1) {
+        // 第一页，直接替换评论列表
+        product.value.comments = commentsData
+      } else {
+        // 追加评论
+        if (!product.value.comments) {
+          product.value.comments = []
+        }
+        product.value.comments = product.value.comments.concat(commentsData)
+      }
+      
+      // 判断是否还有更多评论
+      noMoreComments.value = product.value.comments.length >= totalComments
+    } else {
+      // 无法提取评论数据
+      console.error('[评论] 无法从响应中提取评论数据:', res)
+      showToast('获取评论失败')
+    }
+  } catch (error) {
+    console.error('[评论] 获取评论失败:', error)
+    showToast('获取评论失败，请稍后重试')
+  } finally {
+    loadingComments.value = false
   }
 }
+
+// 处理头像加载错误
+const handleAvatarError = (event, userId) => {
+  console.log(`[评论] 用户ID=${userId}的头像加载失败`)
+  // 使用默认随机头像
+  event.target.src = `https://picsum.photos/id/${120 + ((userId || 0) % 10)}/100/100`
+}
+
+// 应用默认用户信息
+const applyDefaultUserInfo = (comments) => {
+  comments.forEach(comment => {
+    comment.author = {
+      id: comment.userId,
+      name: comment.userName || `用户${comment.userId}`,
+      avatar: comment.userAvatar || `https://picsum.photos/id/${120 + (comment.userId % 10)}/100/100`
+    }
+    
+    // 确保createTime字段存在
+    if (!comment.createTime && comment.createdAt) {
+      comment.createTime = comment.createdAt
+    }
+  })
+  console.log('[评论] 应用默认用户信息完成')
+}
+
+// 加载更多评论
+const loadMoreComments = () => {
+  if (loadingComments.value || noMoreComments.value) return
+  fetchComments(commentPage.value + 1)
+}
+
+// 取消回复
+const cancelReply = () => {
+  replyTo.value = null
+}
+
+// 评估头像URL，确保链接有效
+const evaluateAvatarUrl = (avatar, userId) => {
+  if (!avatar || typeof avatar !== 'string' || avatar.trim() === '') {
+    return `https://picsum.photos/id/${120 + ((userId || 0) % 10)}/100/100`
+  }
+  
+  // 检查是否为相对路径，如果是则添加基础URL
+  if (avatar.startsWith('/') && !avatar.startsWith('//')) {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
+    return `${baseUrl}${avatar}`
+  }
+  
+  return avatar
+}
+
+// 状态变量
+const showEditForm = ref(false)
+
+// 分享选项
+const shareOptions = [
+  { name: '微信', icon: 'wechat' },
+  { name: '微博', icon: 'weibo' },
+  { name: 'QQ', icon: 'qq' },
+  { name: '复制链接', icon: 'link' }
+];
 </script>
 
 <style scoped>
@@ -2248,10 +2397,10 @@ const submitReport = async () => {
 }
 /* 收藏激活状态 */
 .action-icon i.icon-favorite-filled {
-  color: var(--ios-systemRed, #ff3b30);
+  color: #ffc107; /* 从红色(#ff3b30)改为黄色 */
 }
 .action-icon:has(i.icon-favorite-filled) .icon-text {
-  color: var(--ios-systemRed, #ff3b30);
+  color: #ffc107; /* 从红色(#ff3b30)改为黄色 */
 }
 
 .icon-text {
@@ -2958,5 +3107,91 @@ const submitReport = async () => {
 
 .report-detail {
   margin-top: 16px;
+}
+
+/* 加载更多按钮 */
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.load-more-btn {
+  background: transparent;
+  border: none;
+  color: #007AFF;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.load-more-btn:disabled {
+  color: #8e8e93;
+  cursor: not-allowed;
+}
+
+.circular {
+  animation: circular 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes circular {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.no-more {
+  text-align: center;
+  color: #8e8e93;
+  font-size: 14px;
+  margin-top: 16px;
+  padding: 8px;
+}
+
+/* 无评论状态 */
+.no-comments {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  color: #8e8e93;
+}
+
+.no-comments i {
+  font-size: 40px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-comments-text {
+  font-size: 14px;
+}
+
+.empty-comment {
+  text-align: center;
+  padding: 20px;
+  color: #8e8e93;
+}
+
+.empty-comment-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-comment-text {
+  font-size: 14px;
+}
+
+.cancel-reply {
+  color: #8e8e93;
+  font-size: 14px;
+  margin-left: 10px;
+  cursor: pointer;
 }
 </style>

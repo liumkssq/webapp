@@ -126,18 +126,158 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
-import { showToast, showDialog } from 'vant'
-import { areaList } from '@vant/area-data'
-import HeaderNav from '@/components/HeaderNav.vue'
 import FooterNav from '@/components/FooterNav.vue'
-import { 
-  getAddressList, 
-  addAddress, 
-  updateAddress, 
-  deleteAddress as apiDeleteAddress,
-  setDefaultAddress
-} from '@/api/address'
+import HeaderNav from '@/components/HeaderNav.vue'
+import { areaList } from '@vant/area-data'
+import { showDialog, showToast } from 'vant'
+import { computed, onMounted, reactive, ref } from 'vue'
+// 已注释API导入
+// import { 
+//   getAddressList, 
+//   addAddress, 
+//   updateAddress, 
+//   deleteAddress as apiDeleteAddress,
+//   setDefaultAddress
+// } from '@/api/address'
+
+// 创建模拟数据
+const mockAddresses = ref([
+  {
+    id: 1,
+    name: '张三',
+    phone: '13812345678',
+    province: '广东省',
+    city: '深圳市',
+    district: '南山区',
+    detail: '科技园南路XX号',
+    isDefault: true
+  },
+  {
+    id: 2,
+    name: '李四',
+    phone: '13987654321',
+    province: '广东省',
+    city: '广州市',
+    district: '天河区',
+    detail: '天河路123号',
+    isDefault: false
+  }
+])
+
+// 模拟API调用
+const getAddressList = async () => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  return {
+    code: 200,
+    data: [...mockAddresses.value],
+    message: '获取成功'
+  }
+}
+
+const addAddress = async (data) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 创建新地址
+  const newAddress = {
+    ...data,
+    id: mockAddresses.value.length + 1
+  }
+  
+  // 如果设为默认地址，将其他地址设为非默认
+  if (newAddress.isDefault) {
+    mockAddresses.value.forEach(addr => {
+      addr.isDefault = false
+    })
+  }
+  
+  // 添加到地址列表
+  mockAddresses.value.push(newAddress)
+  
+  return {
+    code: 200,
+    message: '添加成功'
+  }
+}
+
+const updateAddress = async (data) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 查找要更新的地址
+  const index = mockAddresses.value.findIndex(addr => addr.id === data.id)
+  if (index === -1) {
+    return {
+      code: 400,
+      message: '地址不存在'
+    }
+  }
+  
+  // 如果设为默认地址，将其他地址设为非默认
+  if (data.isDefault) {
+    mockAddresses.value.forEach(addr => {
+      addr.isDefault = false
+    })
+  }
+  
+  // 更新地址
+  mockAddresses.value[index] = { ...mockAddresses.value[index], ...data }
+  
+  return {
+    code: 200,
+    message: '更新成功'
+  }
+}
+
+const apiDeleteAddress = async (id) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 查找要删除的地址
+  const index = mockAddresses.value.findIndex(addr => addr.id === id)
+  if (index === -1) {
+    return {
+      code: 400,
+      message: '地址不存在'
+    }
+  }
+  
+  // 删除地址
+  mockAddresses.value.splice(index, 1)
+  
+  return {
+    code: 200,
+    message: '删除成功'
+  }
+}
+
+const setDefaultAddress = async (id) => {
+  // 模拟网络延迟
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 查找要设为默认的地址
+  const index = mockAddresses.value.findIndex(addr => addr.id === id)
+  if (index === -1) {
+    return {
+      code: 400,
+      message: '地址不存在'
+    }
+  }
+  
+  // 将所有地址设为非默认
+  mockAddresses.value.forEach(addr => {
+    addr.isDefault = false
+  })
+  
+  // 将指定地址设为默认
+  mockAddresses.value[index].isDefault = true
+  
+  return {
+    code: 200,
+    message: '设置成功'
+  }
+}
 
 const loading = ref(true)
 const error = ref('')

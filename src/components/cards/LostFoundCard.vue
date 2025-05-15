@@ -37,9 +37,9 @@
 </template>
 
 <script setup>
+import { Icon as VanIcon } from 'vant';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { Icon as VanIcon } from 'vant';
 
 const props = defineProps({
   item: {
@@ -80,10 +80,12 @@ const statusClass = computed(() => {
   }
 });
 
+// 使用base64编码的空白图片作为占位图
+const noImageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABmJLR0QA/wD/AP+gvaeTAAAA+0lEQVR4nO3csQ2DMBRF0WcUxAJp2CAjZIQskA1gBBiCKZIyBVLkIsWFJPuec3rLV7giMwEAAAAAAAAAALjaNE/zPM/Tvdfa7mj30O4BADcQBAhBgBAECEGAEAQIQYAQBAhBgBAECEGAEAQIQYBs67rWWutaa313Lf55BwAAAAAAADjKFwV7FWVkG0KkAAAAAElFTkSuQmCC';
+
 // 处理物品图片
 const getItemImage = (item) => {
-  const placeholder = 'https://via.placeholder.com/150/F7F8FA/969799?text=No+Image';
-  if (!item) return placeholder;
+  if (!item) return noImageBase64;
 
   if (item.imageUrl) return item.imageUrl;
   if (item.images) {
@@ -94,21 +96,21 @@ const getItemImage = (item) => {
        try {
         if (item.images.startsWith('[')) {
           const parsedImages = JSON.parse(item.images);
-          return Array.isArray(parsedImages) && parsedImages.length > 0 ? parsedImages[0] : placeholder;
+          return Array.isArray(parsedImages) && parsedImages.length > 0 ? parsedImages[0] : noImageBase64;
         }
-        return item.images || placeholder;
+        return item.images || noImageBase64;
       } catch (e) {
-        return placeholder;
+        return noImageBase64;
       }
     }
   }
   if (item.image) return item.image;
-  return placeholder;
+  return noImageBase64;
 };
 
 // 图片加载错误处理
 const handleImageError = (event) => {
-  event.target.src = getItemImage(null); // 使用占位图
+  event.target.src = noImageBase64; // 使用base64占位图
 };
 
 // 格式化时间
@@ -151,7 +153,7 @@ const getPublisher = (item) => {
 const goToDetail = () => {
   if (props.item && props.item.id) {
     // 根据失物招领的路由调整
-    router.push(`/lostfound/detail/${props.item.id}`);
+    router.push(`/lost-found/detail/${props.item.id}`);
   }
 };
 
@@ -303,5 +305,17 @@ const toggleItemStatus = () => {
   gap: 8px;
   border-top: 1px solid #f2f3f5;
   padding: 10px 12px;
+}
+
+/* 增加以下样式，确保按钮样式正确显示 */
+.item-actions .van-button {
+  z-index: 1; /* 确保按钮在最上层 */
+  position: relative; /* 启用z-index */
+}
+
+/* 避免按钮样式被覆盖 */
+.item-actions .van-button--plain {
+  background-color: transparent !important;
+  border: 1px solid currentColor !important;
 }
 </style>

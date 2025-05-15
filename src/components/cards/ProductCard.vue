@@ -77,9 +77,12 @@ const statusClass = computed(() => {
   }
 });
 
+// 使用base64编码的空白图片作为占位图
+const noImageBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABmJLR0QA/wD/AP+gvaeTAAAA+0lEQVR4nO3csQ2DMBRF0WcUxAJp2CAjZIQskA1gBBiCKZIyBVLkIsWFJPuec3rLV7giMwEAAAAAAAAAALjaNE/zPM/Tvdfa7mj30O4BADcQBAhBgBAECEGAEAQIQYAQBAhBgBAECEGAEAQIQYBs67rWWutaa313Lf55BwAAAAAAADjKFwV7FWVkG0KkAAAAAElFTkSuQmCC';
+
 // 处理产品图片
 const getProductImage = (product) => {
-  if (!product) return 'https://via.placeholder.com/300';
+  if (!product) return noImageBase64;
   
   // 处理imageUrl字段
   if (product.imageUrl) return product.imageUrl;
@@ -88,7 +91,36 @@ const getProductImage = (product) => {
   if (product.images) {
     // 如果images是数组
     if (Array.isArray(product.images) && product.images.length > 0) {
-      return product.images[0];
+      const firstImage = product.images[0];
+      
+      // 处理特殊的嵌套JSON字符串格式
+      if (typeof firstImage === 'string') {
+        // 处理像 "[\"https://picsum.photos/300/300?random=826\"", " \"https://picsum.photos/300/300?random=139\"]" 这样的格式
+        if (firstImage.startsWith('[') && firstImage.includes('http')) {
+          try {
+            // 使用正则表达式直接提取URL
+            const urlMatch = firstImage.match(/https?:\/\/[^"\\]+/);
+            if (urlMatch && urlMatch[0]) {
+              return urlMatch[0];
+            }
+          } catch (e) {
+            console.error('解析商品图片URL失败:', e, firstImage);
+          }
+        }
+        
+        // 直接是URL的情况
+        if (firstImage.startsWith('http')) {
+          return firstImage;
+        }
+        
+        // 清理可能的JSON字符串
+        const cleanedUrl = firstImage.replace(/^\[\"|\"\]$/g, '').trim();
+        if (cleanedUrl.startsWith('http')) {
+          return cleanedUrl;
+        }
+      }
+      
+      return firstImage;
     }
     
     // 如果images是字符串（可能是JSON）
@@ -96,14 +128,21 @@ const getProductImage = (product) => {
       try {
         if (product.images.startsWith('[')) {
           const parsedImages = JSON.parse(product.images);
-          return Array.isArray(parsedImages) && parsedImages.length > 0 
-            ? parsedImages[0] 
-            : 'https://via.placeholder.com/300';
+          if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+            // 提取第一个图片URL
+            const firstParsedImage = parsedImages[0];
+            if (typeof firstParsedImage === 'string' && firstParsedImage.startsWith('http')) {
+              return firstParsedImage;
+            }
+          }
         }
-        return product.images;
+        
+        // 如果直接是URL
+        if (product.images.startsWith('http')) {
+          return product.images;
+        }
       } catch (e) {
-        console.error('解析商品图片字符串失败:', e);
-        return 'https://via.placeholder.com/300';
+        console.error('解析商品图片字符串失败:', e, product.images);
       }
     }
   }
@@ -113,12 +152,12 @@ const getProductImage = (product) => {
   if (product.thumbnail) return product.thumbnail;
   
   // 默认占位图
-  return 'https://via.placeholder.com/300';
+  return noImageBase64;
 };
 
 // 图片加载错误处理
 const handleImageError = (event) => {
-  event.target.src = 'https://via.placeholder.com/300';
+  event.target.src = noImageBase64;
 };
 
 // 格式化价格
@@ -310,5 +349,17 @@ const toggleProductStatus = () => {
   gap: 8px;
   border-top: 1px solid #f2f3f5;
   padding: 10px 12px;
+}
+
+/* 增加以下样式，确保按钮样式正确显示 */
+.product-actions .van-button {
+  z-index: 1; /* 确保按钮在最上层 */
+  position: relative; /* 启用z-index */
+}
+
+/* 避免按钮样式被覆盖 */
+.product-actions .van-button--plain {
+  background-color: transparent !important;
+  border: 1px solid currentColor !important;
 }
 </style>

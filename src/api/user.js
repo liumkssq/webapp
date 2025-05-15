@@ -825,6 +825,8 @@ export function findUsers(ids) {
   // 确保ids始终是数组
   const userIds = Array.isArray(ids) ? ids : [ids];
   
+  console.log('[findUsers] 请求参数:', { ids: userIds });
+  
   return request({
     url: '/api/user/finduser',
     method: 'post',
@@ -833,21 +835,63 @@ export function findUsers(ids) {
     }
   })
   .then(response => {
-    console.log('findUsers API原始响应:', response);
+    console.log('[findUsers] 原始响应:', response);
+    
+    // 处理单个用户对象响应
+    if (response && response.id && !response.users && !response.data) {
+      console.log('[findUsers] 检测到单个用户对象响应');
+      // 服务器直接返回了单个用户对象
+      return {
+        code: 200,
+        message: '获取用户成功',
+        data: {
+          users: [response]
+        }
+      };
+    }
     
     // 处理直接返回users数组的情况
     if (response && response.users && Array.isArray(response.users)) {
-      console.log('服务器直接返回users数组格式');
-      return response; // 直接返回原始响应
+      console.log('[findUsers] 检测到直接返回users数组格式');
+      return {
+        code: 200,
+        message: '获取用户成功',
+        data: {
+          users: response.users
+        }
+      };
+    }
+    
+    // 处理直接返回用户数组的情况
+    if (response && Array.isArray(response) && response.length > 0 && response[0].id) {
+      console.log('[findUsers] 检测到直接返回用户数组格式');
+      return {
+        code: 200,
+        message: '获取用户成功',
+        data: {
+          users: response
+        }
+      };
     }
     
     // 处理标准响应格式
-    if (response && response.code === 200 && response.data) {
+    if (response && response.code === 200) {
+      console.log('[findUsers] 检测到标准响应格式');
+      
+      // 处理data为数组的情况
+      if (Array.isArray(response.data)) {
+        console.log('[findUsers] 标准响应中data是用户数组');
+        response.data = {
+          users: response.data
+        };
+      }
+      
       // 标准化响应格式
-      console.log('标准响应格式处理');
-      if (Array.isArray(response.data.users)) {
+      if (response.data && response.data.users) {
+        console.log('[findUsers] 标准化用户数据');
         response.data.users = response.data.users.map(user => ({
           id: user.id || user.userId,
+          userId: user.id || user.userId, // 兼容字段
           username: user.username || '未知用户',
           nickname: user.nickname || user.username || '未知用户',
           avatar: user.avatar || '',
@@ -861,12 +905,13 @@ export function findUsers(ids) {
     return response;
   })
   .catch(error => {
-    console.error('findUsers API请求失败:', error);
+    console.error('[findUsers] 请求失败:', error);
+    
     // 使用错误处理的最佳实践
     if (error.response) {
       // 服务器响应了一个状态码
-      console.error('服务器响应错误状态码:', error.response.status);
-      console.error('错误响应数据:', error.response.data);
+      console.error('[findUsers] 服务器响应错误状态码:', error.response.status);
+      console.error('[findUsers] 错误响应数据:', error.response.data);
       
       return {
         code: error.response.status,
@@ -877,7 +922,7 @@ export function findUsers(ids) {
       };
     } else if (error.request) {
       // 请求发送成功，但没有收到响应
-      console.error('未收到响应:', error.request);
+      console.error('[findUsers] 未收到响应:', error.request);
       return {
         code: 500,
         message: '服务器无响应',

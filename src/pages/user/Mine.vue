@@ -27,13 +27,11 @@
           </template>
         </div>
       </div>
-      <!-- Header Actions: Settings, Cart, Notifications -->
+      <!-- Header Actions: Settings, Notifications -->
       <div class="header-actions">
-        <div class="header-icon" @click="goToCart">
-          <svg-icon name="shopping-cart" size="24" />
-        </div>
         <div class="header-icon" @click="goToNotifications">
           <svg-icon name="bell" size="24" />
+          <span class="badge" v-if="unreadNotificationsCount > 0">{{ unreadNotificationsCount }}</span>
         </div>
         <div class="header-icon" @click="goToSettings">
            <svg-icon name="settings" size="24" />
@@ -50,13 +48,13 @@
         <div class="stat-value">{{ userStats.lostFoundCount || 0 }}</div>
         <div class="stat-label">失物招领</div>
       </div>
-      <div class="stat-item" @click="goToUserArticles">
-        <div class="stat-value">{{ userStats.articleCount || 0 }}</div>
-        <div class="stat-label">我的文章</div>
-      </div>
       <div class="stat-item" @click="goToFavorites">
         <div class="stat-value">{{ userStats.favoriteCount || 0 }}</div>
         <div class="stat-label">我的收藏</div>
+      </div>
+      <div class="stat-item" @click="goToCart">
+        <svg-icon name="shopping-cart" size="24" />
+        <div class="stat-label">购物车</div>
       </div>
     </div>
 
@@ -74,11 +72,6 @@
             <span>待付款</span>
             <svg-icon name="chevron-right" size="16" class="arrow-icon" />
           </div>
-          <div class="function-item" @click="goToOrderList('processing')">
-            <svg-icon name="package" size="24" />
-            <span>待发货</span>
-            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
-          </div>
           <div class="function-item" @click="goToOrderList('shipping')">
             <svg-icon name="truck" size="24" />
             <span>待收货</span>
@@ -88,14 +81,9 @@
       </div>
 
       <div class="function-section">
-        <div class="section-title">我的工具</div>
+        <div class="section-title">常用功能</div>
         <div class="function-items">
-          <div class="function-item" @click="goToWallet">
-            <svg-icon name="credit-card" size="24" />
-            <span>我的钱包</span>
-            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
-          </div>
-           <div class="function-item" @click="goToAddressList">
+          <div class="function-item" @click="goToAddressList">
             <svg-icon name="map-pin" size="24" />
             <span>收货地址</span>
             <svg-icon name="chevron-right" size="16" class="arrow-icon" />
@@ -105,29 +93,9 @@
             <span>浏览历史</span>
             <svg-icon name="chevron-right" size="16" class="arrow-icon" />
           </div>
-          <div class="function-item" @click="goToIdentity">
-            <svg-icon name="shield-check" size="24" />
-            <span>身份认证</span>
-            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
-          </div>
-           <div class="function-item" @click="goToCoupons">
-            <svg-icon name="tag" size="24" />
-            <span>我的优惠券</span>
-            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
-          </div>
-           <div class="function-item" @click="goToDrafts">
-            <svg-icon name="file-text" size="24" />
-            <span>草稿箱</span>
-            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
-          </div>
           <div class="function-item" @click="goToCustomerService">
             <svg-icon name="help-circle" size="24" />
             <span>联系客服</span>
-            <svg-icon name="chevron-right" size="16" class="arrow-icon" />
-          </div>
-          <div class="function-item" @click="goToFeedback">
-            <svg-icon name="message-square" size="24" />
-            <span>问题反馈</span>
             <svg-icon name="chevron-right" size="16" class="arrow-icon" />
           </div>
           <div class="function-item" @click="goToAbout">
@@ -148,14 +116,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useUserStore } from '@/store/user'
-import { useMessageStore } from '@/store/message'
+import { getUserLostFound } from '@/api/lostfound'
+import { getUserFavorites, getUserProducts } from '@/api/product'
+import { getNotifications, logout } from '@/api/user'
 import FooterNavigation from '@/components/common/FooterNavigation.vue'
-import { getUserStats, logout } from '@/api/user'
-import { getSafeImageUrl, DEFAULT_AVATAR } from '@/utils/defaultImages'
 import IosTop from '@/components/Ios/IosTop.vue'
+import { useMessageStore } from '@/store/message'
+import { useUserStore } from '@/store/user'
+import { DEFAULT_AVATAR, getSafeImageUrl } from '@/utils/defaultImages'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 const router = useRouter()
 const userStore = useUserStore()
 const messageStore = useMessageStore()
@@ -175,72 +145,256 @@ const defaultAvatar = DEFAULT_AVATAR
 const userInfo = computed(() => userStore.userInfo || {})
 const isLoggedIn = computed(() => !!userStore.token)
 
+// 用户数据
+const userProducts = ref([])
+const userFavorites = ref([])
+const userLostFound = ref([])
+const loading = ref({
+  products: false,
+  favorites: false,
+  lostFound: false
+})
+
 const userStats = computed(() => {
   return {
-    productCount: userInfo.value.productCount || 0,
-    lostFoundCount: userInfo.value.lostFoundCount || 0,
+    productCount: userProducts.value.length || userInfo.value.productCount || 0,
+    lostFoundCount: userLostFound.value.length || userInfo.value.lostFoundCount || 0,
     articleCount: userInfo.value.articleCount || 0,
-    favoriteCount: userInfo.value.favoriteCount || 0
+    favoriteCount: userFavorites.value.length || userInfo.value.favoriteCount || 0
   };
 });
 
+// 添加通知数据
+const unreadNotificationsCount = ref(0)
+
 onMounted(async () => {
-  // 启动时间更新
+  console.log('个人中心页面加载...')
+  
+  // 启动时间更新定时器
   updateTime()
   timeInterval = setInterval(updateTime, 30000) // 每30秒更新一次
   
-  if (isLoggedIn.value) {
-    try {
-      console.log('Mine页面加载，开始获取用户数据...');
-      
-      // 1. 确保有完整的用户基本信息
-      if (!userInfo.value.id || !userInfo.value.username) {
-        console.log('用户信息不完整，调用getUserInfo获取最新数据');
-        await userStore.getUserInfo();
-      }
-      
-      console.log('当前用户信息:', userInfo.value);
-      
-      // 2. 获取用户统计数据
-      if (!userInfo.value.productCount || !userInfo.value.articleCount || !userInfo.value.lostFoundCount) {
-        console.log('用户统计数据缺失，调用getUserStats API');
-        const response = await getUserStats(true);
-        
-        if (response.code === 200 && response.data) {
-          console.log('获取到用户统计数据:', response.data);
-          userStore.updateUserInfo({
-            productCount: response.data.productCount || 0,
-            lostFoundCount: response.data.lostFoundCount || 0,
-            articleCount: response.data.articleCount || 0,
-            favoriteCount: response.data.favoriteCount || 0
-          });
-        } else {
-          console.warn('获取用户统计数据失败:', response.message || '未知错误');
-        }
-      } else {
-        console.log('用户统计数据已存在，但仍然请求最新数据以确保准确性');
-        try {
-          const response = await getUserStats(true);
-          if (response.code === 200 && response.data) {
-            console.log('更新用户统计数据:', response.data);
-            userStore.updateUserInfo({
-              productCount: response.data.productCount || 0,
-              lostFoundCount: response.data.lostFoundCount || 0,
-              articleCount: response.data.articleCount || 0,
-              favoriteCount: response.data.favoriteCount || 0
-            });
-          }
-        } catch (error) {
-          console.error('更新用户统计数据失败:', error);
-        }
-      }
-    } catch (error) {
-      console.error('获取用户信息失败:', error);
+  try {
+    // 首先获取用户信息
+    if (isLoggedIn.value && (!userInfo.value || !userInfo.value.id || !userInfo.value.username)) {
+      console.log('用户信息不完整，调用getUserInfo获取最新数据')
+      await userStore.getUserInfo()
     }
-  } else {
-    console.log('用户未登录，不获取数据');
+    
+    // 只有当用户信息获取成功且已登录时，才加载其他数据
+    if (isLoggedIn.value) {
+      console.log('当前用户信息:', userInfo.value)
+      console.log('用户已登录，ID:', userInfo.value.id)
+      
+      // 获取用户统计数据
+      // fetchUserStats()
+      
+      // 同时获取用户商品、收藏、失物招领和通知信息
+      Promise.all([
+        fetchUserProducts(),
+        fetchUserFavorites(),
+        fetchUserLostFound(),
+        // fetchNotifications() // 确保在用户已登录状态下调用
+      ])
+    } else {
+      console.warn('用户未登录，不加载个人数据')
+    }
+  } catch (error) {
+    console.error('初始化个人中心页面失败:', error)
   }
 })
+
+// 获取用户发布的商品
+async function fetchUserProducts() {
+  if (!userInfo.value.id) {
+    console.warn('fetchUserProducts: 用户ID不存在，跳过API调用');
+    return;
+  }
+  
+  try {
+    loading.value.products = true;
+    console.log('获取用户发布的商品...');
+    
+    // 添加详细调试信息
+    console.log('fetchUserProducts: userInfo.id的类型:', typeof userInfo.value.id);
+    console.log('fetchUserProducts: userInfo.id的值:', userInfo.value.id);
+    
+    // 确保userId是一个有效的值（字符串或数字），而不是对象
+    let userId = userInfo.value.id;
+    if (typeof userId === 'object') {
+      console.warn('fetchUserProducts: 警告: 用户ID是一个对象而不是简单值');
+      // 尝试从对象中提取id
+      userId = userId.id || userId.userId || null;
+      console.log('fetchUserProducts: 从对象中提取的userId:', userId);
+    }
+    
+    // 如果仍然无法获取有效的userId，则返回
+    if (!userId) {
+      console.error('fetchUserProducts: 无法获取有效的用户ID，取消API请求');
+      loading.value.products = false;
+      return;
+    }
+    
+    // 打印完整的API路径，便于调试
+    console.log(`fetchUserProducts: 将调用API路径: /api/product/userProduct/${userId}`);
+    
+    // 使用指定的API接口获取用户商品
+    const response = await getUserProducts(userId);
+    console.log('fetchUserProducts: API响应:', response);
+    
+    if (response) {
+      // 处理响应数据 - 注意这里是直接使用response，因为请求拦截器已经提取了data
+      const productData = response.list || response.data?.list || [];
+      const totalCount = response.total || response.data?.total || 0;
+      
+      userProducts.value = productData;
+      console.log(`获取到${totalCount}件用户商品`);
+      
+      // 更新用户信息中的商品数量
+      userStore.updateUserInfo({
+        productCount: totalCount
+      });
+    } else {
+      // 处理错误响应
+      console.error('fetchUserProducts: API返回错误:', response?.message || '未知错误');
+      messageStore.showError(response?.message || '获取商品列表失败');
+    }
+  } catch (error) {
+    console.error('获取用户商品失败:', error);
+    messageStore.showError('获取商品列表失败: ' + (error.message || '未知错误'));
+  } finally {
+    loading.value.products = false;
+  }
+}
+
+// 获取用户收藏的商品
+async function fetchUserFavorites() {
+  if (!isLoggedIn.value) return;
+  
+  try {
+    loading.value.favorites = true;
+    console.log('获取用户收藏的商品...');
+    
+    // 使用指定的API接口获取用户收藏
+    const response = await getUserFavorites();
+    console.log('fetchUserFavorites: API响应:', response);
+    
+    if (response) {
+      // 处理响应数据 - 提取列表和总数
+      const favoriteData = response.list || response.data?.list || [];
+      const totalCount = response.total || response.data?.total || 0;
+      
+      userFavorites.value = favoriteData;
+      console.log(`获取到${totalCount}件收藏商品`);
+      
+      // 更新用户信息中的收藏数量
+      userStore.updateUserInfo({
+        favoriteCount: totalCount
+      });
+    }
+  } catch (error) {
+    console.error('获取用户收藏失败:', error);
+  } finally {
+    loading.value.favorites = false;
+  }
+}
+
+// 获取用户的失物招领
+async function fetchUserLostFound() {
+  if (!userInfo.value.id) {
+    console.warn('fetchUserLostFound: 用户ID不存在，跳过API调用');
+    return;
+  }
+  
+  try {
+    loading.value.lostFound = true;
+    console.log('获取用户的失物招领...');
+    
+    // 添加详细调试信息
+    console.log('fetchUserLostFound: userInfo.id的类型:', typeof userInfo.value.id);
+    console.log('fetchUserLostFound: userInfo.id的值:', userInfo.value.id);
+    
+    // 确保userId是一个有效的值（字符串或数字），而不是对象
+    let userId = userInfo.value.id;
+    if (typeof userId === 'object') {
+      console.warn('fetchUserLostFound: 警告: 用户ID是一个对象而不是简单值');
+      // 尝试从对象中提取id
+      userId = userId.id || userId.userId || null;
+      console.log('fetchUserLostFound: 从对象中提取的userId:', userId);
+    }
+    
+    // 如果仍然无法获取有效的userId，则返回
+    if (!userId) {
+      console.error('fetchUserLostFound: 无法获取有效的用户ID，取消API请求');
+      loading.value.lostFound = false;
+      return;
+    }
+    
+    // 打印完整的API路径，便于调试
+    console.log(`fetchUserLostFound: 将调用API路径: /api/lost-found/userLostFound/${userId}`);
+    
+    // 使用指定的API接口获取用户失物招领
+    const response = await getUserLostFound(userId);
+    console.log('fetchUserLostFound: API响应:', response);
+    
+    if (response) {
+      // 处理响应数据 - 提取列表和总数
+      const lostFoundData = response.list || response.data?.list || [];
+      const totalCount = response.total || response.data?.total || 0;
+      
+      userLostFound.value = lostFoundData;
+      console.log(`获取到${totalCount}条失物招领信息`);
+      
+      // 更新用户信息中的失物招领数量
+      userStore.updateUserInfo({
+        lostFoundCount: totalCount
+      });
+    } else {
+      // 处理错误响应
+      console.error('fetchUserLostFound: API返回错误:', response?.message || '未知错误');
+      messageStore.showError(response?.message || '获取失物招领列表失败');
+    }
+  } catch (error) {
+    console.error('获取用户失物招领失败:', error);
+    messageStore.showError('获取失物招领列表失败: ' + (error.message || '未知错误'));
+  } finally {
+    loading.value.lostFound = false;
+  }
+}
+
+// 获取通知信息
+async function fetchNotifications() {
+  if (!isLoggedIn.value) {
+    console.warn('用户未登录，无法获取通知');
+    return;
+  }
+
+  try {
+    console.log('加载用户通知数据...');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.warn('未找到认证令牌，无法获取通知');
+      return;
+    }
+    
+    console.log('API请求路径:', `/api/user/notifications`);
+    const notificationsResponse = await getNotifications();
+    console.log('通知响应结果:', notificationsResponse);
+    
+    if (notificationsResponse && notificationsResponse.code === 200) {
+      const notifications = notificationsResponse.data.list || [];
+      // 计算未读通知数量
+      unreadNotificationsCount.value = notifications.filter(notification => !notification.isRead).length;
+      console.log(`未读通知数量: ${unreadNotificationsCount.value}`);
+    } else {
+      console.error('获取通知失败:', notificationsResponse?.message || '未知错误');
+      // 不向用户显示错误，静默失败
+    }
+  } catch (error) {
+    console.error('获取通知数据失败:', error);
+    // 不在UI上显示错误，因为通知不是核心功能
+  }
+}
 
 const goToLogin = () => {
   router.push('/login')
@@ -312,7 +466,9 @@ const goToCart = () => {
 
 const goToNotifications = () => {
   if (!isLoggedIn.value) return goToLogin();
-  router.push('/notifications'); // Placeholder path
+  
+  console.log('导航到通知页面');
+  router.push('/notifications');
 };
 
 const goToWallet = () => {
@@ -769,10 +925,29 @@ onUnmounted(() => {
   transition: all 0.2s ease;
   backdrop-filter: blur(5px);
   color: white; /* Ensure icons are white */
+  position: relative; /* 为徽章定位 */
 }
 
 .header-icon:hover {
   background-color: rgba(255, 255, 255, 0.3);
   transform: scale(1.1); /* Example hover effect */
+}
+
+/* 添加通知徽章样式 */
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: #ff3b30;
+  color: white;
+  font-size: 0.7rem;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  font-weight: bold;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 </style>

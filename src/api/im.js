@@ -185,7 +185,7 @@ export function getFriendOnlineStatus() {
  * @returns {Promise}
  */
 export function getFriendRequests(params) {
-  return request.get('/api/social/friends/requests', { params });
+  return request.get('/api/social/friends', { params });
 }
 
 /**

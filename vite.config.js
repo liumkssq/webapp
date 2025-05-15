@@ -1,8 +1,8 @@
-import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
+import { defineConfig } from 'vite'
 
 // 生产环境基础路径
 const BASE_URL = '/'
@@ -34,16 +34,30 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5173,
+    port: 5175,
     open: true,
     cors: true,
     proxy: {
       // 可以配置后端接口代理
       '/api': {
-        target: 'http://localhost:8888',
+        target: 'http://localhost:8988',
         changeOrigin: true,
         // rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      '/order': {
+        target: 'http://localhost:9888',
+        changeOrigin: true,
+      },
+      '/payment/v1':{
+        target: 'http://localhost:10889',
+        changeOrigin: true,
+      },
+      // 确保/payment/api也被正确代理，避免前端路由与API冲突
+      '/payment/api':{
+        target: 'http://localhost:10889',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/payment\/api/, '/payment/v1')
+      }
       // // IM服务代理
       // '/v1': {
       //   target: 'http://localhost:8998',

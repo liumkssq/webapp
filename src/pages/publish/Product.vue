@@ -45,7 +45,7 @@
         <div class="images-tip">请上传清晰的商品照片，最多5张</div>
         
         <!-- AI图片分析入口 -->
-        <div class="ai-image-analyzer-btn" v-if="productForm.images.length > 0" @click="showImageAnalyzer = true">
+        <div class="ai-image-analyzer-btn" v-if="productForm.images.length > 0" @click="analyzeImages">
           <i class="icon-analyze"></i>
           <span>AI图片分析</span>
         </div>
@@ -340,20 +340,73 @@ const isFormValid = computed(() => {
 })
 
 // 添加图片
-const addImage = () => {
-  // 在实际应用中，这里应该调用文件选择器
+const addImage = async () => {
+  // 检查图片数量限制
   if (productForm.images.length >= 5) {
     showToast('最多上传5张图片')
     return
   }
   
-  // 模拟上传图片
-  const mockImage = {
-    id: Date.now(),
-    url: `https://picsum.photos/300/300?random=${Math.floor(Math.random() * 1000)}`
-  }
+  // 创建文件输入元素
+  const fileInput = document.createElement('input')
+  fileInput.type = 'file'
+  fileInput.accept = 'image/*'
+  fileInput.style.display = 'none'
+  document.body.appendChild(fileInput)
   
-  productForm.images.push(mockImage)
+  // 监听文件选择事件
+  fileInput.addEventListener('change', async (event) => {
+    try {
+      const file = event.target.files[0]
+      if (!file) {
+        document.body.removeChild(fileInput)
+        return
+      }
+      
+      // 验证文件类型和大小
+      if (!file.type.includes('image')) {
+        showToast('请选择图片文件')
+        document.body.removeChild(fileInput)
+        return
+      }
+      
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      if (file.size > maxSize) {
+        showToast('图片大小不能超过10MB')
+        document.body.removeChild(fileInput)
+        return
+      }
+      
+      // 显示上传中的提示
+      showToast('上传中...')
+      
+      // 导入上传方法
+      const { smartUploadImage } = await import('@/api/upload')
+      
+      // 上传图片到OSS
+      const result = await smartUploadImage(file, 'product')
+      
+      // 添加图片到表单
+      if (result && result.url) {
+        productForm.images.push({
+          id: Date.now(),
+          url: result.url
+        })
+        showToast('上传成功')
+      } else {
+        showToast('上传失败，请重试')
+      }
+    } catch (error) {
+      console.error('图片上传出错:', error)
+      showToast('上传失败: ' + (error.message || '请重试'))
+    } finally {
+      // 移除文件输入元素
+      document.body.removeChild(fileInput)
+    }
+  })
+  
+  // 触发文件选择对话框
+  fileInput.click()
 }
 
 // 移除图片
@@ -707,6 +760,56 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('beforeunload', saveFormDataToStorage);
 });
+
+// 添加新的analyzeImages方法
+const analyzeImages = async () => {
+  // 检查是否有图片
+  if (productForm.images.length === 0) {
+    showToast('请先上传商品图片');
+    return;
+  }
+
+  showToast('AI正在分析图片...');
+  
+  try {
+    // 导入AI图片分析函数
+    const { analyzeImages } = await import('@/utils/aiAssist');
+    
+    // 显示加载中状态并打开分析器弹窗
+    showImageAnalyzer.value = true;
+    
+    // 调用AI图片分析，传入图片数组和上下文
+    const analysisResult = await analyzeImages(productForm.images, {
+      contextType: 'product',
+      existingTitle: productForm.title,
+      existingDescription: productForm.description
+    });
+    
+    // 检查是否有错误
+    if (analysisResult.error) {
+      showToast('分析失败：' + analysisResult.error);
+      return;
+    }
+    
+    // 在组件中设置分析结果，由ImageAnalyzer.vue组件展示和处理
+    // 分析结果将通过@select-title、@select-tag等事件被应用
+    
+    // 如果没有现有描述，可以直接应用分析结果
+    if (!productForm.description && analysisResult.description) {
+      productForm.description = analysisResult.description;
+    }
+    
+    // 如果没有标题，使用推荐标题
+    if (!productForm.title && analysisResult.title) {
+      productForm.title = analysisResult.title;
+    }
+    
+    showToast('AI分析完成');
+  } catch (error) {
+    console.error('AI图片分析出错:', error);
+    showToast('分析失败: ' + (error.message || '未知错误'));
+  }
+}
 </script>
 
 <style scoped>

@@ -1,7 +1,6 @@
 <script setup>
 // Remove the unnecessary import of defineProps
 // import { defineProps } from 'vue'
-import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
@@ -31,26 +30,30 @@ const getProductImage = (product) => {
     if (Array.isArray(product.images) && product.images.length > 0) {
       const firstImage = product.images[0];
       
-      // 处理JSON字符串格式
+      // 处理JSON字符串格式 - 特别处理嵌套JSON格式的问题
       if (typeof firstImage === 'string') {
-        if (firstImage.startsWith('[')) {
+        // 处理像 "[\"https://picsum.photos/300/300?random=826\"", " \"https://picsum.photos/300/300?random=139\"]" 这样的数据
+        if (firstImage.startsWith('[') && firstImage.includes('http')) {
           try {
-            const parsedImages = JSON.parse(firstImage);
-            return Array.isArray(parsedImages) && parsedImages.length > 0 
-              ? parsedImages[0] 
-              : 'https://via.placeholder.com/300';
+            // 使用正则表达式直接提取URL，避免复杂的JSON解析
+            const urlMatch = firstImage.match(/https?:\/\/[^"\\]+/);
+            if (urlMatch && urlMatch[0]) {
+              return urlMatch[0];
+            }
           } catch (e) {
-            console.error('解析商品图片JSON失败:', e);
-            // 尝试移除JSON字符串的引号和括号
-            return firstImage.replace(/^\[\"|\"\]$/g, '') || 'https://via.placeholder.com/300';
+            console.error('解析商品图片URL失败:', e, firstImage);
           }
         }
         
-        // 检查是否为CDN图片URL
-        if (firstImage.includes('cdn.pixabay.com') || 
-            firstImage.includes('http://') || 
-            firstImage.includes('https://')) {
+        // 如果直接是URL
+        if (firstImage.startsWith('http')) {
           return firstImage;
+        }
+        
+        // 移除JSON字符串的引号和括号
+        const cleanedUrl = firstImage.replace(/^\[\"|\"\]$/g, '').trim();
+        if (cleanedUrl.startsWith('http')) {
+          return cleanedUrl;
         }
       }
       
@@ -60,16 +63,12 @@ const getProductImage = (product) => {
     // 如果images是字符串（可能是JSON）
     if (typeof product.images === 'string') {
       try {
-        if (product.images.startsWith('[')) {
-          const parsedImages = JSON.parse(product.images);
-          return Array.isArray(parsedImages) && parsedImages.length > 0 
-            ? parsedImages[0] 
-            : 'https://via.placeholder.com/300';
+        const parsed = JSON.parse(product.images);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed[0];
         }
-        return product.images;
       } catch (e) {
         console.error('解析商品图片字符串失败:', e);
-        return 'https://via.placeholder.com/300';
       }
     }
   }

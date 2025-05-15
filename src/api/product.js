@@ -1,19 +1,46 @@
 import request from '@/utils/request';
+import axios from 'axios';
 
 // 添加商品评论
-export function commentProduct(productId, data) {
-  return request({
-    url: `/api/product/comment/${productId}`,
+export function commentProduct(id, data) {
+  console.log(`[API] 发表商品${id}评论:`, data);
+  
+  // 确保token在请求头中
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.error('[API] 发表评论失败: 未找到认证令牌');
+    return Promise.reject({ 
+      code: 401, 
+      message: '认证失败，请重新登录', 
+      status: 401 
+    });
+  }
+  
+  return axios({
+    url: `${import.meta.env.VITE_API_BASE_URL || ''}/api/product/comment/${id}`,
     method: 'post',
-    data
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    data: data
   })
+  .then(response => {
+    console.log(`[API] 发表评论成功:`, response.data);
+    return response.data;
+  })
+  .catch(error => {
+    console.error(`[API] 发表评论失败:`, error);
+    throw error;
+  });
 }
 
 // 取消收藏商品
 export function unfavoriteProduct(id) {
   return request({
     url: `/api/product/unfavorite/${id}`,
-    method: 'post'
+    method: 'post',
+    data: { favorite: false }
   })
 }
 
@@ -207,16 +234,31 @@ export function deleteProduct(id) {
 
 /**
  * 获取用户发布的商品列表
- * @param {number|string} userId 用户ID
+ * @param {number|string|object} userId 用户ID
  * @param {Object} params 查询参数
  * @returns {Promise} Promise对象
  */
 export function getUserProducts(userId, params) {
+  // 处理userId可能是对象的情况
+  let id = userId;
+  
+  if (typeof userId === 'object') {
+    console.warn('getUserProducts: userId是对象类型', userId);
+    id = userId.id || userId.userId || null;
+  }
+  
+  if (!id) {
+    console.error('getUserProducts: 无效的用户ID', userId);
+    return Promise.reject(new Error('无效的用户ID'));
+  }
+  
+  console.log(`调用getUserProducts API, userId: ${id}, 参数:`, params);
+  
   return request({
-    url: `/api/product/user/${userId}`,
+    url: `/api/product/userProduct/${id}`,
     method: 'get',
     params
-  })
+  });
 }
 
 /**
@@ -227,7 +269,8 @@ export function getUserProducts(userId, params) {
 export function favoriteProduct(id) {
   return request({
     url: `/api/product/favorite/${id}`,
-    method: 'post'
+    method: 'post',
+    data: { favorite: true }
   })
 }
 
@@ -242,6 +285,15 @@ export function getFavoriteProducts(params) {
     method: 'get',
     params
   })
+}
+
+/**
+ * 获取用户收藏的商品列表
+ * 简化版本，直接调用getFavoriteProducts
+ * @returns {Promise} Promise对象
+ */
+export function getUserFavorites() {
+  return getFavoriteProducts();
 }
 
 /**
@@ -270,5 +322,21 @@ export function reportProduct(id, data) {
       message: error.message || '举报失败，请稍后重试',
       success: false
     };
+  });
+}
+
+/**
+ * 获取商品评论列表
+ * @param {number|string} id 商品ID
+ * @param {Object} params 查询参数
+ * @param {number} params.page 页码
+ * @param {number} params.limit 每页数量
+ * @returns {Promise} Promise对象
+ */
+export function getProductComments(id, params = {}) {
+  return request({
+    url: `/api/product/comments/${id}`,
+    method: 'get',
+    params
   });
 }

@@ -10,6 +10,8 @@ import * as article from './article'
 import * as common from './common'
 import * as search from './search'
 import * as upload from './upload'
+import * as order from './order'
+import * as payment from './payment'
 
 // 创建API对象，便于统一管理
 const api = {
@@ -23,7 +25,9 @@ const api = {
   article,
   common,
   search,
-  upload
+  upload,
+  order,
+  payment
 }
 
 export default api

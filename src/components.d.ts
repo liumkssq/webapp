@@ -70,5 +70,18 @@ declare module 'vue' {
     TransactionItem: typeof import('./components/wallet/TransactionItem.vue')['default']
     UploadDialog: typeof import('./components/dialog/UploadDialog.vue')['default']
     UserEditDialog: typeof import('./components/dialog/UserEditDialog.vue')['default']
+    VanBadge: typeof import('vant/es')['Badge']
+    VanButton: typeof import('vant/es')['Button']
+    VanDialog: typeof import('vant/es')['Dialog']
+    VanEmpty: typeof import('vant/es')['Empty']
+    VanField: typeof import('vant/es')['Field']
+    VanIcon: typeof import('vant/es')['Icon']
+    VanImage: typeof import('vant/es')['Image']
+    VanList: typeof import('vant/es')['List']
+    VanLoading: typeof import('vant/es')['Loading']
+    VanNavBar: typeof import('vant/es')['NavBar']
+    VanPopup: typeof import('vant/es')['Popup']
+    VanPullRefresh: typeof import('vant/es')['PullRefresh']
+    VanSearch: typeof import('vant/es')['Search']
   }
 }

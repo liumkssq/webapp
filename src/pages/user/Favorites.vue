@@ -69,24 +69,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import { showToast } from 'vant';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 // 从各模块导入收藏相关API
-import { getFavoriteProducts, unfavoriteProduct } from '@/api/product';
-import { getFavoriteArticles, favoriteArticle } from '@/api/article'; // favoriteArticle(id, false) 用于取消收藏
+import { favoriteArticle, getFavoriteArticles } from '@/api/article'; // favoriteArticle(id, false) 用于取消收藏
 import { unfavoriteLostFound } from '@/api/lostfound'; // 假设 lostFound.js 有 getFavoriteLostFounds (待确认或添加)
+import { getFavoriteProducts, unfavoriteProduct } from '@/api/product';
 // 假设有 getFavoriteLostFounds 用于获取收藏的失物招领
 // import { getFavoriteLostFounds, unfavoriteLostFound } from '@/api/lostfound';
 
 // 导入组件
-import HeaderNav from '@/components/HeaderNav.vue';
 import FooterNav from '@/components/FooterNav.vue';
-import ProductCard from '@/components/cards/ProductCard.vue';
+import HeaderNav from '@/components/HeaderNav.vue';
 import ArticleCard from '@/components/cards/ArticleCard.vue';
 import LostFoundCard from '@/components/cards/LostFoundCard.vue';
+import ProductCard from '@/components/cards/ProductCard.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -117,51 +117,45 @@ const fetchUserFavorites = async () => {
     }
     console.log(`Fetching favorites for user ID: ${userStore.userInfo.id}`);
 
-    // 并行获取所有类型的收藏
-    const results = await Promise.allSettled([
-      getFavoriteProducts({ userId: userStore.userInfo.id, page: 1, pageSize: 50 }),
-      getFavoriteArticles({ userId: userStore.userInfo.id, page: 1, pageSize: 50 }),
-      // 假设的获取收藏失物招领API调用，如果不存在，可以暂时注释掉
-      // getFavoriteLostFounds({ userId: userStore.userInfo.id, page: 1, pageSize: 50 })
-    ]);
+    // 获取商品收藏
+    const productFavsResponse = await getFavoriteProducts();
+    console.log('getFavoriteProducts原始响应:', productFavsResponse);
+
+    // 尝试获取文章收藏
+    let articleFavsResponse;
+    try {
+      articleFavsResponse = await getFavoriteArticles();
+      console.log('getFavoriteArticles原始响应:', articleFavsResponse);
+    } catch (e) {
+      console.warn('获取文章收藏失败，可能API不存在', e);
+      articleFavsResponse = null;
+    }
 
     let allFavorites = [];
-    let fetchError = null;
 
     // 处理商品收藏结果
-    if (results[0].status === 'fulfilled' && results[0].value.code === 200) {
-      const productFavs = results[0].value.data?.list || [];
-      allFavorites.push(...productFavs.map(item => ({ type: 'product', itemId: item.id, itemDetails: item, favoriteId: item.favoriteId /* 假设有 */ })));
-    } else if (results[0].status === 'rejected' || results[0].value.code !== 200) {
-      console.error('获取商品收藏失败:', results[0].reason || results[0].value.message);
-      fetchError = results[0].reason?.message || results[0].value?.message || '加载商品收藏失败';
+    if (productFavsResponse) {
+      const productFavs = productFavsResponse.list || productFavsResponse.data?.list || [];
+      
+      allFavorites.push(...productFavs.map(item => ({ 
+        type: 'product', 
+        itemId: item.id, 
+        itemDetails: item, 
+        favoriteId: item.favoriteId || item.id
+      })));
     }
 
     // 处理文章收藏结果
-    if (results[1].status === 'fulfilled' && results[1].value.code === 200) {
-      const articleFavs = results[1].value.data?.list || [];
-      allFavorites.push(...articleFavs.map(item => ({ type: 'article', itemId: item.id, itemDetails: item, favoriteId: item.favoriteId })));
-    } else if (results[1].status === 'rejected' || results[1].value.code !== 200) {
-      console.error('获取文章收藏失败:', results[1].reason || results[1].value.message);
-      fetchError = fetchError || results[1].reason?.message || results[1].value?.message || '加载文章收藏失败';
+    if (articleFavsResponse) {
+      const articleFavs = articleFavsResponse.list || articleFavsResponse.data?.list || [];
+      
+      allFavorites.push(...articleFavs.map(item => ({ 
+        type: 'article', 
+        itemId: item.id, 
+        itemDetails: item, 
+        favoriteId: item.favoriteId || item.id
+      })));
     }
-
-    // 处理失物招领收藏结果 (如果API存在)
-    // if (results[2].status === 'fulfilled' && results[2].value.code === 200) {
-    //   const lostFoundFavs = results[2].value.data?.list || [];
-    //   allFavorites.push(...lostFoundFavs.map(item => ({ type: 'lostfound', itemId: item.id, itemDetails: item, favoriteId: item.favoriteId })));
-    // } else if (results[2].status === 'rejected' || results[2].value.code !== 200) {
-    //   console.error('获取失物招领收藏失败:', results[2].reason || results[2].value.message);
-    //   fetchError = fetchError || results[2].reason?.message || results[2].value?.message || '加载失物招领收藏失败';
-    // }
-
-    if (fetchError) {
-        // 如果有任何一个请求失败，显示第一个错误
-        throw new Error(fetchError);
-    }
-
-    // 可以根据收藏时间等进行排序
-    // allFavorites.sort((a, b) => new Date(b.itemDetails?.favoriteTime || b.itemDetails?.createdAt) - new Date(a.itemDetails?.favoriteTime || a.itemDetails?.createdAt));
 
     favorites.value = allFavorites;
     console.log('合并后的收藏列表:', favorites.value);

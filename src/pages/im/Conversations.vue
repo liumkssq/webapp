@@ -623,11 +623,29 @@ const handleNotification = (notification) => {
       router.push('/im/groups');
       break;
     case 'system':
-      // 处理系统通知
+      // 如果内容中包含订单，跳转到订单页面
+      if (notification.content.includes('订单')) {
+        router.push('/user/orders');
+      }
+      break;
+    case 'activity':
+      router.push('/mine'); // 跳转到个人中心或活动页
+      break;
+    case 'comment':
+      // 如果是商品评论，导航到我的商品页面
+      if (notification.content.includes('商品')) {
+        router.push('/user/products');
+      } else {
+        router.push('/mine');
+      }
       break;
     default:
+      router.push('/mine');
       break;
   }
+  
+  // 显示已读提示
+  showToast('已标记为已读');
 };
 
 // 获取通知图标
@@ -639,6 +657,10 @@ const getNotificationIcon = (type) => {
       return 'cluster-o';
     case 'system':
       return 'info-o';
+    case 'activity':
+      return 'flag-o';
+    case 'comment':
+      return 'chat-o';
     default:
       return 'bell';
   }
@@ -697,35 +719,57 @@ const loadFriendRequestsCount = async () => {
 
 // 初始化模拟通知数据
 const initMockNotifications = () => {
-  // 仅在mock环境下初始化模拟数据
-  if (import.meta.env.VITE_USE_MOCK === 'true') {
-    notifications.value = [
-      {
-        id: 1,
-        type: 'friend_request',
-        title: '好友申请',
-        content: '张三请求添加您为好友',
-        time: '2023-04-18 14:30:00',
-        read: false
-      },
-      {
-        id: 2,
-        type: 'group_invite',
-        title: '群聊邀请',
-        content: '李四邀请您加入群聊"校园活动"',
-        time: '2023-04-17 10:20:00',
-        read: false
-      },
-      {
-        id: 3,
-        type: 'system',
-        title: '系统通知',
-        content: '您的账号已完成实名认证',
-        time: '2023-04-16 09:15:00',
-        read: true
-      }
-    ];
-  }
+  // 移除环境变量判断，始终使用模拟数据
+  notifications.value = [
+    {
+      id: 1,
+      type: 'friend_request',
+      title: '好友申请',
+      content: '张三请求添加您为好友',
+      time: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm:ss'),
+      read: false
+    },
+    {
+      id: 2,
+      type: 'group_invite',
+      title: '群聊邀请',
+      content: '李四邀请您加入群聊"校园活动"',
+      time: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm:ss'),
+      read: false
+    },
+    {
+      id: 3,
+      type: 'system',
+      title: '系统通知',
+      content: '您的账号已完成实名认证',
+      time: dayjs().subtract(2, 'day').format('YYYY-MM-DD HH:mm:ss'),
+      read: true
+    },
+    {
+      id: 4,
+      type: 'system',
+      title: '商品订单通知',
+      content: '您的订单#12345已发货',
+      time: dayjs().subtract(3, 'day').format('YYYY-MM-DD HH:mm:ss'),
+      read: false
+    },
+    {
+      id: 5,
+      type: 'activity',
+      title: '活动提醒',
+      content: '您报名的"校园二手市场"活动将在明天开始',
+      time: dayjs().subtract(12, 'hour').format('YYYY-MM-DD HH:mm:ss'),
+      read: false
+    },
+    {
+      id: 6,
+      type: 'comment',
+      title: '评论通知',
+      content: '王五评论了您的商品"二手笔记本电脑"',
+      time: dayjs().subtract(6, 'hour').format('YYYY-MM-DD HH:mm:ss'),
+      read: false
+    }
+  ];
 };
 
 // 更新未读消息数

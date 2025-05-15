@@ -1,5 +1,5 @@
 <template>
-  <div class="product-list-page">
+  <div class="product-list-page" ref="scrollContainerRef">
     <!-- 头部导航 -->
     <HeaderNav title="二手商品" :showSearch="true" @search="goToSearch" />
     
@@ -14,7 +14,7 @@
           :key="category.id"
           class="category-item"
           :class="{ active: activeCategoryId === category.id }"
-          @click="switchCategory(category.id)"
+          @click="handleCategoryClick(category)"
         >
           {{ category.name }}
         </div>
@@ -23,18 +23,34 @@
     
     <!-- 商品列表 -->
     <ProductList 
+      :products="products" 
+      :loading="isLoading"
+      :loadingMore="isLoading && products.length > 0"
+      :hasMore="hasMore"
       :categoryId="activeCategoryId"
       :showFilter="true"
-      ref="productList"
-      @refresh="onProductListRefresh"
+      ref="productListRef" 
       @emptyAction="goToPublish"
+      @refresh="refreshProducts"
+      @filterChange="handleFilterChange"
     />
-    
-    <!-- 浮动按钮 -->
-    <div class="float-button" @click="goToPublish">
-      <i class="icon-plus"></i>
-      <span>发布</span>
+
+    <!-- Loading indicator and sentinel for infinite scroll -->
+    <div v-if="isLoading && products.length === 0" class="loading-initial">
+      正在加载...
     </div>
+    <div v-if="isLoading && products.length > 0" class="loading-more">
+      正在加载更多...
+    </div>
+    <div v-if="!hasMore && products.length > 0" class="no-more-products">
+      没有更多商品了
+    </div>
+    <div v-if="!isLoading && products.length === 0 && !hasMore" class="no-products-found">
+      该分类下暂无商品，去发布一个吧！
+    </div>
+
+    <!-- Sentinel element for IntersectionObserver 移到底部以更好地触发下一页加载 -->
+    <div ref="sentinel" class="sentinel"></div>
     
     <!-- 底部导航 -->
     <FooterNav />
@@ -42,151 +58,332 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, onActivated } from 'vue'
-import { useRouter } from 'vue-router'
-import HeaderNav from '@/components/HeaderNav.vue'
+import { getProductList as apiGetProductList } from '@/api/product.js'
 import FooterNav from '@/components/FooterNav.vue'
+import HeaderNav from '@/components/HeaderNav.vue'
 import ProductList from '@/components/ProductList.vue'
 import { useMessageStore } from '@/store/message'
+import { nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const messageStore = useMessageStore()
 
-// 激活的分类ID
-const activeCategoryId = ref('all')
-const categoryScroll = ref(null)
-const productList = ref(null)
+const products = ref([])
+const activeCategoryId = ref(-1)
+const currentPage = ref(1)
+const limit = ref(10)
+const isLoading = ref(false)
+const hasMore = ref(true)
+const totalProducts = ref(0)
 
-// 商品分类列表
+const categoryScroll = ref(null)
+const productListRef = ref(null)
+const sentinel = ref(null)
+const scrollContainerRef = ref(null)
+
 const categories = [
-  { id: 'all', name: '全部' },
-  { id: 'electronics', name: '电子数码' },
-  { id: 'books', name: '图书教材' },
-  { id: 'clothing', name: '服装鞋包' },
-  { id: 'sports', name: '运动户外' },
-  { id: 'beauty', name: '美妆日化' },
-  { id: 'furniture', name: '家具家电' },
-  { id: 'tickets', name: '门票卡券' },
-  { id: 'stationery', name: '文具办公' },
-  { id: 'toys', name: '玩具乐器' },
-  { id: 'bicycles', name: '自行车' },
-  { id: 'others', name: '其他' }
+  { id: -1, name: '全部' },
+  { id: 1, name: '电子数码' },
+  { id: 2, name: '图书教材' },
+  { id: 3, name: '服装鞋包' },
+  { id: 4, name: '运动户外' },
+  { id: 5, name: '美妆日化' },
+  { id: 6, name: '家具家电' },
+  { id: 7, name: '门票卡券' },
+  { id: 8, name: '文具办公' },
+  { id: 9, name: '玩具乐器' },
+  { id: 10, name: '自行车' },
+  { id: 11, name: '其他' }
 ]
 
-// 切换分类
-const switchCategory = (categoryId) => {
-  if (activeCategoryId.value === categoryId) return
-  
-  activeCategoryId.value = categoryId
-  console.log(`切换到分类: ${categoryId}`);
-  
-  // 滚动分类到可见区域
-  nextTick(() => {
-    scrollCategoryIntoView()
-  })
-  
-  // 刷新商品列表
-  if (productList.value) {
-    console.log('请求刷新商品列表');
-    productList.value.refresh()
-  } else {
-    console.warn('商品列表组件未初始化');
-    messageStore.showWarning('加载商品列表失败，请刷新页面');
-  }
-}
+const activeFilters = ref({
+  sort: 'latest',
+  price: 'all',
+  condition: 'all'
+});
 
-// 滚动分类到可见区域
-const scrollCategoryIntoView = () => {
-  if (!categoryScroll.value) {
-    console.warn('分类滚动容器未找到');
+const handleFilterChange = (filters) => {
+  console.log('[List.vue] Filter changed:', filters);
+  activeFilters.value = { ...filters };
+  refreshProducts();
+};
+
+const fetchProducts = async (pageToLoad, append = false) => {
+  if (isLoading.value) {
+    console.log(`[List.vue] Fetch skipped: already loading. Page requested: ${pageToLoad}`);
+    return;
+  }
+  if (append && !hasMore.value) {
+    console.log(`[List.vue] Fetch skipped: append=true but no more data. Page requested: ${pageToLoad}`);
     return;
   }
   
+  isLoading.value = true;
+  console.log(`[List.vue] Fetching products. Page: ${pageToLoad}, Category: ${activeCategoryId.value}, Append: ${append}, HasMore: ${hasMore.value}`);
+
+  try {
+    const params = {
+      page: pageToLoad,
+      limit: limit.value,
+    };
+    
+    if (activeCategoryId.value > 0) {
+      params.category = activeCategoryId.value;
+      console.log(`[List.vue] Using numeric category ID: ${activeCategoryId.value}`);
+    } else {
+      console.log(`[List.vue] No category filter applied (all categories)`);
+    }
+    
+    if (activeFilters.value.sort !== 'latest') {
+      params.sort = activeFilters.value.sort;
+      console.log(`[List.vue] Setting sort parameter: ${params.sort}`);
+    }
+    
+    if (activeFilters.value.price !== 'all') {
+      if (activeFilters.value.price === 'under50') {
+        params.maxPrice = 50;
+        console.log('[List.vue] Setting maxPrice: 50');
+      } else if (activeFilters.value.price === '50_100') {
+        params.minPrice = 50;
+        params.maxPrice = 100;
+        console.log('[List.vue] Setting price range: 50-100');
+      } else if (activeFilters.value.price === '100_500') {
+        params.minPrice = 100;
+        params.maxPrice = 500;
+        console.log('[List.vue] Setting price range: 100-500');
+      } else if (activeFilters.value.price === 'above500') {
+        params.minPrice = 500;
+        console.log('[List.vue] Setting minPrice: 500');
+      }
+    }
+    
+    if (activeFilters.value.condition !== 'all') {
+      params.condition = activeFilters.value.condition;
+      console.log(`[List.vue] Setting condition parameter: ${params.condition}`);
+      
+      if (!params.sort) {
+        params.sort = `condition_${activeFilters.value.condition}`;
+        console.log(`[List.vue] Setting condition via sort parameter: ${params.sort}`);
+      }
+    }
+    
+    console.log('[List.vue] Fetching products with params:', params);
+    const response = await apiGetProductList(params);
+    console.log('[List.vue] API response received:', JSON.parse(JSON.stringify(response)));
+
+    if (response && response.data && Array.isArray(response.data.list)) {
+      const newData = response.data.list;
+      
+      const processedData = newData.map(product => {
+        const seller = product.seller || {
+          id: product.sellerId || '未知ID',
+          name: product.sellerName || '未知用户',
+          avatar: product.sellerAvatar || '/avatar-placeholder.png'
+        };
+        
+        let images = product.images || [];
+        if (typeof images === 'string') {
+          try {
+            if (images.startsWith('[')) {
+              images = JSON.parse(images);
+  } else {
+              images = [images];
+            }
+          } catch (e) {
+            console.warn(`[List.vue] Failed to parse images JSON for product ${product.id}:`, e);
+            images = [images];
+          }
+        }
+        
+        return {
+          ...product,
+          seller,
+          images,
+          price: typeof product.price === 'number' ? product.price : parseFloat(product.price) || 0,
+          status: product.status === '\u0000' ? '在售' : (product.status || '在售')
+        };
+      });
+      
+      if (append) {
+        products.value = [...products.value, ...processedData];
+      } else {
+        products.value = processedData;
+      }
+      
+      if (typeof response.data.total === 'number') {
+        totalProducts.value = Number(response.data.total);
+      }
+      currentPage.value = pageToLoad; 
+      
+      hasMore.value = newData.length >= limit.value;
+      
+      if (newData.length === 0) {
+        hasMore.value = false;
+      }
+      
+      console.log(`[List.vue] Products fetched. Total count: ${products.value.length}, HasMore: ${hasMore.value}, Page: ${currentPage.value}`);
+    } else {
+      console.error('[List.vue] Invalid API response structure:', response);
+      messageStore.showError('获取商品数据格式错误');
+      if (!append) {
+        products.value = [];
+      }
+      hasMore.value = false; 
+    }
+  } catch (error) {
+    console.error('[List.vue] Error fetching products:', error);
+    messageStore.showError(error.message || '获取商品列表失败');
+    if (!append) {
+      products.value = [];
+    }
+    hasMore.value = false;
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const refreshProducts = () => {
+  console.log('[List.vue] Refreshing products list...');
+  currentPage.value = 1;
+  hasMore.value = true; 
+  products.value = [];
+  fetchProducts(1, false); 
+};
+
+let observer = null;
+const setupIntersectionObserver = () => {
+  if (observer) {
+    observer.disconnect();
+    console.log("[List.vue] Previous IntersectionObserver disconnected.");
+  }
+
+  const options = {
+    root: null,
+    rootMargin: '100px',
+    threshold: 0.1
+  };
+
+  observer = new IntersectionObserver((entries) => {
+    const entry = entries[0];
+    if (entry.isIntersecting) {
+      console.log(`[List.vue] Sentinel intersected. isLoading: ${isLoading.value}, hasMore: ${hasMore.value}, currentPage: ${currentPage.value}`);
+      if (hasMore.value && !isLoading.value) {
+        const nextPage = currentPage.value + 1;
+        console.log(`[List.vue] Loading more products, page: ${nextPage}`);
+        fetchProducts(nextPage, true);
+      } else {
+        console.log("[List.vue] Load more condition not met:", 
+          isLoading.value ? "Still loading previous data" : "No more data to load");
+      }
+    }
+  }, options);
+
+  nextTick(() => {
+    if (sentinel.value) {
+      observer.observe(sentinel.value);
+      console.log("[List.vue] IntersectionObserver observing sentinel element");
+    } else {
+      console.warn("[List.vue] Sentinel element not found for IntersectionObserver");
+    }
+  });
+};
+
+const handleCategoryClick = (category) => {
+  console.log(`[List.vue] Category clicked: id=${category.id}, name=${category.name}`);
+  if (activeCategoryId.value === category.id) {
+    console.log('[List.vue] Same category clicked, ignoring.');
+    return;
+  }
+  
+  activeCategoryId.value = category.id;
+  router.push({
+    path: route.path,
+    query: { 
+      ...route.query,
+      category: category.id === -1 ? undefined : category.id 
+    }
+  });
+  
+  console.log(`[List.vue] Category changed to: ${activeCategoryId.value}`);
+  refreshProducts();
+};
+
+const scrollCategoryIntoView = () => {
+  if (!categoryScroll.value) return
   const container = categoryScroll.value
   const activeEl = container.querySelector('.category-item.active')
+  if (!activeEl) return
   
-  if (!activeEl) {
-    console.warn('未找到激活的分类元素');
-    return;
-  }
-  
-  // 计算滚动位置
   const containerWidth = container.offsetWidth
   const activeElLeft = activeEl.offsetLeft
   const activeElWidth = activeEl.offsetWidth
   
-  // 如果分类不在可见区域内，滚动到适当位置
   if (activeElLeft < container.scrollLeft || 
       activeElLeft + activeElWidth > container.scrollLeft + containerWidth) {
-    // 将分类滚动到中间位置
     container.scrollLeft = activeElLeft - (containerWidth / 2) + (activeElWidth / 2)
   }
 }
 
-// 跳转到搜索页
 const goToSearch = () => {
   router.push('/search?type=product')
 }
 
-// 跳转到发布页
 const goToPublish = () => {
   router.push('/publish/product')
 }
 
-// 页面加载和激活时进行初始化
 onMounted(() => {
-  console.log('商品列表页加载');
+  console.log('[List.vue] Component mounted')
+  const categoryIdFromQuery = route.query.category
   
-  // 从 URL 参数中获取分类
-  const query = new URLSearchParams(window.location.search)
-  const categoryId = query.get('category')
-  
-  if (categoryId && categories.some(c => c.id === categoryId)) {
-    console.log(`从URL参数获取分类: ${categoryId}`);
-    activeCategoryId.value = categoryId
-  } else {
-    console.log('使用默认分类: all');
+  if (categoryIdFromQuery && !isNaN(parseInt(categoryIdFromQuery))) {
+    // 将查询字符串转换为数字
+    const categoryIdNum = parseInt(categoryIdFromQuery)
+    // 检查是否在我们的类别列表中
+    if (categories.some(c => c.id === categoryIdNum)) {
+      activeCategoryId.value = categoryIdNum
+    }
   }
   
-  // 滚动分类到可见区域
+  refreshProducts()
+  
   nextTick(() => {
     scrollCategoryIntoView()
-  })
-  
-  // 确保ProductList组件已初始化
-  nextTick(() => {
-    if (productList.value) {
-      console.log('初始化时刷新商品列表');
-      productList.value.refresh();
-    } else {
-      console.warn('初始化时商品列表组件未找到');
-      messageStore.showWarning('加载商品列表失败，请刷新页面');
-      
-      // 在组件未找到的情况下，尝试延迟获取
-      setTimeout(() => {
-        if (productList.value) {
-          console.log('延迟获取到商品列表组件');
-          productList.value.refresh();
-        }
-      }, 800);
-    }
+    setupIntersectionObserver()
   })
 })
 
-// 当页面被缓存后再次激活时执行
-onActivated(() => {
-  console.log('商品列表页被激活');
-  
-  // 刷新商品列表
-  if (productList.value) {
-    console.log('页面激活时刷新商品列表');
-    productList.value.refresh()
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect();
+    observer = null;
+    console.log("[List.vue] IntersectionObserver disconnected on unmount.");
   }
 })
 
-// 处理商品列表刷新
+onActivated(() => {
+  console.log('[List.vue] Component activated');
+  // Re-setup observer as DOM might have changed or sentinel might need re-observing
+  nextTick(() => {
+    if (sentinel.value) {
+      console.log("[List.vue] Re-observing sentinel on activation.");
+      setupIntersectionObserver(); // This will disconnect old and observe new/existing sentinel
+    } else {
+         console.warn("[List.vue] Sentinel not found on activation for observer.")
+    }
+  });
+});
+
+watch(activeCategoryId, (newVal, oldVal) => {
+  if (newVal !== oldVal) {
+  }
+})
+
 const onProductListRefresh = (info) => {
-  console.log('商品列表刷新完成:', info);
+  console.log('[List.vue] ProductList emitted refresh. Triggering refreshProducts.', info);
+  refreshProducts();
 }
 </script>
 
@@ -211,14 +408,14 @@ const onProductListRefresh = (info) => {
   display: flex;
   overflow-x: auto;
   white-space: nowrap;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
   padding: 0 var(--spacing-sm);
 }
 
 .category-scroll::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Opera */
+  display: none;
 }
 
 .category-item {
@@ -237,42 +434,21 @@ const onProductListRefresh = (info) => {
   background-color: rgba(0, 122, 255, 0.1);
 }
 
-.float-button {
-  position: fixed;
-  right: var(--spacing-lg);
-  bottom: calc(var(--footer-height) + var(--spacing-lg) + var(--safe-area-inset-bottom));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--primary-color);
-  color: var(--white);
-  width: 110px;
-  height: 38px;
-  border-radius: var(--radius-full);
-  box-shadow: 0 4px 10px rgba(0, 122, 255, 0.25);
-  z-index: 99;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  transition: transform 0.2s, box-shadow 0.2s;
+.loading-initial, .loading-more, .no-more-products, .no-products-found {
+  text-align: center;
+  padding: var(--spacing-md);
+  color: var(--text-tertiary);
 }
 
-.float-button:active {
-  transform: scale(0.96);
-  box-shadow: 0 2px 5px rgba(0, 122, 255, 0.2);
-}
-
-.float-button i {
-  margin-right: var(--spacing-xxs);
-  font-size: var(--font-size-lg);
+.sentinel {
+  height: 20px;
+  margin: 10px 0;
+  visibility: hidden; /* 隐藏但仍占据空间 */
 }
 
 @media (prefers-color-scheme: dark) {
   .category-item.active {
     background-color: rgba(0, 122, 255, 0.2);
-  }
-  
-  .float-button {
-    box-shadow: 0 4px 10px rgba(0, 122, 255, 0.4);
   }
 }
 </style>

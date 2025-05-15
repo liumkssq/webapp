@@ -1,4 +1,5 @@
-import request from '@/utils/request'
+import request from '@/utils/request';
+import axios from 'axios';
 
 /**
  * 获取失物招领列表
@@ -85,21 +86,55 @@ export function getLostFoundDetail(id) {
 
 /**
  * 获取用户发布的失物招领
- * @param {object} params 查询参数
- * @param {number} params.userId 用户ID
- * @param {number} params.page 页码
- * @param {number} params.limit 每页数量
+ * @param {number|string|object} userIdOrParams 用户ID或包含userId的参数对象
+ * @param {Object} [optionalParams] 可选的查询参数
  * @returns {Promise} Promise对象
  */
-export function getUserLostFound(params) {
-  return request({
-    url: `/api/lost-found/user/${params.userId}`,
-    method: 'get',
-    params: {
-      page: params.page,
-      limit: params.limit
+export function getUserLostFound(userIdOrParams, optionalParams = {}) {
+  // 判断第一个参数是对象还是ID
+  let userId;
+  let params = { page: 1, limit: 20, ...optionalParams };
+  
+  if (typeof userIdOrParams === 'object') {
+    // 从对象中尝试提取用户ID
+    if (userIdOrParams.userId) {
+      userId = userIdOrParams.userId;
+    } else if (userIdOrParams.id) {
+      userId = userIdOrParams.id;
+    } else if (userIdOrParams.publisherId) {
+      userId = userIdOrParams.publisherId;
+    } else {
+      console.error('getUserLostFound: 无法从对象中提取用户ID', userIdOrParams);
+      return Promise.reject(new Error('无效的用户ID'));
     }
-  })
+    
+    // 合并其他参数
+    params = { ...params, ...userIdOrParams };
+    
+    // 删除ID字段，避免URL参数冲突
+    delete params.userId;
+    delete params.id;
+    delete params.publisherId;
+    
+    console.warn('getUserLostFound: 从对象提取的ID:', userId);
+  } else {
+    // 如果是直接提供的ID
+    userId = userIdOrParams;
+  }
+  
+  // 确保有userId
+  if (!userId) {
+    console.error('getUserLostFound: 未提供用户ID或ID无效', userIdOrParams);
+    return Promise.reject(new Error('获取用户失物招领信息失败：未提供用户ID或ID无效'));
+  }
+  
+  console.log(`调用getUserLostFound API, userId: ${userId}, 参数:`, params);
+  
+  return request({
+    url: `/api/lost-found/userLostFound/${userId}`,
+    method: 'get',
+    params
+  });
 }
 
 /**
@@ -135,23 +170,75 @@ export function updateLostFound(id, data) {
  * @returns {Promise} Promise对象
  */
 export function deleteLostFound(id) {
-  return request({
-    url: `/api/lost-found/${id}`,
-    method: 'delete'
+  const token = localStorage.getItem('token');
+  console.log(`[API] 开始删除失物招领, ID: ${id}, 认证状态: ${token ? '已设置令牌' : '未设置令牌'}`);
+  
+  if (!token) {
+    console.error('[API] 删除失物招领失败: 未找到认证令牌');
+    return Promise.reject({ 
+      code: 401, 
+      message: '认证失败，请重新登录', 
+      status: 401 
+    });
+  }
+  
+  // 按照后端API格式，通过认证中间件发送请求
+  return axios({
+    url: `${import.meta.env.VITE_API_BASE_URL || ''}/api/lost-found/${id}`,
+    method: 'delete',
+    headers: {
+      'Content-Type': 'application/json',
+      // 确保令牌格式正确，Bearer 后应该有空格
+      'Authorization': `Bearer ${token}`
+    },
+    // 不需要在请求体中传递ID，因为它已经在URL路径中了
+    data: {} // 空的请求体
   })
+  .then(response => {
+    console.log(`[API] 删除失物招领成功, ID: ${id}, 响应:`, response.data);
+    return response.data;
+  })
+  .catch(error => {
+    console.error(`[API] 删除失物招领失败, ID: ${id}, 错误:`, error);
+    
+    // 特殊处理认证错误
+    if (error.response?.status === 401 || 
+        error.response?.data?.includes('authenticated') ||
+        error.message?.includes('authenticated')) {
+      // 清除无效的token
+      localStorage.removeItem('token');
+      
+      return Promise.reject({
+        code: 401,
+        message: '认证失败，请重新登录',
+        status: 401
+      });
+    }
+    
+    return Promise.reject({
+      code: error.response?.status || 500,
+      message: error.response?.data || error.message || '删除失败',
+      status: error.response?.status || 500
+    });
+  });
 }
 
 /**
  * 更新失物招领状态
  * @param {number} id 失物招领ID
- * @param {string} status 状态(pending/found/claimed/closed)
+ * @param {string|number} status 状态(pending/found/claimed/closed)或状态码
  * @returns {Promise} Promise对象
  */
 export function updateLostFoundStatus(id, status) {
+  console.log(`更新失物招领状态，ID: ${id}, 状态: ${status}`);
+  
+  // 确保status是正确的格式
+  const statusData = typeof status === 'object' ? status : { status };
+  
   return request({
     url: `/api/lost-found/${id}/status`,
     method: 'put',
-    data: { status }
+    data: statusData
   })
 }
 
